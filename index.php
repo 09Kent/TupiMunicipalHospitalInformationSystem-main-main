@@ -1179,5 +1179,24 @@ $appointmentUrl = file_exists(__DIR__ . '/tmhis/public/index.php') ? 'tmhis/publ
 
     <!-- Custom Main JS -->
     <script src="js/main.js"></script>
+    <script>
+        // Guaranteed fallback initialization
+        (function() {
+            function initPage() {
+                if (typeof lucide !== 'undefined' && lucide.createIcons) {
+                    lucide.createIcons();
+                }
+                if (typeof AOS !== 'undefined' && AOS.init) {
+                    AOS.init({ duration: 800, once: true });
+                }
+            }
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', initPage);
+            } else {
+                initPage();
+            }
+            window.addEventListener('load', initPage);
+        })();
+    </script>
 </body>
 </html>
