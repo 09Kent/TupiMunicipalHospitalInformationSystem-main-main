@@ -457,42 +457,44 @@ document.addEventListener('DOMContentLoaded', () => {
             <table class="table">
               <thead>
                 <tr>
-                  <th>Patient ID</th>
-                  <th>Patient Name</th>
-                  <th>Date of Birth</th>
-                  <th>Gender</th>
+                  <th>Patient</th>
+                  <th>DOB / Gender</th>
                   <th>Contact</th>
-                  <th>Registration Date</th>
+                  <th>Registration</th>
                   <th>Record Status</th>
                   <th>Verification</th>
                   <th>Last Updated</th>
-                  <th>Actions</th>
+                  <th style="text-align:right;">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 ${filtered.length === 0 ? `
                   <tr>
-                    <td colspan="10" style="text-align:center; padding:2.5rem; color:var(--text-muted);">
+                    <td colspan="8" style="text-align:center; padding:2.5rem; color:var(--text-muted);">
                       <i data-lucide="search-x" style="width:32px;height:32px;margin:0 auto 0.5rem;display:block;"></i>
                       No patient records matched the specified filter criteria.
                     </td>
                   </tr>
                 ` : filtered.map(p => `
                   <tr>
-                    <td><span class="patient-id-badge">${p.id}</span></td>
                     <td>
                       <div class="patient-name-cell">
-                        <div class="patient-avatar-mini">${p.firstName[0]}${p.lastName[0]}</div>
+                        <div class="patient-avatar-mini">${p.firstName ? p.firstName[0] : 'P'}${p.lastName ? p.lastName[0] : 'T'}</div>
                         <div>
-                          <strong>${p.firstName} ${p.middleName ? p.middleName[0] + '.' : ''} ${p.lastName} ${p.suffix || ''}</strong>
+                          <div style="display:flex; align-items:center; gap:0.4rem; flex-wrap:wrap;">
+                            <strong>${p.firstName} ${p.middleName ? p.middleName[0] + '.' : ''} ${p.lastName} ${p.suffix || ''}</strong>
+                            <span class="patient-id-badge">${p.id}</span>
+                          </div>
                           <div style="font-size:0.72rem; color:var(--text-muted);">${p.email || 'No email registered'}</div>
                         </div>
                       </div>
                     </td>
-                    <td>${formatDate(p.dob)} <span style="color:var(--text-muted);font-size:0.72rem;">(${p.age}y)</span></td>
-                    <td>${p.gender}</td>
-                    <td>${p.contact}</td>
-                    <td>${formatDate(p.registrationDate)}</td>
+                    <td>
+                      <div style="white-space:nowrap; font-weight:500;">${formatDate(p.dob)} <span style="color:var(--text-muted);font-size:0.72rem;">(${p.age}y)</span></div>
+                      <div style="font-size:0.72rem; color:var(--text-muted);">${p.gender}</div>
+                    </td>
+                    <td style="white-space:nowrap; font-size:0.8rem;">${p.contact}</td>
+                    <td style="white-space:nowrap; font-size:0.78rem;">${formatDate(p.registrationDate)}</td>
                     <td>
                       <span class="badge ${p.recordStatus === 'Active' ? 'badge-active' : 'badge-archived'}">
                         ${p.recordStatus}
@@ -503,27 +505,23 @@ document.addEventListener('DOMContentLoaded', () => {
                         ${p.verificationStatus}
                       </span>
                     </td>
-                    <td style="font-size:0.75rem; color:var(--text-muted);">${p.lastUpdated || '-'}</td>
-                    <td>
-                      <div class="action-btn-group">
-                        <button class="btn btn-secondary btn-sm" onclick="window.viewPatientRecord('${p.id}')" title="View Patient Record">
-                          <i data-lucide="eye" style="width:14px;height:14px;"></i> View
+                    <td style="font-size:0.74rem; color:var(--text-muted); white-space:nowrap;">${p.lastUpdated || '-'}</td>
+                    <td style="text-align:right;">
+                      <div class="action-btn-group" style="justify-content:flex-end;">
+                        <button class="btn btn-secondary btn-xs" onclick="window.viewPatientRecord('${p.id}')" title="View Full Record">
+                          <i data-lucide="eye" style="width:13px;height:13px;"></i> View
                         </button>
-                        <button class="btn btn-secondary btn-sm" onclick="window.editPatientRecord('${p.id}')" title="Edit Patient Demographics">
-                          <i data-lucide="edit-2" style="width:14px;height:14px;"></i> Edit
+                        <button class="btn btn-secondary btn-icon-sm" onclick="window.editPatientRecord('${p.id}')" title="Edit Demographics">
+                          <i data-lucide="edit-2" style="width:13px;height:13px;"></i>
                         </button>
                         ${p.verificationStatus !== 'Verified' ? `
-                          <button class="btn btn-secondary btn-sm" onclick="window.openVerificationModal('${p.id}')" title="Verify Record Accuracy">
-                            <i data-lucide="check-square" style="width:14px;height:14px;"></i> Verify
+                          <button class="btn btn-primary btn-icon-sm" onclick="window.openVerificationModal('${p.id}')" title="Verify Record Accuracy">
+                            <i data-lucide="check-square" style="width:13px;height:13px;"></i>
                           </button>
-                        ` : `
-                          <span class="badge badge-verified" style="display:inline-flex;align-items:center;gap:3px;padding:4px 8px;font-size:0.7rem;font-weight:700;">
-                            <i data-lucide="check-check" style="width:12px;height:12px;"></i> Verified
-                          </span>
-                        `}
+                        ` : ''}
                         ${p.recordStatus !== 'Archived' ? `
-                          <button class="btn btn-secondary btn-sm text-danger" onclick="window.openArchiveModal('${p.id}')" title="Archive Record">
-                            <i data-lucide="archive" style="width:14px;height:14px;"></i> Archive
+                          <button class="btn btn-secondary btn-icon-sm text-danger" onclick="window.openArchiveModal('${p.id}')" title="Archive Record">
+                            <i data-lucide="archive" style="width:13px;height:13px;"></i>
                           </button>
                         ` : ''}
                       </div>
@@ -536,6 +534,7 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>
       </div>
     `;
+    refreshIcons();
   }
 
   /* ==========================================================================
@@ -568,30 +567,31 @@ document.addEventListener('DOMContentLoaded', () => {
             <table class="table">
               <thead>
                 <tr>
-                  <th>Patient ID</th>
-                  <th>Patient Name</th>
+                  <th>Patient</th>
                   <th>Registration Date</th>
                   <th>Registration Type</th>
                   <th>Verification Status</th>
                   <th>Verified By</th>
                   <th>Last Updated</th>
-                  <th>Action</th>
+                  <th style="text-align:right;">Action</th>
                 </tr>
               </thead>
               <tbody>
                 ${list.map(p => `
                   <tr>
-                    <td><span class="patient-id-badge">${p.id}</span></td>
                     <td>
                       <div class="patient-name-cell">
                         <div class="patient-avatar-mini">${p.firstName[0]}${p.lastName[0]}</div>
                         <div>
-                          <strong>${p.firstName} ${p.lastName} ${p.suffix || ''}</strong>
+                          <div style="display:flex; align-items:center; gap:0.4rem; flex-wrap:wrap;">
+                            <strong>${p.firstName} ${p.lastName} ${p.suffix || ''}</strong>
+                            <span class="patient-id-badge">${p.id}</span>
+                          </div>
                           <div style="font-size:0.72rem; color:var(--text-muted);">${p.contact}</div>
                         </div>
                       </div>
                     </td>
-                    <td>${formatDate(p.registrationDate)}</td>
+                    <td style="white-space:nowrap; font-size:0.8rem;">${formatDate(p.registrationDate)}</td>
                     <td>${p.registrationType || 'Outpatient'}</td>
                     <td>
                       <span class="badge ${p.verificationStatus === 'Verified' ? 'badge-verified' : (p.verificationStatus === 'Needs Correction' ? 'badge-correction' : 'badge-pending')}">
@@ -599,20 +599,20 @@ document.addEventListener('DOMContentLoaded', () => {
                       </span>
                     </td>
                     <td style="font-size:0.78rem;">${p.verifiedBy || '<span style="color:var(--text-muted);">Unverified</span>'}</td>
-                    <td style="font-size:0.75rem; color:var(--text-muted);">${p.lastUpdated || '-'}</td>
-                    <td>
-                      <div class="action-btn-group">
+                    <td style="font-size:0.75rem; color:var(--text-muted); white-space:nowrap;">${p.lastUpdated || '-'}</td>
+                    <td style="text-align:right;">
+                      <div class="action-btn-group" style="justify-content:flex-end;">
                         ${p.verificationStatus === 'Verified' ? `
-                          <span class="badge badge-verified" style="display:inline-flex;align-items:center;gap:4px;padding:6px 10px;font-size:0.75rem;font-weight:700;">
-                            <i data-lucide="check-check" style="width:14px;height:14px;color:#10b981;"></i> Verified
+                          <span class="badge badge-verified" style="display:inline-flex;align-items:center;gap:4px;padding:4px 8px;font-size:0.72rem;font-weight:700;">
+                            <i data-lucide="check-check" style="width:13px;height:13px;color:#10b981;"></i> Verified
                           </span>
                         ` : `
-                          <button class="btn btn-primary btn-sm" onclick="window.openVerificationModal('${p.id}')">
-                            <i data-lucide="file-check" style="width:14px;height:14px;"></i> Verify Record
+                          <button class="btn btn-primary btn-xs" onclick="window.openVerificationModal('${p.id}')" title="Verify Record">
+                            <i data-lucide="file-check" style="width:13px;height:13px;"></i> Verify
                           </button>
                         `}
-                        <button class="btn btn-secondary btn-sm" onclick="window.viewRegistrationHistory('${p.id}')">
-                          <i data-lucide="history" style="width:14px;height:14px;"></i> History
+                        <button class="btn btn-secondary btn-icon-sm" onclick="window.viewRegistrationHistory('${p.id}')" title="View History">
+                          <i data-lucide="history" style="width:13px;height:13px;"></i>
                         </button>
                       </div>
                     </td>
@@ -666,43 +666,44 @@ document.addEventListener('DOMContentLoaded', () => {
                 <tr>
                   <th>Request ID</th>
                   <th>Patient</th>
-                  <th>Patient ID</th>
                   <th>Request Type</th>
                   <th>Requested By</th>
                   <th>Request Date</th>
                   <th>Priority</th>
                   <th>Status</th>
-                  <th>Actions</th>
+                  <th style="text-align:right;">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 ${list.map(r => `
                   <tr>
                     <td><span class="patient-id-badge">${r.id}</span></td>
-                    <td><strong>${r.patientName}</strong></td>
-                    <td><span class="patient-id-badge" style="background:#f1f5f9;color:#475569;border-color:#cbd5e1;">${r.patientId}</span></td>
+                    <td>
+                      <strong>${r.patientName}</strong>
+                      <div><span class="patient-id-badge" style="font-size:0.68rem; background:#f1f5f9; color:#475569; border-color:#cbd5e1;">${r.patientId}</span></div>
+                    </td>
                     <td>${r.requestType}</td>
                     <td>
                       <div>${r.requestedBy}</div>
                       <div style="font-size:0.7rem; color:var(--text-muted);">${r.requestingEntity}</div>
                     </td>
-                    <td>${formatDate(r.requestDate)}</td>
+                    <td style="white-space:nowrap; font-size:0.8rem;">${formatDate(r.requestDate)}</td>
                     <td>
                       <span class="badge ${r.priority === 'Urgent' ? 'badge-urgent' : 'badge-normal'}">${r.priority}</span>
                     </td>
                     <td>
                       <span class="badge badge-${r.status.toLowerCase()}">${r.status}</span>
                     </td>
-                    <td>
-                      <div class="action-btn-group">
-                        <button class="btn btn-secondary btn-sm" onclick="window.viewRecordRequest('${r.id}')" title="View Request Details">
-                          <i data-lucide="eye" style="width:14px;height:14px;"></i> View
+                    <td style="text-align:right;">
+                      <div class="action-btn-group" style="justify-content:flex-end;">
+                        <button class="btn btn-secondary btn-icon-sm" onclick="window.viewRecordRequest('${r.id}')" title="View Request Details">
+                          <i data-lucide="eye" style="width:13px;height:13px;"></i>
                         </button>
-                        <button class="btn btn-primary btn-sm" onclick="window.openProcessWizard('${r.id}')" title="Process Multi-Step Request">
-                          <i data-lucide="cpu" style="width:14px;height:14px;"></i> Process
+                        <button class="btn btn-primary btn-xs" onclick="window.openProcessWizard('${r.id}')" title="Process Multi-Step Request">
+                          <i data-lucide="cpu" style="width:13px;height:13px;"></i> Process
                         </button>
-                        <button class="btn btn-secondary btn-sm" onclick="window.openUpdateRequestStatusModal('${r.id}')" title="Update Status">
-                          <i data-lucide="refresh-cw" style="width:14px;height:14px;"></i> Status
+                        <button class="btn btn-secondary btn-icon-sm" onclick="window.openUpdateRequestStatusModal('${r.id}')" title="Update Status">
+                          <i data-lucide="refresh-cw" style="width:13px;height:13px;"></i>
                         </button>
                       </div>
                     </td>
@@ -1152,38 +1153,39 @@ document.addEventListener('DOMContentLoaded', () => {
               <thead>
                 <tr>
                   <th>Summary ID</th>
-                  <th>Patient Name</th>
-                  <th>Patient ID</th>
+                  <th>Patient</th>
                   <th>Purpose</th>
                   <th>Sections Included</th>
                   <th>Generated Date</th>
                   <th>Generated By</th>
                   <th>Status</th>
-                  <th>Actions</th>
+                  <th style="text-align:right;">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 ${state.summaries.map(s => `
                   <tr>
                     <td><span class="patient-id-badge">${s.summaryId}</span></td>
-                    <td><strong>${s.patientName}</strong></td>
-                    <td><span class="patient-id-badge" style="background:#f1f5f9;color:#475569;border-color:#cbd5e1;">${s.patientId}</span></td>
+                    <td>
+                      <strong>${s.patientName}</strong>
+                      <div><span class="patient-id-badge" style="font-size:0.68rem; background:#f1f5f9; color:#475569; border-color:#cbd5e1;">${s.patientId}</span></div>
+                    </td>
                     <td>${s.purpose}</td>
                     <td>
-                      <div style="display:flex; flex-wrap:wrap; gap:4px; max-width:250px;">
+                      <div style="display:flex; flex-wrap:wrap; gap:4px; max-width:200px;">
                         ${s.sectionsIncluded.map(sec => `<span class="badge badge-normal" style="font-size:0.65rem;">${sec}</span>`).join('')}
                       </div>
                     </td>
-                    <td>${s.generatedDate}</td>
+                    <td style="white-space:nowrap; font-size:0.8rem;">${s.generatedDate}</td>
                     <td>${s.generatedBy}</td>
                     <td><span class="badge badge-verified">${s.status}</span></td>
-                    <td>
-                      <div class="action-btn-group">
-                        <button class="btn btn-secondary btn-sm" onclick="window.previewSummaryDocument('${s.summaryId}')">
-                          <i data-lucide="eye" style="width:14px;height:14px;"></i> View Summary
+                    <td style="text-align:right;">
+                      <div class="action-btn-group" style="justify-content:flex-end;">
+                        <button class="btn btn-secondary btn-xs" onclick="window.previewSummaryDocument('${s.summaryId}')" title="View Summary">
+                          <i data-lucide="eye" style="width:13px;height:13px;"></i> View
                         </button>
-                        <button class="btn btn-primary btn-sm" onclick="window.printSummaryDocument('${s.summaryId}')">
-                          <i data-lucide="printer" style="width:14px;height:14px;"></i> Print Summary
+                        <button class="btn btn-primary btn-xs" onclick="window.printSummaryDocument('${s.summaryId}')" title="Print Summary">
+                          <i data-lucide="printer" style="width:13px;height:13px;"></i> Print
                         </button>
                       </div>
                     </td>

@@ -21,7 +21,7 @@ require_once __DIR__ . '/config/data.php';
   <meta name="csrf-token" content="<?= csrf_token() ?>">
   
   <!-- CSS Stylesheet -->
-  <link rel="stylesheet" href="<?= asset('section/records/css/styles.css') ?>">
+  <link rel="stylesheet" href="<?= asset('section/records/css/styles.css') ?>?v=<?= file_exists(public_path('section/records/css/styles.css')) ? filemtime(public_path('section/records/css/styles.css')) : time() ?>">
   
   <!-- Lucide Icons CDN -->
   <script src="https://unpkg.com/lucide@latest"></script>
@@ -67,8 +67,8 @@ require_once __DIR__ . '/config/data.php';
       ], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
   </script>
   <!-- App Scripts -->
-  <script src="<?= asset('section/records/js/data.js') ?>"></script>
-  <script src="<?= asset('section/records/js/app.js') ?>"></script>
+  <script src="<?= asset('section/records/js/data.js') ?>?v=<?= file_exists(public_path('section/records/js/data.js')) ? filemtime(public_path('section/records/js/data.js')) : time() ?>"></script>
+  <script src="<?= asset('section/records/js/app.js') ?>?v=<?= file_exists(public_path('section/records/js/app.js')) ? filemtime(public_path('section/records/js/app.js')) : time() ?>"></script>
 
 </body>
 </html>

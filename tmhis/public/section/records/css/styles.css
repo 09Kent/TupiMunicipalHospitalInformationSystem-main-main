@@ -65,8 +65,8 @@
   --font-mono: 'JetBrains Mono', monospace;
   
   /* Dimensions & Spacing */
-  --sidebar-width: 270px;
-  --sidebar-collapsed-width: 78px;
+  --sidebar-width: 250px;
+  --sidebar-collapsed-width: 72px;
   --header-height: 70px;
   --radius-sm: 6px;
   --radius-md: 10px;
@@ -425,16 +425,22 @@ a {
 
 /* Main Content Area */
 .main-wrapper {
-  flex: 1;
+  flex: 0 0 calc(100% - var(--sidebar-width));
+  width: calc(100% - var(--sidebar-width));
+  max-width: calc(100% - var(--sidebar-width));
   margin-left: var(--sidebar-width);
+  min-width: 0;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  transition: margin-left var(--transition-normal);
+  transition: margin-left var(--transition-normal), flex-basis var(--transition-normal), width var(--transition-normal), max-width var(--transition-normal);
   background-color: var(--bg-body);
 }
 
 .sidebar.collapsed + .main-wrapper {
+  flex: 0 0 calc(100% - var(--sidebar-collapsed-width));
+  width: calc(100% - var(--sidebar-collapsed-width));
+  max-width: calc(100% - var(--sidebar-collapsed-width));
   margin-left: var(--sidebar-collapsed-width);
 }
 
@@ -589,10 +595,10 @@ a {
 /* Page Content View Container */
 .content-body {
   flex: 1;
-  padding: 2rem;
-  max-width: 1600px;
+  padding: 1.25rem 1.5rem;
+  max-width: 100%;
   width: 100%;
-  margin: 0 auto;
+  margin: 0;
   animation: fadeIn 0.25s ease-out;
 }
 
@@ -842,11 +848,37 @@ a {
   border-radius: var(--radius-sm);
 }
 
+.btn-xs {
+  padding: 0.28rem 0.55rem;
+  font-size: 0.74rem;
+  border-radius: var(--radius-sm);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  line-height: 1.2;
+  font-weight: 600;
+}
+
 .btn-icon {
   width: 34px;
   height: 34px;
   padding: 0;
   border-radius: var(--radius-md);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-icon-sm {
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  padding: 0;
+  border-radius: var(--radius-sm);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
 }
 
 /* Filter Tab Group */
@@ -956,29 +988,45 @@ textarea.form-control {
 .table-responsive {
   width: 100%;
   overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 #f8fafc;
+}
+
+.table-responsive::-webkit-scrollbar {
+  height: 5px;
+}
+
+.table-responsive::-webkit-scrollbar-track {
+  background: #f8fafc;
+}
+
+.table-responsive::-webkit-scrollbar-thumb {
+  background-color: #cbd5e1;
+  border-radius: 4px;
 }
 
 .table {
   width: 100%;
   border-collapse: collapse;
   text-align: left;
-  font-size: 0.84rem;
+  font-size: 0.82rem;
+  table-layout: auto;
 }
 
 .table th {
   background-color: #f8fafc;
   color: var(--text-muted);
   font-weight: 700;
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
-  padding: 0.85rem 1.25rem;
+  letter-spacing: 0.05em;
+  padding: 0.65rem 0.75rem;
   border-bottom: 1px solid var(--border-color);
   white-space: nowrap;
 }
 
 .table td {
-  padding: 0.95rem 1.25rem;
+  padding: 0.65rem 0.75rem;
   border-bottom: 1px solid var(--border-color);
   color: var(--text-main);
   vertical-align: middle;
@@ -1022,25 +1070,28 @@ textarea.form-control {
 /* Patient ID styling */
 .patient-id-badge {
   font-family: var(--font-mono);
-  font-size: 0.78rem;
+  font-size: 0.72rem;
   font-weight: 600;
   color: var(--primary);
   background: var(--primary-light);
-  padding: 0.15rem 0.45rem;
+  padding: 0.1rem 0.4rem;
   border-radius: var(--radius-sm);
   border: 1px solid var(--primary-border);
   display: inline-block;
+  white-space: nowrap;
+  letter-spacing: -0.01em;
 }
 
 .patient-name-cell {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.6rem;
+  min-width: 0;
 }
 
 .patient-avatar-mini {
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   border-radius: var(--radius-full);
   background: #e0e7ff;
   color: #3730a3;
@@ -1048,15 +1099,16 @@ textarea.form-control {
   align-items: center;
   justify-content: center;
   font-weight: 700;
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   flex-shrink: 0;
 }
 
 /* Action button groups */
 .action-btn-group {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
+  gap: 0.3rem;
+  white-space: nowrap;
 }
 
 /* ==========================================================================
@@ -1712,12 +1764,35 @@ textarea.form-control {
    RESPONSIVE DESIGN BREAKPOINTS
    ========================================================================== */
 
+@media (max-width: 1400px) {
+  :root {
+    --sidebar-width: 240px;
+  }
+  .content-body {
+    padding: 1rem 1.25rem;
+  }
+  .table th, .table td {
+    padding: 0.55rem 0.65rem;
+  }
+}
+
 @media (max-width: 1200px) {
+  :root {
+    --sidebar-width: 230px;
+  }
   .summary-cards-grid {
     grid-template-columns: repeat(2, 1fr);
   }
   .info-grid {
     grid-template-columns: 1fr;
+  }
+  .table th, .table td {
+    padding: 0.5rem 0.55rem;
+    font-size: 0.78rem;
+  }
+  .filter-tab {
+    padding: 0.35rem 0.65rem;
+    font-size: 0.74rem;
   }
 }
 
@@ -1730,7 +1805,10 @@ textarea.form-control {
     transform: translateX(0);
   }
   .main-wrapper {
+    flex: 0 0 100% !important;
     margin-left: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
   }
   .mobile-menu-toggle {
     display: flex;
