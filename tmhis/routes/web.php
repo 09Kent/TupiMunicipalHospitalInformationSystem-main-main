@@ -219,3 +219,46 @@ $registerAdminApiRoutes('api', 'api.admin.');
 Route::match(['get', 'post'], '/api/registration/classify.php', [RegisterApiController::class, 'classify']);
 Route::match(['get', 'post'], '/api/registration/submit.php', [RegisterApiController::class, 'submitRegistration']);
 Route::match(['get', 'post'], '/api/vitals.php', [NurseController::class, 'createVital']);
+
+// =========================================================================
+// Legacy View Path Compatibility Fallbacks (Ensures zero 404 on legacy URLs)
+// =========================================================================
+$handleLegacyDashboard = function () {
+    if (auth()->check()) {
+        $uRole = strtolower(auth()->user()->Role ?? '');
+        if (in_array($uRole, ['chief', 'director'])) return redirect('/director');
+        if ($uRole === 'admin') return redirect('/admin');
+        if ($uRole === 'records') return redirect('/records');
+        if ($uRole === 'doctor') return redirect('/doctor');
+        if ($uRole === 'nurse') return redirect('/nurse');
+        if ($uRole === 'medtech') return redirect('/medtech');
+        if (in_array($uRole, ['pharmacist', 'pharmacy'])) return redirect('/pharmacy');
+        if (in_array($uRole, ['billing', 'cashier', 'accountant'])) return redirect('/billing');
+        return redirect('/register');
+    }
+    return redirect('/login');
+};
+
+Route::any('/views/dashboard/index.php', $handleLegacyDashboard);
+Route::any('/register/views/dashboard/index.php', $handleLegacyDashboard);
+Route::any('/doctor/views/dashboard/index.php', fn() => redirect('/doctor'));
+Route::any('/nurse/views/dashboard/index.php', fn() => redirect('/nurse'));
+Route::any('/views/patients/view.php', function (\Illuminate\Http\Request $request) {
+    $id = $request->query('id');
+    return $id ? redirect("/register/patients/{$id}") : redirect('/register/patients');
+});
+Route::any('/register/views/patients/view.php', function (\Illuminate\Http\Request $request) {
+    $id = $request->query('id');
+    return $id ? redirect("/register/patients/{$id}") : redirect('/register/patients');
+});
+Route::any('/views/patients/index.php', fn() => redirect('/register/patients'));
+Route::any('/register/views/patients/index.php', fn() => redirect('/register/patients'));
+Route::any('/views/appointments/index.php', fn() => redirect('/register/appointments'));
+Route::any('/register/views/appointments/index.php', fn() => redirect('/register/appointments'));
+Route::any('/views/queue/index.php', fn() => redirect('/register/queue'));
+Route::any('/register/views/queue/index.php', fn() => redirect('/register/queue'));
+Route::any('/views/reports/index.php', fn() => redirect('/register/reports'));
+Route::any('/register/views/reports/index.php', fn() => redirect('/register/reports'));
+Route::any('/views/registration/index.php', fn() => redirect('/register/intake'));
+Route::any('/register/views/registration/index.php', fn() => redirect('/register/intake'));
+

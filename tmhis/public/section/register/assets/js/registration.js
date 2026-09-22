@@ -456,7 +456,7 @@ function renderRegStep1() {
 
         <!-- Actions -->
         <div class="flex items-center justify-between pt-2">
-          <a href="${window.SERVER_DATA?.baseUrl || '/'}views/dashboard/index.php" class="px-5 py-2.5 text-xs font-bold text-slate-500 hover:text-slate-800 bg-slate-100 rounded-xl transition">
+          <a href="${window.SERVER_DATA?.dashboardUrl || (window.SERVER_DATA?.baseUrl ? window.SERVER_DATA.baseUrl + 'register' : '/register')}" class="px-5 py-2.5 text-xs font-bold text-slate-500 hover:text-slate-800 bg-slate-100 rounded-xl transition">
             Cancel & Return
           </a>
 
@@ -1349,14 +1349,14 @@ function renderRegStep8() {
         </button>
 
         ${rec.patient_id ? `
-          <a href="${window.SERVER_DATA?.baseUrl || '/'}views/patients/view.php?id=${rec.patient_id}" 
+          <a href="${window.SERVER_DATA?.baseUrl ? window.SERVER_DATA.baseUrl + 'register/patients/' + rec.patient_id : '/register/patients/' + rec.patient_id}" 
              class="px-6 py-3 bg-blue-50 text-blue-700 border border-blue-200 rounded-xl text-xs font-bold transition flex items-center gap-2">
             <i data-lucide="file-text" class="w-4 h-4"></i>
             <span>View Full Profile</span>
           </a>
         ` : ''}
 
-        <a href="${window.SERVER_DATA?.baseUrl || '/'}views/dashboard/index.php" 
+        <a href="${window.SERVER_DATA?.dashboardUrl || (window.SERVER_DATA?.baseUrl ? window.SERVER_DATA.baseUrl + 'register' : '/register')}" 
            class="px-7 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-lg shadow-blue-600/20 transition flex items-center gap-2">
           <i data-lucide="layout-dashboard" class="w-4 h-4"></i>
           <span>Return to Dashboard</span>

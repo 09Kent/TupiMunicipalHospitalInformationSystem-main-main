@@ -86,7 +86,21 @@ class RoleMiddleware
                 ], 403);
             }
 
-            return redirect()->route('login')->with('error', 'Access Denied: Insufficient permissions.');
+            // Redirect logged-in user to their authorized portal instead of kicking them out to login
+            $redirectUrl = match ($userRole) {
+                'chief', 'director' => url('/director'),
+                'admin'             => url('/admin'),
+                'records'           => url('/records'),
+                'doctor'            => url('/doctor'),
+                'nurse'             => url('/nurse'),
+                'medtech'           => url('/medtech'),
+                'pharmacist', 'pharmacy' => url('/pharmacy'),
+                'billing', 'cashier', 'accountant' => url('/billing'),
+                'register', 'registrator' => url('/register'),
+                default             => url('/')
+            };
+
+            return redirect($redirectUrl)->with('error', 'Access Denied: You do not have permission to access that section.');
         }
 
         return $next($request);

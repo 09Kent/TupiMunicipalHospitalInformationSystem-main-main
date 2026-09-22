@@ -87,7 +87,59 @@ if (!function_exists('calculate_age')) {
 if (!function_exists('base_url')) {
     function base_url(string $path = ''): string
     {
-        return url('/register/' . ltrim($path, '/'));
+        $path = ltrim($path, '/');
+        $parts = explode('?', $path, 2);
+        $main = $parts[0];
+        $query = isset($parts[1]) ? '?' . $parts[1] : '';
+
+        // Dashboard redirection based on authenticated user's role
+        if (empty($main) || strpos($main, 'views/dashboard') !== false || $main === 'dashboard') {
+            if (\Illuminate\Support\Facades\Auth::check()) {
+                $userRole = strtolower(trim(\Illuminate\Support\Facades\Auth::user()->Role ?? ''));
+                if (in_array($userRole, ['chief', 'director'])) return url('/director') . $query;
+                if ($userRole === 'admin') return url('/admin') . $query;
+                if ($userRole === 'records') return url('/records') . $query;
+                if ($userRole === 'doctor') return url('/doctor') . $query;
+                if ($userRole === 'nurse') return url('/nurse') . $query;
+                if ($userRole === 'medtech') return url('/medtech') . $query;
+                if (in_array($userRole, ['pharmacist', 'pharmacy'])) return url('/pharmacy') . $query;
+                if (in_array($userRole, ['billing', 'cashier', 'accountant'])) return url('/billing') . $query;
+                return url('/register') . $query;
+            }
+            return url('/register') . $query;
+        }
+
+        if (strpos($main, 'views/patients/view.php') !== false || $main === 'patients/view') {
+            if (isset($parts[1]) && preg_match('/(?:^|&)id=([^&]+)/', $parts[1], $m)) {
+                return url('/register/patients/' . $m[1]);
+            }
+            return url('/register/patients') . $query;
+        }
+
+        if (strpos($main, 'views/patients') !== false || $main === 'patients') {
+            return url('/register/patients') . $query;
+        }
+
+        if (strpos($main, 'views/appointments') !== false || $main === 'appointments') {
+            return url('/register/appointments') . $query;
+        }
+
+        if (strpos($main, 'views/queue') !== false || $main === 'queue') {
+            return url('/register/queue') . $query;
+        }
+
+        if (strpos($main, 'views/reports') !== false || $main === 'reports') {
+            return url('/register/reports') . $query;
+        }
+
+        if (strpos($main, 'views/registration') !== false || $main === 'registration' || $main === 'intake') {
+            return url('/register/intake') . $query;
+        }
+
+        $clean = preg_replace('#^views/#', '', $main);
+        $clean = preg_replace('#/index\.php$#', '', $clean);
+        $clean = preg_replace('#\.php$#', '', $clean);
+        return url('/register/' . $clean) . $query;
     }
 }
 
@@ -147,7 +199,7 @@ if (!function_exists('doctor_url')) {
 if (!function_exists('register_url')) {
     function register_url(string $path = ''): string
     {
-        return url('/register/' . ltrim($path, '/'));
+        return base_url($path);
     }
 }
 

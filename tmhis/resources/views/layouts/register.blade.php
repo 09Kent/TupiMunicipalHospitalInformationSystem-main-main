@@ -87,8 +87,24 @@
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       <div class="flex items-center justify-between h-18 gap-4">
         
+        @php
+          $navbarDashUrl = route('register.dashboard');
+          if (Auth::check()) {
+            $uRole = strtolower(Auth::user()->Role ?? '');
+            if (in_array($uRole, ['chief', 'director'])) $navbarDashUrl = url('/director');
+            elseif ($uRole === 'admin') $navbarDashUrl = url('/admin');
+            elseif ($uRole === 'records') $navbarDashUrl = url('/records');
+            elseif ($uRole === 'doctor') $navbarDashUrl = url('/doctor');
+            elseif ($uRole === 'nurse') $navbarDashUrl = url('/nurse');
+            elseif ($uRole === 'medtech') $navbarDashUrl = url('/medtech');
+            elseif (in_array($uRole, ['pharmacist', 'pharmacy'])) $navbarDashUrl = url('/pharmacy');
+            elseif (in_array($uRole, ['billing', 'cashier', 'accountant'])) $navbarDashUrl = url('/billing');
+            elseif (in_array($uRole, ['register', 'registrator'])) $navbarDashUrl = route('register.dashboard');
+          }
+        @endphp
+
         <!-- Brand Logo -->
-        <a href="{{ route('register.dashboard') }}" class="flex items-center gap-3 shrink-0 group">
+        <a href="{{ $navbarDashUrl }}" class="flex items-center gap-3 shrink-0 group">
           <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-blue-700 to-blue-500 text-white flex items-center justify-center shadow-md shadow-blue-500/25 group-hover:scale-105 transition-transform duration-200">
             <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
               <path d="M12 2v20M2 12h20M12 8l4 4-4 4-4-4 4-4z"></path>
@@ -106,7 +122,7 @@
         <!-- Primary Navigation Links -->
         <div class="hidden lg:flex items-center gap-1">
           
-          <a href="{{ route('register.dashboard') }}" 
+          <a href="{{ $navbarDashUrl }}" 
              class="px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 {{ request()->routeIs('register.dashboard') ? 'bg-blue-50 text-blue-700 font-extrabold shadow-2xs' : 'text-slate-600 hover:text-blue-600 hover:bg-slate-50' }}">
             <i data-lucide="layout-dashboard" class="w-4 h-4 {{ request()->routeIs('register.dashboard') ? 'text-blue-600' : 'text-slate-400' }}"></i>
             <span>Dashboard</span>
