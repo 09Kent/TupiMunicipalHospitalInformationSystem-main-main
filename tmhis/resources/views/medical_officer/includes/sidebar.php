@@ -48,7 +48,7 @@
           <i data-lucide="file-check"></i>
         </div>
         <span class="nav-item-label">Record Verification</span>
-        <span class="nav-badge" id="sidebarPendingBadge">8</span>
+        <span class="nav-badge" id="sidebarPendingBadge" <?= (isset($pendingVerificationCount) && $pendingVerificationCount <= 0) ? 'style="display:none;"' : '' ?>><?= $pendingVerificationCount ?? 8 ?></span>
       </a>
 
       <a href="#" class="nav-item" data-view="requests" data-tooltip="Medical Record Requests">
@@ -112,7 +112,7 @@
         <span class="user-name"><?= htmlspecialchars($currentOfficer['name'] ?? 'Mark Valenzuela') ?></span>
         <span class="user-role-badge">Medical Records Officer</span>
       </div>
-      <a href="/logout" class="logout-link" title="Logout" style="margin-left:auto;color:#ef4444;display:flex;align-items:center;padding:6px;">
+      <a href="<?= url('/logout') ?>" class="logout-link" title="Logout" style="margin-left:auto;color:#ef4444;display:flex;align-items:center;padding:6px;">
         <i data-lucide="log-out" style="width:16px;height:16px;"></i>
       </a>
     </div>

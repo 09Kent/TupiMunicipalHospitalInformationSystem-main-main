@@ -512,9 +512,15 @@ document.addEventListener('DOMContentLoaded', () => {
                         <button class="btn btn-secondary btn-sm" onclick="window.editPatientRecord('${p.id}')" title="Edit Patient Demographics">
                           <i data-lucide="edit-2" style="width:14px;height:14px;"></i> Edit
                         </button>
-                        <button class="btn btn-secondary btn-sm" onclick="window.openVerificationModal('${p.id}')" title="Verify Record Accuracy">
-                          <i data-lucide="check-square" style="width:14px;height:14px;"></i> Verify
-                        </button>
+                        ${p.verificationStatus !== 'Verified' ? `
+                          <button class="btn btn-secondary btn-sm" onclick="window.openVerificationModal('${p.id}')" title="Verify Record Accuracy">
+                            <i data-lucide="check-square" style="width:14px;height:14px;"></i> Verify
+                          </button>
+                        ` : `
+                          <span class="badge badge-verified" style="display:inline-flex;align-items:center;gap:3px;padding:4px 8px;font-size:0.7rem;font-weight:700;">
+                            <i data-lucide="check-check" style="width:12px;height:12px;"></i> Verified
+                          </span>
+                        `}
                         ${p.recordStatus !== 'Archived' ? `
                           <button class="btn btn-secondary btn-sm text-danger" onclick="window.openArchiveModal('${p.id}')" title="Archive Record">
                             <i data-lucide="archive" style="width:14px;height:14px;"></i> Archive
@@ -596,9 +602,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     <td style="font-size:0.75rem; color:var(--text-muted);">${p.lastUpdated || '-'}</td>
                     <td>
                       <div class="action-btn-group">
-                        <button class="btn btn-primary btn-sm" onclick="window.openVerificationModal('${p.id}')">
-                          <i data-lucide="file-check" style="width:14px;height:14px;"></i> Verify Record
-                        </button>
+                        ${p.verificationStatus === 'Verified' ? `
+                          <span class="badge badge-verified" style="display:inline-flex;align-items:center;gap:4px;padding:6px 10px;font-size:0.75rem;font-weight:700;">
+                            <i data-lucide="check-check" style="width:14px;height:14px;color:#10b981;"></i> Verified
+                          </span>
+                        ` : `
+                          <button class="btn btn-primary btn-sm" onclick="window.openVerificationModal('${p.id}')">
+                            <i data-lucide="file-check" style="width:14px;height:14px;"></i> Verify Record
+                          </button>
+                        `}
                         <button class="btn btn-secondary btn-sm" onclick="window.viewRegistrationHistory('${p.id}')">
                           <i data-lucide="history" style="width:14px;height:14px;"></i> History
                         </button>
@@ -1827,6 +1839,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const patient = state.patients.find(p => p.id === patientId);
     if (!patient) return;
 
+    if (patient.verificationStatus === 'Verified') {
+      showToast("Already Verified", `Patient record ${patient.id} has already been verified and certified accurate.`, "info");
+      return;
+    }
+
     const modal = document.getElementById('verifyRecordModal');
     const content = document.getElementById('verifyRecordModalContent');
     if (!modal || !content) return;
@@ -1896,10 +1913,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const timeStr = now.toTimeString().split(' ')[0].substring(0, 5);
 
     patient.verificationStatus = "Verified";
-    patient.verifiedBy = TMHIS_DATA.currentOfficer.name;
+    patient.verifiedBy = (TMHIS_DATA?.currentOfficer?.name) || 'Mark Anthony Valenzuela, RMT';
     patient.verifiedDate = dateStr;
     patient.lastUpdated = `${dateStr} ${timeStr}`;
-    patient.lastUpdatedBy = TMHIS_DATA.currentOfficer.name;
+    patient.lastUpdatedBy = (TMHIS_DATA?.currentOfficer?.name) || 'Mark Anthony Valenzuela, RMT';
 
     // Add registration history
     state.registrationHistory.unshift({
@@ -1909,20 +1926,43 @@ document.addEventListener('DOMContentLoaded', () => {
       date: `${dateStr} ${timeStr}`,
       eventType: "Record Verified",
       details: "Full 7-point patient demographic and registration checklist certified accurate.",
-      performedBy: `${TMHIS_DATA.currentOfficer.name} (Medical Records Officer)`
+      performedBy: `${patient.verifiedBy} (Medical Records Officer)`
     });
 
     logAudit("Verified Patient Record", patient.id, `${patient.firstName} ${patient.lastName}`, "Certified 7-point verification accuracy");
 
-    // Sync to Supabase
-    fetch('/records/api/patients/' + (patient.patient_id || patient.id) + '/verify', {
+    // Dynamic pending badge update immediately
+    const remainingPending = state.patients.filter(p => p.verificationStatus === 'Pending Verification').length;
+    const badge = document.getElementById('sidebarPendingBadge');
+    if (badge) {
+      badge.textContent = remainingPending;
+      if (remainingPending <= 0) {
+        badge.style.display = 'none';
+      } else {
+        badge.style.display = '';
+      }
+    }
+
+    // Sync to Server / Database
+    const appUrl = window.TMHIS_APP_URL || (window.location.pathname.includes('/public') ? window.location.pathname.substring(0, window.location.pathname.indexOf('/public') + 7) : '');
+    const verifyUrl = `${appUrl}/records/api/patients/${patient.patient_id || patient.id}/verify`;
+
+    fetch(verifyUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') || {}).content || '',
         'Accept': 'application/json'
       }
-    }).catch(e => console.error('Error recording verification in Supabase:', e));
+    }).then(res => res.json()).then(data => {
+      if (data && data.pending_count !== undefined) {
+        const b = document.getElementById('sidebarPendingBadge');
+        if (b) {
+          b.textContent = data.pending_count;
+          b.style.display = data.pending_count <= 0 ? 'none' : '';
+        }
+      }
+    }).catch(e => console.error('Error recording verification in database:', e));
 
     closeModal('verifyRecordModal');
     showToast("Record Verified", `Patient record ${patient.id} marked as VERIFIED.`, "success");
@@ -2935,6 +2975,20 @@ document.addEventListener('DOMContentLoaded', () => {
     window.print();
   };
 
+  function updatePendingBadge() {
+    const pendingCount = state.patients.filter(p => p.verificationStatus === 'Pending Verification').length;
+    const badge = document.getElementById('sidebarPendingBadge');
+    if (badge) {
+      badge.textContent = pendingCount;
+      if (pendingCount <= 0) {
+        badge.style.display = 'none';
+      } else {
+        badge.style.display = '';
+      }
+    }
+  }
+
   // Initial Load
+  updatePendingBadge();
   renderCurrentView();
 });

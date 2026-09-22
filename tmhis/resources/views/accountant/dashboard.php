@@ -200,7 +200,7 @@
           <i data-lucide="bell" class="w-3.5 h-3.5 text-slate-400"></i> Notifications
         </a>
         <div class="my-1 border-t border-slate-100"></div>
-        <a href="/logout" class="flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-rose-600 hover:bg-rose-50 rounded-lg">
+        <a href="<?= url('/logout') ?>" class="flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-rose-600 hover:bg-rose-50 rounded-lg">
           <i data-lucide="log-out" class="w-3.5 h-3.5 text-rose-500"></i> Logout
         </a>
       </div>

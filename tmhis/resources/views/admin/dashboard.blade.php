@@ -251,7 +251,7 @@
           Other
         </div>
         <nav class="space-y-0.5">
-          <a href="/logout"
+          <a href="{{ route('logout') }}"
              class="sidebar-item group flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-rose-600 hover:bg-rose-50 hover:text-rose-700 transition-all duration-200 w-full">
             <div class="flex items-center justify-center shrink-0 w-5 h-5 text-rose-500 group-hover:scale-110 transition-transform">
               <i data-lucide="log-out" class="w-4 h-4"></i>

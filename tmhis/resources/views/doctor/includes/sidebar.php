@@ -137,7 +137,7 @@ $allSpecialistDocs = $docObj->getAll();
           <p class="text-[11px] font-semibold text-blue-600 truncate"><?= e($currentUser['specialty'] ?? 'Cardiologist') ?></p>
         </div>
       </div>
-      <a href="/logout" 
+      <a href="<?= url('/logout') ?>" 
          title="Sign Out" 
          class="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition">
         <i data-lucide="log-out" class="w-4 h-4"></i>

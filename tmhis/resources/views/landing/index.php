@@ -999,7 +999,7 @@
                         <div class="group cursor-pointer" onclick="openTeamModal(1)" data-aos="fade-up" data-aos-delay="100">
                             <div class="h-full bg-white rounded-3xl p-6 shadow-lg shadow-slate-200/50 border border-slate-200 hover:border-blue-400 hover:shadow-xl hover:shadow-blue-500/10 transition-all duration-300 transform hover:-translate-y-1 flex flex-col">
                                 <div class="relative w-full aspect-[4/3] rounded-2xl overflow-hidden ring-4 ring-blue-50 group-hover:ring-blue-100 transition-all mb-4 bg-slate-100 shadow-inner">
-                                    <img src="assets/Production_Team/Kent.jpg" alt="Kent Carl V. Amit" class="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-500">
+                                    <img src="assets/Production_Team/Kent1.jpg" alt="Kent Carl V. Amit" class="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-500">
                                     <div class="absolute top-3 left-3 bg-blue-600 text-white text-[10px] font-extrabold px-2.5 py-1 rounded-full shadow-sm flex items-center gap-1">
                                         <i data-lucide="code" class="w-3 h-3"></i>
                                         Architecture
@@ -1071,7 +1071,7 @@
                         <div class="group cursor-pointer" onclick="openTeamModal(3)" data-aos="fade-up" data-aos-delay="300">
                             <div class="h-full bg-white rounded-3xl p-6 shadow-lg shadow-slate-200/50 border border-slate-200 hover:border-emerald-400 hover:shadow-xl hover:shadow-emerald-500/10 transition-all duration-300 transform hover:-translate-y-1 flex flex-col">
                                 <div class="relative w-full aspect-[4/3] rounded-2xl overflow-hidden ring-4 ring-emerald-50 group-hover:ring-emerald-100 transition-all mb-4 bg-slate-100 shadow-inner">
-                                    <img src="assets/Production_Team/Allen.jpg" alt="Allene Joy R. Cunahap" class="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-500">
+                                    <img src="assets/Production_Team/Allen1.jpg" alt="Allene Joy R. Cunahap" class="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-500">
                                     <div class="absolute top-3 left-3 bg-emerald-600 text-white text-[10px] font-extrabold px-2.5 py-1 rounded-full shadow-sm flex items-center gap-1">
                                         <i data-lucide="bar-chart-3" class="w-3 h-3"></i>
                                         Analytics
@@ -1521,10 +1521,10 @@
                 badge: "Full-Stack Architecture & Cloud",
                 badgeClass: "bg-blue-50 text-blue-700 border-blue-100",
                 tagline: "Engineering high-performance, resilient, and secure clinical software architectures.",
-                photo1: "assets/Production_Team/Kent.jpg",
-                photo2: "assets/Production_Team/Kent1.jpg",
-                photoLabel1: "Primary Picture • Studio Profile",
-                photoLabel2: "Second Picture • Engineering & Field Profile",
+                photo1: "assets/Production_Team/Kent1.jpg",
+                photo2: "assets/Production_Team/Kent.jpg",
+                photoLabel1: "Primary Picture • Campus & Architecture Profile",
+                photoLabel2: "Second Picture • Full Portrait",
                 studiesTitle: "Bachelor of Science in Information Technology major in Business Analytics (BSIT-BA)",
                 studiesDesc: "Rigorous academic foundation in software architecture, database management systems, full-stack programming, cloud computing, and enterprise business intelligence.",
                 experience: "Lead software engineer responsible for the end-to-end full-stack hospital architecture. Implemented isolated multi-device session concurrency (database sessions), automated cross-module doctor-medtech-pharmacy data pipelines, cascading database referential integrity across 23 tables, and optimized serverless cloud deployment on Vercel with Supabase PostgreSQL.",
@@ -1553,10 +1553,10 @@
                 badge: "Healthcare Business Intelligence & Analytics",
                 badgeClass: "bg-emerald-50 text-emerald-700 border-emerald-100",
                 tagline: "Transforming complex hospital clinical data into actionable operational intelligence.",
-                photo1: "assets/Production_Team/Allen.jpg",
-                photo2: "assets/Production_Team/Allen1.jpg",
-                photoLabel1: "Primary Picture • Formal Profile",
-                photoLabel2: "Second Picture • Analytics & Field Profile",
+                photo1: "assets/Production_Team/Allen1.jpg",
+                photo2: "assets/Production_Team/Allen.jpg",
+                photoLabel1: "Primary Picture • Creative Profile",
+                photoLabel2: "Second Picture • Formal Analytics Profile",
                 studiesTitle: "Bachelor of Science in Information Technology major in Business Analytics (BSIT-BA)",
                 studiesDesc: "Specialized in data mining, predictive analytics, statistical analysis, clinical KPI derivation, relational schema design, and quantitative decision modeling.",
                 experience: "Led data modeling and business intelligence initiatives for the hospital information system. Analyzed municipal patient census trends, architected the hospital director KPI telemetry dashboard, developed automated unbilled revenue aggregation algorithms, and formatted clinical health registries for compliance reporting.",
@@ -1566,11 +1566,11 @@
         ];
 
         let currentTeamIndex = 0;
-        let currentPhotoVersion = 2; // Default to Second Picture as requested!
+        let currentPhotoVersion = 1; // Default to Primary Picture first as requested!
 
         function openTeamModal(index) {
             currentTeamIndex = index;
-            currentPhotoVersion = 2; // Always display the second picture by default when opened
+            currentPhotoVersion = 1; // Always display the first picture by default when opened
             updateTeamModalContent();
 
             const modal = document.getElementById('teamProfileModal');
@@ -1603,11 +1603,17 @@
                 label.textContent = member.photoLabel1 || "Primary Picture";
                 btn1.className = "flex-1 py-1.5 px-2 text-xs font-bold rounded-lg bg-blue-600 text-white shadow-xs";
                 btn2.className = "flex-1 py-1.5 px-2 text-xs font-bold rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-600 transition-colors";
+                img.style.objectPosition = "center top";
             } else {
                 img.src = member.photo2;
                 label.textContent = member.photoLabel2 || "Second Picture";
                 btn2.className = "flex-1 py-1.5 px-2 text-xs font-bold rounded-lg bg-blue-600 text-white shadow-xs";
                 btn1.className = "flex-1 py-1.5 px-2 text-xs font-bold rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-600 transition-colors";
+                if (member.name === "Kent Carl V. Amit") {
+                    img.style.objectPosition = "center 80%";
+                } else {
+                    img.style.objectPosition = "center top";
+                }
             }
         }
 
@@ -1639,7 +1645,7 @@
                 skillsContainer.appendChild(span);
             });
 
-            // Set photo (defaults to photo2)
+            // Set photo (defaults to photo1)
             switchTeamPhoto(currentPhotoVersion);
 
             if (typeof lucide !== 'undefined') {
@@ -1651,7 +1657,7 @@
             currentTeamIndex += direction;
             if (currentTeamIndex < 0) currentTeamIndex = teamMembersData.length - 1;
             if (currentTeamIndex >= teamMembersData.length) currentTeamIndex = 0;
-            currentPhotoVersion = 2; // Always default to second photo for next member
+            currentPhotoVersion = 1; // Always default to primary photo for next member
             updateTeamModalContent();
         }
 

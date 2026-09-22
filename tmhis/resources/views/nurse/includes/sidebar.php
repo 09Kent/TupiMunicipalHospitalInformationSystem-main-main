@@ -143,7 +143,7 @@ $activeMenu = $activeMenu ?? 'dashboard';
           <p class="text-[11px] font-semibold text-teal-600 truncate">Nurse On Duty</p>
         </div>
       </div>
-      <a href="/logout" 
+      <a href="<?= url('/logout') ?>" 
          title="Sign Out" 
          class="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition">
         <i data-lucide="log-out" class="w-4 h-4"></i>

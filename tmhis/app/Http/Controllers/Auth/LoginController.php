@@ -111,18 +111,32 @@ class LoginController extends Controller
         $username = strtolower(trim($user->Username ?? ''));
         $role = strtolower(trim($user->Role ?? ''));
 
+        // 1. Hospital Chief / Medical Director / Chief Medical Officer
+        if (in_array($role, ['chief', 'director', 'cmo']) || in_array($username, ['director', 'cmo', 'chief'])) {
+            return redirect()->route('director.dashboard');
+        }
+
+        // 2. Nurse on Duty
+        if ($role === 'nurse' || str_contains($username, 'nurse') || in_array($username, ['staff.reyes', 'staff.bautista'])) {
+            return redirect()->route('nurse.dashboard');
+        }
+
+        // 3. System Administrator
         if ($role === 'admin' || $username === 'admin') {
             return redirect()->route('admin.dashboard');
         }
-        if (in_array($role, ['chief', 'director']) || $username === 'director') {
-            return redirect()->route('director.dashboard');
-        }
-        if ($role === 'records' || $username === 'records' || $username === 'records_officer') {
+
+        // 4. Medical Records Officer
+        if (in_array($role, ['records', 'mro']) || in_array($username, ['records', 'records2', 'records_officer'])) {
             return redirect()->route('records.dashboard');
         }
+
+        // 5. Admitting / Registration Staff
         if (in_array($role, ['register', 'registrator']) || str_contains($username, 'registrator') || str_contains($username, 'register') || $username === 'register1') {
             return redirect()->route('register.dashboard');
         }
+
+        // 6. Attending Physician / Doctor
         if ($role === 'doctor' || Doctor::where('UserID', $user->UserID)->exists()) {
             if (!session('doctor_id')) {
                 $doc = Doctor::where('UserID', $user->UserID)->first() ?? Doctor::where('Status', 'Active')->first() ?? Doctor::first();
@@ -132,16 +146,19 @@ class LoginController extends Controller
             }
             return redirect()->route('doctor.dashboard');
         }
-        if ($role === 'nurse' || str_contains($username, 'nurse') || $username === 'staff.reyes') {
-            return redirect()->route('nurse.dashboard');
-        }
+
+        // 7. Medical Technologist
         if ($role === 'medtech' || str_contains($username, 'medtech') || $username === 'medtech2') {
             return redirect()->route('medtech.dashboard');
         }
+
+        // 8. Pharmacist
         if (in_array($role, ['pharmacist', 'pharmacy']) || str_contains($username, 'pharmacist')) {
             return redirect()->route('pharmacy.dashboard');
         }
-        if (in_array($role, ['billing', 'cashier', 'accountant']) || in_array($username, ['cashier', 'billing', 'accountant'])) {
+
+        // 9. Billing / Cashier
+        if (in_array($role, ['billing', 'cashier', 'accountant']) || in_array($username, ['cashier', 'billing', 'accountant', 'cashier2'])) {
             return redirect()->route('billing.dashboard');
         }
 

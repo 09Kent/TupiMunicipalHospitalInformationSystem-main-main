@@ -59,6 +59,7 @@ require_once __DIR__ . '/config/data.php';
 
   <!-- Live Server Data -->
   <script>
+    window.TMHIS_APP_URL = "<?= url('/') ?>";
     window.SERVER_RECORDS_DATA = <?= json_encode(
       $serverData ?? [
         'currentOfficer' => $currentOfficer ?? [],

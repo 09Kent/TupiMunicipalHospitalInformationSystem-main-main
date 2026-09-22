@@ -164,7 +164,7 @@ $activeMenu = $activeMenu ?? 'dashboard';
         <span>Notifications</span>
       </button>
       <div class="border-t border-slate-100 my-1"></div>
-      <a href="/logout" class="w-full text-left px-3 py-2 rounded-xl text-xs font-semibold text-rose-600 hover:bg-rose-50 flex items-center gap-2.5 transition">
+      <a href="<?= url('/logout') ?>" class="w-full text-left px-3 py-2 rounded-xl text-xs font-semibold text-rose-600 hover:bg-rose-50 flex items-center gap-2.5 transition">
         <i data-lucide="log-out" class="w-4 h-4 text-rose-500"></i>
         <span>Logout Session</span>
       </a>

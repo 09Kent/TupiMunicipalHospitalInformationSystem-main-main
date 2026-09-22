@@ -115,7 +115,7 @@ $user = Session::getCurrentUser() ?: [
             <div class="text-[10px] font-semibold text-blue-600 leading-tight"><?= e($user['role']) ?></div>
           </div>
 
-          <a href="/logout" 
+          <a href="<?= url('/logout') ?>" 
              class="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition ml-1" 
              title="Log Out">
             <i data-lucide="log-out" class="w-4 h-4"></i>

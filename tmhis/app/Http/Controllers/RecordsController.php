@@ -60,11 +60,11 @@ class RecordsController extends Controller
                 'registrationType'   => (($r->PatientCategory ?? '') === 'Inpatient') ? 'Inpatient Admission' : 'Outpatient Consultation',
                 'registeredBy'       => 'Admitting Staff',
                 'recordStatus'       => $r->Status ?: 'Active',
-                'verificationStatus' => ($r->Status === 'Archived') ? 'Archived' : 'Verified',
-                'verifiedBy'         => $currentOfficer['name'],
-                'verifiedDate'       => substr((string)($r->CreatedAt ?? date('Y-m-d')), 0, 10),
+                'verificationStatus' => $r->VerificationStatus ?: (($r->Status === 'Archived') ? 'Archived' : 'Pending Verification'),
+                'verifiedBy'         => $r->VerifiedBy ?: (($r->VerificationStatus === 'Verified') ? $currentOfficer['name'] : null),
+                'verifiedDate'       => $r->VerifiedAt ? substr((string)$r->VerifiedAt, 0, 10) : (($r->VerificationStatus === 'Verified') ? substr((string)($r->CreatedAt ?? date('Y-m-d')), 0, 10) : null),
                 'lastUpdated'        => substr((string)($r->UpdatedAt ?? $r->CreatedAt ?? date('Y-m-d H:i')), 0, 16),
-                'lastUpdatedBy'      => $currentOfficer['name']
+                'lastUpdatedBy'      => $r->VerifiedBy ?: $currentOfficer['name']
             ];
         }
 
@@ -217,16 +217,19 @@ class RecordsController extends Controller
             ];
         }
 
+        $pendingVerificationCount = Patient::where('VerificationStatus', 'Pending Verification')->count();
+
         $serverData = [
-            'currentOfficer'        => $currentOfficer,
-            'patients'              => $livePatients,
-            'medicalRecordRequests' => $requests,
-            'consultations'         => $liveConsultations,
-            'laboratoryHistory'     => $liveLabs,
-            'treatmentHistory'      => $liveTreatments,
+            'currentOfficer'           => $currentOfficer,
+            'patients'                 => $livePatients,
+            'medicalRecordRequests'    => $requests,
+            'consultations'            => $liveConsultations,
+            'laboratoryHistory'        => $liveLabs,
+            'treatmentHistory'         => $liveTreatments,
+            'pendingVerificationCount' => $pendingVerificationCount,
         ];
 
-        return view('medical_officer.dashboard', compact('currentOfficer', 'serverData'));
+        return view('medical_officer.dashboard', compact('currentOfficer', 'serverData', 'pendingVerificationCount'));
     }
 
     public function getPatients(Request $request): JsonResponse
@@ -366,14 +369,57 @@ class RecordsController extends Controller
     {
         $patient = Patient::where('PatientID', $id)
             ->orWhere('PatientCode', $id)
-            ->firstOrFail();
+            ->first();
+
+        if (!$patient && is_string($id) && preg_match('/PAT-\d{4}-(\d+)/', $id, $matches)) {
+            $numId = (int)$matches[1];
+            $patient = Patient::where('PatientID', $numId)->first();
+        }
+
+        if (!$patient) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Patient record not found.'
+            ], 404);
+        }
+
+        $officerName = auth()->user() ? auth()->user()->FullName : 'Mark Anthony Valenzuela, RMT';
+
+        $patient->update([
+            'VerificationStatus' => 'Verified',
+            'VerifiedBy'         => $officerName,
+            'VerifiedAt'         => now(),
+        ]);
+
+        // Record in registration history table
+        try {
+            DB::table('patient_registration_history')->insert([
+                'PatientID'   => $patient->PatientID,
+                'UserID'      => auth()->id() ?? 1,
+                'Action'      => 'RECORD_VERIFIED',
+                'Description' => "Full 7-point patient demographic and registration checklist certified accurate by {$officerName}.",
+                'CreatedAt'   => now(),
+            ]);
+        } catch (\Throwable $e) {}
 
         $this->logAudit($request, 'VERIFY_RECORD_ACCURACY', "Verified accuracy of patient record {$patient->PatientCode} ({$patient->FirstName} {$patient->LastName})", (string)$patient->PatientID);
 
+        $pendingCount = Patient::where('VerificationStatus', 'Pending Verification')->count();
+
         return response()->json([
-            'success' => true,
-            'message' => "Patient record {$patient->PatientCode} verified for accuracy.",
-            'verified_at' => now()->toDateTimeString()
+            'success'       => true,
+            'message'       => "Patient record {$patient->PatientCode} verified for accuracy.",
+            'verified_at'   => now()->toDateTimeString(),
+            'pending_count' => $pendingCount,
+            'patient'       => [
+                'id'                 => $patient->PatientCode ?: ('PAT-' . date('Y') . '-' . str_pad((string)$patient->PatientID, 4, '0', STR_PAD_LEFT)),
+                'patient_id'         => (int)$patient->PatientID,
+                'verificationStatus' => 'Verified',
+                'verifiedBy'         => $officerName,
+                'verifiedDate'       => date('Y-m-d'),
+                'lastUpdated'        => date('Y-m-d H:i'),
+                'lastUpdatedBy'      => $officerName,
+            ]
         ]);
     }
 

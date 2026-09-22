@@ -66,6 +66,7 @@ $appointmentUrl = file_exists(__DIR__ . '/tmhis/public/index.php') ? 'tmhis/publ
                     <a href="#about" class="nav-link text-sm font-semibold text-slate-700 hover:text-blue-600 transition-colors whitespace-nowrap">About Us</a>
                     <a href="#services" class="nav-link text-sm font-semibold text-slate-700 hover:text-blue-600 transition-colors whitespace-nowrap">Services</a>
                     <a href="#departments" class="nav-link text-sm font-semibold text-slate-700 hover:text-blue-600 transition-colors whitespace-nowrap">Departments</a>
+                    <a href="#team" class="nav-link text-sm font-semibold text-slate-700 hover:text-blue-600 transition-colors whitespace-nowrap">Production Team</a>
                     <a href="#contact" class="nav-link text-sm font-semibold text-slate-700 hover:text-blue-600 transition-colors whitespace-nowrap">Contact Us</a>
                 </nav>
 
@@ -913,6 +914,204 @@ $appointmentUrl = file_exists(__DIR__ . '/tmhis/public/index.php') ? 'tmhis/publ
             </div>
         </section>
 
+        <!-- 8.5. Production Team Hierarchy & Profiles -->
+        <section id="team" class="py-20 lg:py-28 bg-gradient-to-b from-slate-50 via-white to-slate-50 border-t border-slate-200/80 relative overflow-hidden">
+            <!-- Subtle background ambient glows -->
+            <div class="absolute -top-32 -right-32 w-80 h-80 bg-blue-100/50 rounded-full blur-3xl pointer-events-none"></div>
+            <div class="absolute -bottom-32 -left-32 w-80 h-80 bg-indigo-100/50 rounded-full blur-3xl pointer-events-none"></div>
+
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+                
+                <!-- Section Header -->
+                <div class="text-center max-w-3xl mx-auto mb-16" data-aos="fade-up">
+                    <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-xs font-extrabold text-blue-700 uppercase tracking-widest mb-3">
+                        <i data-lucide="users" class="w-3.5 h-3.5 text-blue-600"></i>
+                        PRODUCTION & ENGINEERING TEAM
+                    </span>
+                    <h2 class="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-slate-900 tracking-tight">
+                        Meet the Production Team
+                    </h2>
+                    <p class="mt-4 text-base sm:text-lg text-slate-600">
+                        The multidisciplinary team of <span class="font-bold text-blue-700">BSIT-BA (Bachelor of Science in Information Technology major in Business Analytics)</span> innovators who engineered, designed, and deployed the Tupi Municipal Hospital Information Management System.
+                    </p>
+                    <p class="mt-1 text-xs sm:text-sm text-slate-400 italic">
+                        Click on any member's card to view their complete profile, studies, experience, expertise, and secondary photograph.
+                    </p>
+                </div>
+
+                <!-- Hierarchy Tree Container -->
+                <div class="relative max-w-5xl mx-auto">
+                    
+                    <!-- LEVEL 1: Product Team Manager (Leadership Tier) -->
+                    <div class="flex justify-center mb-6 sm:mb-8" data-aos="zoom-in">
+                        <div class="w-full max-w-lg group cursor-pointer" onclick="openTeamModal(0)">
+                            <div class="relative bg-white rounded-3xl p-6 sm:p-7 shadow-xl shadow-indigo-100/80 border-2 border-indigo-200 hover:border-indigo-500 hover:shadow-2xl hover:shadow-indigo-500/15 transition-all duration-300 transform hover:-translate-y-1">
+                                <!-- Top Accent Badge -->
+                                <div class="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-gradient-to-r from-indigo-600 to-blue-600 text-white text-[11px] font-extrabold uppercase tracking-wider px-4 py-1 rounded-full shadow-md flex items-center gap-1.5 whitespace-nowrap">
+                                    <i data-lucide="crown" class="w-3.5 h-3.5"></i>
+                                    Product Leadership
+                                </div>
+
+                                <div class="flex flex-col sm:flex-row items-center gap-5 mt-2">
+                                    <div class="relative w-28 h-28 sm:w-32 sm:h-32 shrink-0 rounded-2xl overflow-hidden ring-4 ring-indigo-50 group-hover:ring-indigo-200 transition-all shadow-md">
+                                        <img src="assets/Production_Team/Kirby1.jpg" alt="Kirby Geagonia" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
+                                        <div class="absolute bottom-1.5 right-1.5 bg-white/90 backdrop-blur-xs p-1 rounded-lg shadow-xs">
+                                            <i data-lucide="maximize-2" class="w-3.5 h-3.5 text-indigo-600"></i>
+                                        </div>
+                                    </div>
+                                    <div class="text-center sm:text-left flex-1">
+                                        <h3 class="text-xl sm:text-2xl font-extrabold text-slate-900 group-hover:text-indigo-600 transition-colors">
+                                            Kirby Geagonia
+                                        </h3>
+                                        <div class="mt-1 flex flex-wrap items-center justify-center sm:justify-start gap-1.5">
+                                            <span class="px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 text-xs font-extrabold border border-indigo-100">
+                                                Product Team Manager
+                                            </span>
+                                            <span class="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[10px] font-semibold">
+                                                BSIT-BA Graduate
+                                            </span>
+                                        </div>
+                                        <p class="mt-2.5 text-xs sm:text-sm text-slate-600 leading-relaxed">
+                                            Orchestrates project vision, sprint roadmaps, clinical stakeholder alignment, operational workflows, and delivery milestones.
+                                        </p>
+                                        <div class="mt-3 inline-flex items-center gap-1 text-xs font-bold text-indigo-600 group-hover:translate-x-1 transition-transform">
+                                            <span>View Experience & Skills</span>
+                                            <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Hierarchy Connector Lines (Desktop visual flow) -->
+                    <div class="hidden md:flex flex-col items-center justify-center my-1 pointer-events-none">
+                        <div class="w-0.5 h-6 bg-gradient-to-b from-indigo-400 to-blue-300"></div>
+                        <div class="w-3/4 h-0.5 bg-blue-200 relative">
+                            <div class="absolute -top-1 left-0 w-2.5 h-2.5 rounded-full bg-blue-500"></div>
+                            <div class="absolute -top-1 left-1/2 -translate-x-1/2 w-2.5 h-2.5 rounded-full bg-blue-500"></div>
+                            <div class="absolute -top-1 right-0 w-2.5 h-2.5 rounded-full bg-blue-500"></div>
+                        </div>
+                        <div class="w-0.5 h-6 bg-blue-200"></div>
+                    </div>
+
+                    <!-- LEVEL 2: Core Engineering, UI/UX Design, and Data Analytics -->
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-8 mt-4 sm:mt-6">
+                        
+                        <!-- 1. Kent Carl V. Amit (Software Engineer) -->
+                        <div class="group cursor-pointer" onclick="openTeamModal(1)" data-aos="fade-up" data-aos-delay="100">
+                            <div class="h-full bg-white rounded-3xl p-6 shadow-lg shadow-slate-200/50 border border-slate-200 hover:border-blue-400 hover:shadow-xl hover:shadow-blue-500/10 transition-all duration-300 transform hover:-translate-y-1 flex flex-col">
+                                <div class="relative w-full aspect-[4/3] rounded-2xl overflow-hidden ring-4 ring-blue-50 group-hover:ring-blue-100 transition-all mb-4 bg-slate-100 shadow-inner">
+                                    <img src="assets/Production_Team/Kent1.jpg" alt="Kent Carl V. Amit" class="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-500">
+                                    <div class="absolute top-3 left-3 bg-blue-600 text-white text-[10px] font-extrabold px-2.5 py-1 rounded-full shadow-sm flex items-center gap-1">
+                                        <i data-lucide="code" class="w-3 h-3"></i>
+                                        Architecture
+                                    </div>
+                                    <div class="absolute bottom-2 right-2 bg-white/90 backdrop-blur-xs p-1.5 rounded-xl shadow-xs">
+                                        <i data-lucide="maximize-2" class="w-3.5 h-3.5 text-blue-600"></i>
+                                    </div>
+                                </div>
+                                <div class="flex-1 flex flex-col">
+                                    <h4 class="text-lg font-extrabold text-slate-900 group-hover:text-blue-600 transition-colors">
+                                        Kent Carl V. Amit
+                                    </h4>
+                                    <div class="mt-1 flex flex-wrap items-center gap-1.5">
+                                        <span class="px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 text-xs font-bold border border-blue-100">
+                                            Software Engineer
+                                        </span>
+                                        <span class="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[10px] font-semibold">
+                                            BSIT-BA
+                                        </span>
+                                    </div>
+                                    <p class="mt-2.5 text-xs text-slate-600 leading-relaxed flex-1">
+                                        Architect of core database concurrency, serverless cloud APIs, multi-role security, cascading integrity, and full-stack hospital architecture.
+                                    </p>
+                                    <div class="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs font-semibold text-blue-600">
+                                        <span>View Studies & Skills</span>
+                                        <i data-lucide="arrow-right" class="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 2. Fairah C. Alang (UI/UX Designer) -->
+                        <div class="group cursor-pointer" onclick="openTeamModal(2)" data-aos="fade-up" data-aos-delay="200">
+                            <div class="h-full bg-white rounded-3xl p-6 shadow-lg shadow-slate-200/50 border border-slate-200 hover:border-pink-400 hover:shadow-xl hover:shadow-pink-500/10 transition-all duration-300 transform hover:-translate-y-1 flex flex-col">
+                                <div class="relative w-full aspect-[4/3] rounded-2xl overflow-hidden ring-4 ring-pink-50 group-hover:ring-pink-100 transition-all mb-4 bg-slate-100 shadow-inner">
+                                    <img src="assets/Production_Team/Fairah.jpg" alt="Fairah C. Alang" class="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-500">
+                                    <div class="absolute top-3 left-3 bg-pink-600 text-white text-[10px] font-extrabold px-2.5 py-1 rounded-full shadow-sm flex items-center gap-1">
+                                        <i data-lucide="palette" class="w-3 h-3"></i>
+                                        Design
+                                    </div>
+                                    <div class="absolute bottom-2 right-2 bg-white/90 backdrop-blur-xs p-1.5 rounded-xl shadow-xs">
+                                        <i data-lucide="maximize-2" class="w-3.5 h-3.5 text-pink-600"></i>
+                                    </div>
+                                </div>
+                                <div class="flex-1 flex flex-col">
+                                    <h4 class="text-lg font-extrabold text-slate-900 group-hover:text-pink-600 transition-colors">
+                                        Fairah C. Alang
+                                    </h4>
+                                    <div class="mt-1 flex flex-wrap items-center gap-1.5">
+                                        <span class="px-2.5 py-0.5 rounded-full bg-pink-50 text-pink-700 text-xs font-bold border border-pink-100">
+                                            UI/UX Designer
+                                        </span>
+                                        <span class="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[10px] font-semibold">
+                                            BSIT-BA
+                                        </span>
+                                    </div>
+                                    <p class="mt-2.5 text-xs text-slate-600 leading-relaxed flex-1">
+                                        Crafts human-centric clinical interfaces, accessible workflows, responsive design systems, and aesthetic digital healthcare ergonomics.
+                                    </p>
+                                    <div class="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs font-semibold text-pink-600">
+                                        <span>View Studies & Skills</span>
+                                        <i data-lucide="arrow-right" class="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 3. Allene Joy R. Cunahap (Data Analyst) -->
+                        <div class="group cursor-pointer" onclick="openTeamModal(3)" data-aos="fade-up" data-aos-delay="300">
+                            <div class="h-full bg-white rounded-3xl p-6 shadow-lg shadow-slate-200/50 border border-slate-200 hover:border-emerald-400 hover:shadow-xl hover:shadow-emerald-500/10 transition-all duration-300 transform hover:-translate-y-1 flex flex-col">
+                                <div class="relative w-full aspect-[4/3] rounded-2xl overflow-hidden ring-4 ring-emerald-50 group-hover:ring-emerald-100 transition-all mb-4 bg-slate-100 shadow-inner">
+                                    <img src="assets/Production_Team/Allen1.jpg" alt="Allene Joy R. Cunahap" class="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-500">
+                                    <div class="absolute top-3 left-3 bg-emerald-600 text-white text-[10px] font-extrabold px-2.5 py-1 rounded-full shadow-sm flex items-center gap-1">
+                                        <i data-lucide="bar-chart-3" class="w-3 h-3"></i>
+                                        Analytics
+                                    </div>
+                                    <div class="absolute bottom-2 right-2 bg-white/90 backdrop-blur-xs p-1.5 rounded-xl shadow-xs">
+                                        <i data-lucide="maximize-2" class="w-3.5 h-3.5 text-emerald-600"></i>
+                                    </div>
+                                </div>
+                                <div class="flex-1 flex flex-col">
+                                    <h4 class="text-lg font-extrabold text-slate-900 group-hover:text-emerald-600 transition-colors">
+                                        Allene Joy R. Cunahap
+                                    </h4>
+                                    <div class="mt-1 flex flex-wrap items-center gap-1.5">
+                                        <span class="px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-xs font-bold border border-emerald-100">
+                                            Data Analyst
+                                        </span>
+                                        <span class="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[10px] font-semibold">
+                                            BSIT-BA
+                                        </span>
+                                    </div>
+                                    <p class="mt-2.5 text-xs text-slate-600 leading-relaxed flex-1">
+                                        Drives hospital clinical data modeling, patient census tracking, financial metrics, and municipal business intelligence pipelines.
+                                    </p>
+                                    <div class="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs font-semibold text-emerald-600">
+                                        <span>View Studies & Skills</span>
+                                        <i data-lucide="arrow-right" class="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
         <!-- 9. About / Healthcare Community Feature -->
         <section id="community" class="py-20 lg:py-28 bg-slate-50 border-t border-slate-200/60">
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -1165,6 +1364,327 @@ $appointmentUrl = file_exists(__DIR__ . '/tmhis/public/index.php') ? 'tmhis/publ
             </div>
         </div>
     </div>
+
+    <!-- Interactive Team Member Profile Detail Modal -->
+    <div id="teamProfileModal" class="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-md hidden items-center justify-center p-3 sm:p-4 overflow-y-auto">
+        <div class="bg-white rounded-3xl max-w-3xl w-full p-6 sm:p-8 shadow-2xl border border-slate-100 relative my-6 max-h-[92vh] flex flex-col overflow-hidden" id="teamModalCard">
+            
+            <!-- Top Bar: Close Button & Member Counter -->
+            <div class="flex items-center justify-between pb-3 sm:pb-4 border-b border-slate-100 shrink-0">
+                <div class="flex items-center gap-2">
+                    <span class="w-2.5 h-2.5 rounded-full bg-blue-600 animate-pulse"></span>
+                    <span class="text-xs font-extrabold tracking-wider uppercase text-slate-600">TMHIS Production Team Profile</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span id="teamMemberCounter" class="text-xs font-semibold text-slate-400 px-2 py-0.5 rounded-md bg-slate-50">1 of 4</span>
+                    <button type="button" onclick="closeTeamModal()" class="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-full transition-colors" aria-label="Close modal">
+                        <i data-lucide="x" class="w-5 h-5"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Modal Content (Scrollable) -->
+            <div class="overflow-y-auto py-4 pr-1 sm:pr-2 flex-1">
+                <div class="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
+                    
+                    <!-- Left Column: Featured Second Picture with toggle -->
+                    <div class="md:col-span-5 flex flex-col items-center">
+                        <div class="relative w-full aspect-[4/5] rounded-2xl overflow-hidden ring-4 ring-slate-100 shadow-md bg-slate-100">
+                            <img id="teamModalImg" src="" alt="Team Member Photo" class="w-full h-full object-cover transition-all duration-300">
+                            <div class="absolute bottom-2 left-2 right-2 bg-slate-900/85 backdrop-blur-sm text-white text-[11px] font-semibold py-1 px-2 rounded-lg text-center shadow-xs" id="teamModalImgLabel">
+                                Primary Picture
+                            </div>
+                        </div>
+
+                        <!-- Photo Switcher Buttons -->
+                        <div class="flex items-center gap-2 mt-3 w-full">
+                            <button type="button" id="btnPhoto1" onclick="switchTeamPhoto(1)" class="flex-1 py-1.5 px-2 text-xs font-bold rounded-lg bg-blue-600 text-white shadow-xs">
+                                Photo 1
+                            </button>
+                            <button type="button" id="btnPhoto2" onclick="switchTeamPhoto(2)" class="flex-1 py-1.5 px-2 text-xs font-bold rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-600 transition-colors">
+                                Second Picture
+                            </button>
+                        </div>
+
+                        <!-- Academic Degree Box -->
+                        <div class="mt-4 p-3.5 rounded-2xl bg-blue-50/70 border border-blue-100 w-full text-center">
+                            <div class="text-[11px] font-extrabold text-blue-700 uppercase tracking-wider flex items-center justify-center gap-1.5">
+                                <i data-lucide="graduation-cap" class="w-4 h-4 text-blue-600"></i>
+                                Academic Degree
+                            </div>
+                            <div class="text-xs font-black text-slate-900 mt-1">
+                                BSIT-BA Graduate
+                            </div>
+                            <div class="text-[11px] text-slate-600 mt-0.5 font-medium leading-snug">
+                                Bachelor of Science in Information Technology major in Business Analytics
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right Column: Profile Info (Studies, Experience, Expertise, Skills) -->
+                    <div class="md:col-span-7 flex flex-col gap-4">
+                        
+                        <!-- Header / Title -->
+                        <div>
+                            <div class="flex items-center gap-2 mb-1.5">
+                                <span id="teamModalRoleBadge" class="px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-blue-50 text-blue-700 border border-blue-100">
+                                    Role Badge
+                                </span>
+                            </div>
+                            <h3 id="teamModalName" class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight"></h3>
+                            <p id="teamModalRole" class="text-sm font-bold text-slate-600 mt-0.5"></p>
+                            <p id="teamModalTagline" class="text-xs text-slate-500 italic mt-1.5 pl-3 border-l-2 border-blue-400"></p>
+                        </div>
+
+                        <!-- 1. Studies Section -->
+                        <div class="p-3.5 rounded-2xl bg-slate-50 border border-slate-100">
+                            <h5 class="text-xs font-extrabold text-slate-900 uppercase tracking-wider flex items-center gap-1.5 text-blue-600 mb-1">
+                                <i data-lucide="book-open" class="w-3.5 h-3.5"></i>
+                                Studies & Education
+                            </h5>
+                            <p class="text-xs font-bold text-slate-800" id="teamModalStudiesTitle">
+                                Bachelor of Science in Information Technology major in Business Analytics (BSIT-BA)
+                            </p>
+                            <p class="text-[11px] text-slate-500 mt-1 leading-relaxed" id="teamModalStudiesDesc"></p>
+                        </div>
+
+                        <!-- 2. Experience Section -->
+                        <div>
+                            <h5 class="text-xs font-extrabold text-slate-900 uppercase tracking-wider flex items-center gap-1.5 text-blue-600 mb-1">
+                                <i data-lucide="briefcase" class="w-3.5 h-3.5"></i>
+                                Experience
+                            </h5>
+                            <p class="text-xs text-slate-600 leading-relaxed" id="teamModalExperience"></p>
+                        </div>
+
+                        <!-- 3. Expertise Section -->
+                        <div>
+                            <h5 class="text-xs font-extrabold text-slate-900 uppercase tracking-wider flex items-center gap-1.5 text-blue-600 mb-1">
+                                <i data-lucide="award" class="w-3.5 h-3.5"></i>
+                                Domain Expertise
+                            </h5>
+                            <p class="text-xs text-slate-600 leading-relaxed" id="teamModalExpertise"></p>
+                        </div>
+
+                        <!-- 4. Skills Section -->
+                        <div>
+                            <h5 class="text-xs font-extrabold text-slate-900 uppercase tracking-wider flex items-center gap-1.5 text-blue-600 mb-1.5">
+                                <i data-lucide="check-circle-2" class="w-3.5 h-3.5"></i>
+                                Core Skills & Competencies
+                            </h5>
+                            <div class="flex flex-wrap gap-1.5" id="teamModalSkills"></div>
+                        </div>
+
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- Footer Bar: Prev / Next Member Navigation -->
+            <div class="mt-2 pt-3 border-t border-slate-100 flex items-center justify-between shrink-0">
+                <button type="button" onclick="navigateTeamMember(-1)" class="inline-flex items-center gap-1.5 text-xs font-bold text-slate-600 hover:text-blue-600 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors">
+                    <i data-lucide="chevron-left" class="w-4 h-4"></i>
+                    <span>Previous Member</span>
+                </button>
+                <button type="button" onclick="closeTeamModal()" class="text-xs font-bold text-slate-500 hover:text-slate-800 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors">
+                    Close
+                </button>
+                <button type="button" onclick="navigateTeamMember(1)" class="inline-flex items-center gap-1.5 text-xs font-bold text-slate-600 hover:text-blue-600 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors">
+                    <span>Next Member</span>
+                    <i data-lucide="chevron-right" class="w-4 h-4"></i>
+                </button>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Production Team Interactive Logic -->
+    <script>
+        const teamMembersData = [
+            {
+                name: "Kirby Geagonia",
+                role: "Product Team Manager",
+                badge: "Project & Product Lead",
+                badgeClass: "bg-indigo-50 text-indigo-700 border-indigo-100",
+                tagline: "Bridging clinical healthcare governance with agile digital hospital solutions.",
+                photo1: "assets/Production_Team/Kirby1.jpg",
+                photo2: "assets/Production_Team/Kirby.jpg",
+                photoLabel1: "Primary Picture • Workstation Profile",
+                photoLabel2: "Second Picture • Field & Project Strategy",
+                studiesTitle: "Bachelor of Science in Information Technology major in Business Analytics (BSIT-BA)",
+                studiesDesc: "Comprehensive academic training in health-tech project governance, clinical business process re-engineering, and strategic data-driven organizational management.",
+                experience: "Extensive background steering multidisciplinary teams through the full development and deployment lifecycle of the Tupi Municipal Hospital Information Management System. Spearheaded sprint roadmaps, clinical stakeholder interviews with municipal doctors and nurses, regulatory compliance tracking, and cross-departmental delivery milestones.",
+                expertise: "Agile & Scrum Methodologies, Health-Tech Product Roadmapping, Requirements Engineering, Clinical Governance, Stakeholder Coordination, Quality Assurance & Risk Mitigation.",
+                skills: ["Product Management", "Agile & Scrum", "Health-Tech Roadmaps", "Requirements Engineering", "Hospital Workflow Modeling", "Stakeholder Relations", "Process Optimization", "Quality Assurance"]
+            },
+            {
+                name: "Kent Carl V. Amit",
+                role: "Software Engineer",
+                badge: "Full-Stack Architecture & Cloud",
+                badgeClass: "bg-blue-50 text-blue-700 border-blue-100",
+                tagline: "Engineering high-performance, resilient, and secure clinical software architectures.",
+                photo1: "assets/Production_Team/Kent1.jpg",
+                photo2: "assets/Production_Team/Kent.jpg",
+                photoLabel1: "Primary Picture • Campus & Architecture Profile",
+                photoLabel2: "Second Picture • Full Portrait",
+                studiesTitle: "Bachelor of Science in Information Technology major in Business Analytics (BSIT-BA)",
+                studiesDesc: "Rigorous academic foundation in software architecture, database management systems, full-stack programming, cloud computing, and enterprise business intelligence.",
+                experience: "Lead software engineer responsible for the end-to-end full-stack hospital architecture. Implemented isolated multi-device session concurrency (database sessions), automated cross-module doctor-medtech-pharmacy data pipelines, cascading database referential integrity across 23 tables, and optimized serverless cloud deployment on Vercel with Supabase PostgreSQL.",
+                expertise: "Full-Stack Web Development, Relational Database Concurrency & ACID Safety, Serverless Cloud Architecture, RESTful API Engineering, Role-Based Access Control (RBAC), Cascade Integrity.",
+                skills: ["PHP & Laravel", "PostgreSQL / Supabase", "MySQL", "Serverless Vercel", "RESTful APIs", "Database Optimization", "JavaScript", "TailwindCSS", "Git CI/CD"]
+            },
+            {
+                name: "Fairah C. Alang",
+                role: "UI/UX Designer",
+                badge: "Clinical UX & Interface Design",
+                badgeClass: "bg-pink-50 text-pink-700 border-pink-100",
+                tagline: "Designing intuitive, empathetic, and human-centered healthcare experiences.",
+                photo1: "assets/Production_Team/Fairah.jpg",
+                photo2: "assets/Production_Team/Fairah1.jpg",
+                photoLabel1: "Primary Picture • Studio Profile",
+                photoLabel2: "Second Picture • Creative & Field Profile",
+                studiesTitle: "Bachelor of Science in Information Technology major in Business Analytics (BSIT-BA)",
+                studiesDesc: "Deep specialization in human-computer interaction (HCI), design psychology, user experience research, accessibility compliance, and quantitative user analytics.",
+                experience: "Spearheaded user research and digital interface design across all 9 hospital portals. Crafted streamlined triage workflows that minimize cognitive load for attending physicians and nurses, designed accessible high-contrast patient booking portals, and established the cohesive visual design system for TMHIS.",
+                expertise: "Healthcare UI/UX Ergonomics, Clinical User Journey Mapping, Wireframing & Rapid Interactive Prototyping, Design Systems, Mobile-First Healthcare Accessibility (WCAG).",
+                skills: ["Figma", "UI/UX Prototyping", "Design Systems", "Clinical Usability Testing", "Wireframing", "User Journey Mapping", "Responsive Web Design", "Visual Ergonomics"]
+            },
+            {
+                name: "Allene Joy R. Cunahap",
+                role: "Data Analyst",
+                badge: "Healthcare Business Intelligence & Analytics",
+                badgeClass: "bg-emerald-50 text-emerald-700 border-emerald-100",
+                tagline: "Transforming complex hospital clinical data into actionable operational intelligence.",
+                photo1: "assets/Production_Team/Allen1.jpg",
+                photo2: "assets/Production_Team/Allen.jpg",
+                photoLabel1: "Primary Picture • Creative Profile",
+                photoLabel2: "Second Picture • Formal Analytics Profile",
+                studiesTitle: "Bachelor of Science in Information Technology major in Business Analytics (BSIT-BA)",
+                studiesDesc: "Specialized in data mining, predictive analytics, statistical analysis, clinical KPI derivation, relational schema design, and quantitative decision modeling.",
+                experience: "Led data modeling and business intelligence initiatives for the hospital information system. Analyzed municipal patient census trends, architected the hospital director KPI telemetry dashboard, developed automated unbilled revenue aggregation algorithms, and formatted clinical health registries for compliance reporting.",
+                expertise: "Healthcare Business Analytics, Clinical Relational Data Modeling, Quantitative Analysis, Hospital Census & Bed Occupancy Forecasting, Financial & Revenue Analytics.",
+                skills: ["Business Analytics (BA)", "SQL & Relational Modeling", "Statistical Data Analysis", "Clinical KPI Dashboards", "Census Forecasting", "Data Visualization", "Financial Reporting"]
+            }
+        ];
+
+        let currentTeamIndex = 0;
+        let currentPhotoVersion = 1; // Default to Primary Picture first
+
+        function openTeamModal(index) {
+            currentTeamIndex = index;
+            currentPhotoVersion = 1; // Always display first picture initially
+            updateTeamModalContent();
+
+            const modal = document.getElementById('teamProfileModal');
+            if (modal) {
+                modal.classList.remove('hidden');
+                modal.classList.add('flex');
+                document.body.style.overflow = 'hidden';
+            }
+        }
+
+        function closeTeamModal() {
+            const modal = document.getElementById('teamProfileModal');
+            if (modal) {
+                modal.classList.add('hidden');
+                modal.classList.remove('flex');
+                document.body.style.overflow = '';
+            }
+        }
+
+        function switchTeamPhoto(version) {
+            currentPhotoVersion = version;
+            const member = teamMembersData[currentTeamIndex];
+            const img = document.getElementById('teamModalImg');
+            const label = document.getElementById('teamModalImgLabel');
+            const btn1 = document.getElementById('btnPhoto1');
+            const btn2 = document.getElementById('btnPhoto2');
+
+            if (version === 1) {
+                img.src = member.photo1;
+                label.textContent = member.photoLabel1 || "Primary Picture";
+                btn1.className = "flex-1 py-1.5 px-2 text-xs font-bold rounded-lg bg-blue-600 text-white shadow-xs";
+                btn2.className = "flex-1 py-1.5 px-2 text-xs font-bold rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-600 transition-colors";
+                img.style.objectPosition = "center top";
+            } else {
+                img.src = member.photo2;
+                label.textContent = member.photoLabel2 || "Second Picture";
+                btn2.className = "flex-1 py-1.5 px-2 text-xs font-bold rounded-lg bg-blue-600 text-white shadow-xs";
+                btn1.className = "flex-1 py-1.5 px-2 text-xs font-bold rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-600 transition-colors";
+                if (member.name === "Kent Carl V. Amit") {
+                    img.style.objectPosition = "center 80%";
+                } else {
+                    img.style.objectPosition = "center top";
+                }
+            }
+        }
+
+        function updateTeamModalContent() {
+            const member = teamMembersData[currentTeamIndex];
+            if (!member) return;
+
+            document.getElementById('teamModalName').textContent = member.name;
+            document.getElementById('teamModalRole').textContent = member.role;
+            document.getElementById('teamModalTagline').textContent = `"${member.tagline}"`;
+            
+            const badge = document.getElementById('teamModalRoleBadge');
+            badge.textContent = member.badge;
+            badge.className = `px-2.5 py-0.5 rounded-full text-xs font-extrabold border ${member.badgeClass || 'bg-blue-50 text-blue-700 border-blue-100'}`;
+
+            document.getElementById('teamModalStudiesTitle').textContent = member.studiesTitle;
+            document.getElementById('teamModalStudiesDesc').textContent = member.studiesDesc;
+            document.getElementById('teamModalExperience').textContent = member.experience;
+            document.getElementById('teamModalExpertise').textContent = member.expertise;
+            document.getElementById('teamMemberCounter').textContent = `${currentTeamIndex + 1} of ${teamMembersData.length}`;
+
+            // Skills pills
+            const skillsContainer = document.getElementById('teamModalSkills');
+            skillsContainer.innerHTML = '';
+            member.skills.forEach(skill => {
+                const span = document.createElement('span');
+                span.className = "inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200";
+                span.textContent = skill;
+                skillsContainer.appendChild(span);
+            });
+
+            // Set photo (defaults to photo1)
+            switchTeamPhoto(currentPhotoVersion);
+
+            if (typeof lucide !== 'undefined') {
+                lucide.createIcons();
+            }
+        }
+
+        function navigateTeamMember(direction) {
+            currentTeamIndex += direction;
+            if (currentTeamIndex < 0) currentTeamIndex = teamMembersData.length - 1;
+            if (currentTeamIndex >= teamMembersData.length) currentTeamIndex = 0;
+            currentPhotoVersion = 1;
+            updateTeamModalContent();
+        }
+
+        // Close modal on click outside
+        document.addEventListener('DOMContentLoaded', () => {
+            const modal = document.getElementById('teamProfileModal');
+            if (modal) {
+                modal.addEventListener('click', (e) => {
+                    if (e.target === modal) {
+                        closeTeamModal();
+                    }
+                });
+            }
+
+            // Keyboard navigation
+            document.addEventListener('keydown', (e) => {
+                const modal = document.getElementById('teamProfileModal');
+                if (modal && !modal.classList.contains('hidden')) {
+                    if (e.key === 'Escape') closeTeamModal();
+                    if (e.key === 'ArrowLeft') navigateTeamMember(-1);
+                    if (e.key === 'ArrowRight') navigateTeamMember(1);
+                }
+            });
+        });
+    </script>
 
     <!-- Feedback Toast Notification -->
     <div id="toast" class="fixed bottom-6 right-6 z-50 bg-slate-900 text-white px-6 py-4 rounded-2xl shadow-2xl border border-slate-700 flex items-center gap-3 transform translate-y-20 opacity-0 transition-all pointer-events-none max-w-md">
