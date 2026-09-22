@@ -48,7 +48,6 @@
           <i data-lucide="file-check"></i>
         </div>
         <span class="nav-item-label">Record Verification</span>
-        <span class="nav-badge" id="sidebarPendingBadge" <?= (isset($pendingVerificationCount) && $pendingVerificationCount <= 0) ? 'style="display:none;"' : '' ?>><?= $pendingVerificationCount ?? 8 ?></span>
       </a>
 
       <a href="#" class="nav-item" data-view="requests" data-tooltip="Medical Record Requests">
@@ -56,7 +55,6 @@
           <i data-lucide="file-clock"></i>
         </div>
         <span class="nav-item-label">Medical Record Requests</span>
-        <span class="nav-badge" style="background:#0284c7;">5</span>
       </a>
 
       <a href="#" class="nav-item" data-view="history" data-tooltip="Patient History">
