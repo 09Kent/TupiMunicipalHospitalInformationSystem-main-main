@@ -10,25 +10,10 @@
   <div class="flex items-center justify-between mb-6">
     @php
       $dashboardUrl = url('/register');
-      if (Auth::check()) {
-        $uRole = strtolower(Auth::user()->Role ?? '');
-        if (in_array($uRole, ['chief', 'director'])) $dashboardUrl = url('/director');
-        elseif ($uRole === 'admin') $dashboardUrl = url('/admin');
-        elseif ($uRole === 'records') $dashboardUrl = url('/records');
-        elseif ($uRole === 'doctor') $dashboardUrl = url('/doctor');
-        elseif ($uRole === 'nurse') $dashboardUrl = url('/nurse');
-        elseif ($uRole === 'medtech') $dashboardUrl = url('/medtech');
-        elseif (in_array($uRole, ['pharmacist', 'pharmacy'])) $dashboardUrl = url('/pharmacy');
-        elseif (in_array($uRole, ['billing', 'cashier', 'accountant'])) $dashboardUrl = url('/billing');
-        elseif (in_array($uRole, ['register', 'registrator'])) $dashboardUrl = url('/register');
-        else $dashboardUrl = url('/register');
-      } else {
-        $dashboardUrl = route('landing');
-      }
     @endphp
     <a href="{{ $dashboardUrl }}" class="inline-flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-blue-600 transition bg-white/90 px-3.5 py-2 rounded-xl border border-slate-200/90 shadow-2xs">
       <i data-lucide="arrow-left" class="w-4 h-4"></i>
-      <span>{{ Auth::check() ? 'Return to Dashboard' : 'Back to Home' }}</span>
+      <span>Return to Dashboard</span>
     </a>
     <div class="flex items-center gap-2 bg-white/80 px-3 py-1.5 rounded-xl border border-slate-200/80 text-xs font-semibold text-slate-600">
       <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>

@@ -38,8 +38,8 @@ Route::prefix('register')->name('register.')->group(function () {
         Route::match(['get', 'post'], '/appointments/{id}/cancel', [RegisterController::class, 'cancelAppointment'])->name('appointments.cancel');
     });
 
-    // Registrator & Admin Clinical Management Portal
-    Route::middleware(['auth', 'role:Register,Registrator,Admin'])->group(function () {
+    // Registrator & Clinical Management Portal (Accessible to all authenticated staff)
+    Route::middleware(['auth'])->group(function () {
         Route::get('/', [RegisterController::class, 'dashboard'])->name('dashboard');
         Route::get('/dashboard', [RegisterController::class, 'dashboard'])->name('dashboard.index');
         
@@ -223,24 +223,8 @@ Route::match(['get', 'post'], '/api/vitals.php', [NurseController::class, 'creat
 // =========================================================================
 // Legacy View Path Compatibility Fallbacks (Ensures zero 404 on legacy URLs)
 // =========================================================================
-$handleLegacyDashboard = function () {
-    if (auth()->check()) {
-        $uRole = strtolower(auth()->user()->Role ?? '');
-        if (in_array($uRole, ['chief', 'director'])) return redirect('/director');
-        if ($uRole === 'admin') return redirect('/admin');
-        if ($uRole === 'records') return redirect('/records');
-        if ($uRole === 'doctor') return redirect('/doctor');
-        if ($uRole === 'nurse') return redirect('/nurse');
-        if ($uRole === 'medtech') return redirect('/medtech');
-        if (in_array($uRole, ['pharmacist', 'pharmacy'])) return redirect('/pharmacy');
-        if (in_array($uRole, ['billing', 'cashier', 'accountant'])) return redirect('/billing');
-        return redirect('/register');
-    }
-    return redirect('/login');
-};
-
-Route::any('/views/dashboard/index.php', $handleLegacyDashboard);
-Route::any('/register/views/dashboard/index.php', $handleLegacyDashboard);
+Route::any('/views/dashboard/index.php', fn() => redirect('/register'));
+Route::any('/register/views/dashboard/index.php', fn() => redirect('/register'));
 Route::any('/doctor/views/dashboard/index.php', fn() => redirect('/doctor'));
 Route::any('/nurse/views/dashboard/index.php', fn() => redirect('/nurse'));
 Route::any('/views/patients/view.php', function (\Illuminate\Http\Request $request) {

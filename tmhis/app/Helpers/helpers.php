@@ -92,20 +92,8 @@ if (!function_exists('base_url')) {
         $main = $parts[0];
         $query = isset($parts[1]) ? '?' . $parts[1] : '';
 
-        // Dashboard redirection based on authenticated user's role
+        // Dashboard redirection for the registration portal
         if (empty($main) || strpos($main, 'views/dashboard') !== false || $main === 'dashboard') {
-            if (\Illuminate\Support\Facades\Auth::check()) {
-                $userRole = strtolower(trim(\Illuminate\Support\Facades\Auth::user()->Role ?? ''));
-                if (in_array($userRole, ['chief', 'director'])) return url('/director') . $query;
-                if ($userRole === 'admin') return url('/admin') . $query;
-                if ($userRole === 'records') return url('/records') . $query;
-                if ($userRole === 'doctor') return url('/doctor') . $query;
-                if ($userRole === 'nurse') return url('/nurse') . $query;
-                if ($userRole === 'medtech') return url('/medtech') . $query;
-                if (in_array($userRole, ['pharmacist', 'pharmacy'])) return url('/pharmacy') . $query;
-                if (in_array($userRole, ['billing', 'cashier', 'accountant'])) return url('/billing') . $query;
-                return url('/register') . $query;
-            }
             return url('/register') . $query;
         }
 
