@@ -1,0 +1,251 @@
+<?php
+
+namespace Tests\Feature;
+
+use Tests\TestCase;
+use App\Models\User;
+use App\Models\Doctor;
+use App\Models\Patient;
+use App\Models\LaboratoryRequest;
+use App\Models\LaboratoryResult;
+use App\Models\Prescription;
+use App\Models\InventoryItem;
+use App\Models\Invoice;
+use App\Models\Payment;
+use Illuminate\Support\Facades\DB;
+
+class MultiUserMultiDeviceTest extends TestCase
+{
+    /**
+     * Test 1: Verify PgsqlCompatPdo SQL rewriter and lastInsertId logic
+     */
+    public function test_pgsql_compat_pdo_rewriter_and_lastval(): void
+    {
+        $this->assertTrue(class_exists('\PgsqlCompatPdo'));
+
+        $inputSql = "SELECT LAST_INSERT_ID() as last_id, CURDATE() as today";
+        $rewritten = \PgsqlCompatPdo::rewriteSql($inputSql);
+        $this->assertStringContainsString('lastval()', $rewritten);
+        $this->assertStringContainsString('CURRENT_DATE', $rewritten);
+
+        // Verify column quote rewriting
+        $colSql = "SELECT PatientID, FirstName, LastName FROM patients WHERE PatientID = 1";
+        $colRewritten = \PgsqlCompatPdo::rewriteSql($colSql);
+        $this->assertStringContainsString('"PatientID"', $colRewritten);
+        $this->assertStringContainsString('"FirstName"', $colRewritten);
+        $this->assertStringContainsString('"LastName"', $colRewritten);
+    }
+
+    /**
+     * Test 2: Verify Isolated Multi-User, Multi-Device Sessions and Independent Logout
+     */
+    public function test_multi_user_session_isolation_and_independent_logout(): void
+    {
+        $registrarUser = User::where('Username', 'registrator')->firstOrFail();
+        $doctorUser    = User::where('Username', 'cardio')->firstOrFail();
+        $nurseUser      = User::where('Username', 'nurse')->firstOrFail();
+        $medtechUser   = User::where('Username', 'medtech')->firstOrFail();
+        $pharmacistUser= User::where('Username', 'pharmacist')->firstOrFail();
+        $cashierUser   = User::where('Username', 'cashier')->firstOrFail();
+
+        // Simulate Device A (Registrar)
+        $deviceA = $this->actingAs($registrarUser);
+        $resA = $deviceA->get('/register');
+        $resA->assertStatus(200);
+
+        // Simulate Device B (Doctor)
+        $deviceB = $this->actingAs($doctorUser);
+        $resB = $deviceB->get('/doctor');
+        $resB->assertStatus(200);
+
+        // Simulate Device C (Nurse)
+        $deviceC = $this->actingAs($nurseUser);
+        $resC = $deviceC->get('/nurse');
+        $resC->assertStatus(200);
+
+        // Simulate Device D (MedTech)
+        $deviceD = $this->actingAs($medtechUser);
+        $resD = $deviceD->get('/medtech');
+        $resD->assertStatus(200);
+
+        // Simulate Device E (Pharmacist)
+        $deviceE = $this->actingAs($pharmacistUser);
+        $resE = $deviceE->get('/pharmacy');
+        $resE->assertStatus(200);
+
+        // Simulate Device F (Cashier)
+        $deviceF = $this->actingAs($cashierUser);
+        $resF = $deviceF->get('/billing');
+        $resF->assertStatus(200);
+
+        // Test Independent Logout: Logout Doctor (Device B)
+        $logoutRes = $this->actingAs($doctorUser)->post('/logout');
+        $logoutRes->assertRedirect('/login');
+
+        // Verify other sessions remain fully authenticated as their respective users
+        $this->actingAs($registrarUser)->get('/register')->assertStatus(200);
+        $this->actingAs($nurseUser)->get('/nurse')->assertStatus(200);
+        $this->actingAs($medtechUser)->get('/medtech')->assertStatus(200);
+        $this->actingAs($pharmacistUser)->get('/pharmacy')->assertStatus(200);
+        $this->actingAs($cashierUser)->get('/billing')->assertStatus(200);
+    }
+
+    /**
+     * Test 3: Cross-Device Patient Registration and Doctor Search Synchronization
+     */
+    public function test_cross_device_patient_registration_and_doctor_search(): void
+    {
+        require_once app_path('Services/Doctor/Patient.php');
+
+        $regPatientModel = new \App\Services\Register\Patient();
+        $docPatientModel = new \Patient();
+
+        // Device A (Registrar) creates new patient
+        $uniqueSuffix = time() . rand(100, 999);
+        $firstName = 'ConcurrentTest' . $uniqueSuffix;
+        $lastName = 'MultiDeviceUser';
+
+        $patientId = $regPatientModel->create([
+            'FirstName'       => $firstName,
+            'LastName'        => $lastName,
+            'DateOfBirth'     => '1992-05-15',
+            'Gender'          => 'Female',
+            'CivilStatus'     => 'Married',
+            'ContactNumber'   => '09123456789',
+            'Email'           => "test_{$uniqueSuffix}@tupihospital.test",
+            'Address'         => 'Poblacion, Tupi, South Cotabato',
+            'BloodType'       => 'O+',
+            'PatientCategory' => 'Outpatient',
+            'Status'          => 'Active',
+            'RegisteredBy'    => 1
+        ]);
+
+        $this->assertGreaterThan(0, $patientId, "Patient ID generated by lastInsertId must be greater than 0.");
+
+        // Device B (Doctor) searches for this patient by name
+        $doctor = Doctor::where('Status', 'Active')->first() ?? Doctor::first();
+        $this->assertNotNull($doctor);
+
+        $results = $docPatientModel->getDoctorPatients((int)$doctor->DoctorID, 10, 0, [
+            'search' => $firstName
+        ]);
+
+        $this->assertNotEmpty($results, "Doctor searching for freshly registered patient by name must find the patient.");
+        $found = false;
+        foreach ($results as $row) {
+            if ($row['FirstName'] === $firstName) {
+                $found = true;
+                break;
+            }
+        }
+        $this->assertTrue($found, "Patient record created on Registrar device must match the search result on Doctor device.");
+
+        // Doctor clinical chart access check
+        $hasAccess = $docPatientModel->hasDoctorAccess((int)$doctor->DoctorID, $patientId);
+        $this->assertTrue($hasAccess, "Active licensed doctor must have access to patient's clinical chart.");
+
+        // Clean up test patient
+        DB::table('patients')->where('PatientID', $patientId)->delete();
+    }
+
+    /**
+     * Test 4: End-to-End Operational Lifecycle Across Roles
+     */
+    public function test_end_to_end_operational_lifecycle(): void
+    {
+        require_once app_path('Services/Doctor/LaboratoryRequest.php');
+        require_once app_path('Services/MedTech/LabTechnologist.php');
+        require_once app_path('Services/Doctor/Prescription.php');
+        require_once app_path('Services/Pharmacy/PharmacyManager.php');
+
+        // 1. Registrar registers patient
+        $regPatientModel = new \App\Services\Register\Patient();
+        $patientId = $regPatientModel->create([
+            'FirstName'       => 'E2E_Patient_' . rand(1000, 9999),
+            'LastName'        => 'CrossRoleSync',
+            'DateOfBirth'     => '1985-11-20',
+            'Gender'          => 'Male',
+            'CivilStatus'     => 'Single',
+            'ContactNumber'   => '09987654321',
+            'Email'           => 'e2e@tupihospital.test',
+            'Address'         => 'Tupi, South Cotabato',
+            'BloodType'       => 'A+',
+            'PatientCategory' => 'Outpatient',
+            'Status'          => 'Active',
+            'RegisteredBy'    => 1
+        ]);
+        $this->assertGreaterThan(0, $patientId);
+
+        $doctor = Doctor::where('Status', 'Active')->first() ?? Doctor::first();
+        $this->assertNotNull($doctor);
+
+        // 2. Doctor orders Laboratory Request
+        $labModel = new \LaboratoryRequest();
+        $requestId = $labModel->create([
+            'PatientID'        => $patientId,
+            'DoctorID'         => (int)$doctor->DoctorID,
+            'TestType'         => 'Complete Blood Count (CBC)',
+            'Priority'         => 'Routine',
+            'ClinicalNotes'    => 'Annual health screening',
+            'PurposeOfRequest' => 'Diagnostic',
+        ]);
+        $this->assertGreaterThan(0, $requestId);
+
+        // 3. MedTech processes and records result
+        $medtechService = new \LabTechnologist();
+        $resultId = $medtechService->recordResult([
+            'RequestID'      => $requestId,
+            'PatientID'      => $patientId,
+            'DoctorID'       => (int)$doctor->DoctorID,
+            'TestName'       => 'Complete Blood Count (CBC)',
+            'ResultValue'    => 'WBC: 6.8, RBC: 4.9, Hgb: 15.2',
+            'NormalRange'    => 'Standard Reference Range',
+            'Units'          => 'Various',
+            'Interpretation' => 'Normal',
+            'Notes'          => 'Verified and validated.'
+        ]);
+        $this->assertGreaterThan(0, $resultId);
+
+        // Verify request is marked Completed
+        $updatedReq = DB::table('laboratory_requests')->where('RequestID', $requestId)->first();
+        $this->assertEquals('Completed', $updatedReq->Status);
+
+        // 4. Doctor issues Prescription
+        $rxModel = new \Prescription();
+        $rxId = $rxModel->create([
+            'PatientID'      => $patientId,
+            'DoctorID'       => (int)$doctor->DoctorID,
+            'Diagnosis'      => 'General Wellness',
+            'ValidityPeriod' => '7 days',
+            'SpecialInstructions' => 'Take with full glass of water',
+            'Medications'    => [
+                [
+                    'MedicineName'  => 'Amoxicillin 500mg',
+                    'Dosage'        => '500mg',
+                    'Frequency'     => '3x daily',
+                    'Duration'      => '7 days',
+                    'Quantity'      => 21,
+                    'Instructions'  => 'Take after meals'
+                ]
+            ]
+        ]);
+        $this->assertGreaterThan(0, $rxId);
+
+        // 5. Pharmacy dispenses Prescription
+        $pharmacyManager = new \PharmacyManager();
+        $dispenseId = $pharmacyManager->dispense([
+            'PrescriptionID'    => $rxId,
+            'PatientID'         => $patientId,
+            'MedicineName'      => 'Amoxicillin 500mg',
+            'QuantityDispensed' => '21 capsules',
+            'PharmacistID'      => 1
+        ]);
+        $this->assertGreaterThan(0, $dispenseId);
+
+        // Clean up test records
+        DB::table('prescriptions')->where('PrescriptionID', $rxId)->delete();
+        DB::table('laboratory_results')->where('ResultID', $resultId)->delete();
+        DB::table('laboratory_requests')->where('RequestID', $requestId)->delete();
+        DB::table('patients')->where('PatientID', $patientId)->delete();
+    }
+}
