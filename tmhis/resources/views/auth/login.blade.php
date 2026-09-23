@@ -189,8 +189,8 @@
           <button type="button" onclick="quickLogin('registrator')" class="p-2 rounded-xl bg-slate-50 hover:bg-blue-50 border border-slate-200 font-bold text-slate-700 hover:text-blue-700 text-left transition truncate" title="1-Click Login: Admitting / Registration Staff">
             📋 Register
           </button>
-          <button type="button" onclick="quickLogin('cardio')" class="p-2 rounded-xl bg-slate-50 hover:bg-rose-50 border border-slate-200 font-bold text-slate-700 hover:text-rose-700 text-left transition truncate" title="1-Click Login: Attending Physician (Doctor)">
-            🩺 Doctor
+          <button type="button" onclick="quickLogin('dr.chen')" class="p-2 rounded-xl bg-slate-50 hover:bg-rose-50 border border-slate-200 font-bold text-slate-700 hover:text-rose-700 text-left transition truncate" title="1-Click Login: Dr. Alexander Chen (Cardiologist)">
+            🩺 Dr. Chen
           </button>
           <button type="button" onclick="quickLogin('nurse')" class="p-2 rounded-xl bg-slate-50 hover:bg-emerald-50 border border-slate-200 font-bold text-slate-700 hover:text-emerald-700 text-left transition truncate" title="1-Click Login: Nurse on Duty">
             💉 Nurse
