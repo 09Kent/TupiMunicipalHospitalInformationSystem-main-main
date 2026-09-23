@@ -31,5 +31,10 @@ putenv("VIEW_COMPILED_PATH={$storagePath}/framework/views");
 $_ENV['VIEW_COMPILED_PATH'] = "{$storagePath}/framework/views";
 $_SERVER['VIEW_COMPILED_PATH'] = "{$storagePath}/framework/views";
 
+// Fix Symfony BaseUrl calculation stripping /api from URIs on Vercel serverless
+$_SERVER['SCRIPT_NAME'] = '/index.php';
+$_SERVER['PHP_SELF'] = '/index.php';
+
 // Require the Laravel front controller
 require __DIR__ . '/../public/index.php';
+

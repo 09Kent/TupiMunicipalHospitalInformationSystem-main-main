@@ -68,6 +68,13 @@ Route::prefix('api/register')->name('api.register.')->group(function () {
     Route::post('/queue/call', [RegisterApiController::class, 'callQueueNext'])->name('queue.call');
 });
 
+// Fallback aliases for serverless environments (handling stripped /api prefixes)
+Route::post('/register/submit', [RegisterApiController::class, 'submitRegistration']);
+Route::post('/register/classify', [RegisterApiController::class, 'classify']);
+Route::get('/register/api/symptoms', [RegisterApiController::class, 'getSymptoms']);
+Route::get('/register/api/doctors', [RegisterApiController::class, 'getDoctors']);
+
+
 // =========================================================================
 // DEPARTMENT ROLE DASHBOARDS (Strict RBAC Protected)
 // =========================================================================
