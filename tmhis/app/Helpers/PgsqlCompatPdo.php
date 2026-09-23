@@ -4,6 +4,12 @@ if (!class_exists('PgsqlCompatPdo', false)) {
     {
         private static ?string $pattern = null;
 
+        /**
+         * @suppress PHP2439
+         * @suppress PHP2416
+         * @suppress 2439
+         * @suppress 2416
+         */
         #[\ReturnTypeWillChange]
         public function query(string $query, ?int $fetchMode = null, mixed ...$fetchModeArgs)
         {
