@@ -214,11 +214,13 @@ class PatientRegistration
 
             // 11. Comprehensive Audit Trail (Registration History)
             $fullName = trim(($data['personal']['firstName'] ?? '') . ' ' . ($data['personal']['lastName'] ?? ''));
-            $historyModel->log($patientId, 'Patient Registered', "Patient {$fullName} registered with Digital Code {$patientCode}.", $userId);
-            $historyModel->log($patientId, 'Complaint Recorded', "Chief complaint recorded: " . substr($complaintText, 0, 100), $userId);
-            $historyModel->log($patientId, 'Symptom Classification', "Pre-consultation analysis matched to {$relevanceLevel}% relevance.", $userId);
-            $historyModel->log($patientId, 'Doctor Assigned', "Consultation booked with Doctor ID #{$doctorId} for {$appDate} {$appTime}.", $userId);
-            $historyModel->log($patientId, 'Queue Generated', "Assigned Daily Queue Ticket #{$queueNum}.", $userId);
+            $historyModel->logMultiple([
+                ['PatientID' => $patientId, 'Action' => 'Patient Registered', 'Description' => "Patient {$fullName} registered with Digital Code {$patientCode}.", 'UserID' => $userId],
+                ['PatientID' => $patientId, 'Action' => 'Complaint Recorded', 'Description' => "Chief complaint recorded: " . substr($complaintText, 0, 100), 'UserID' => $userId],
+                ['PatientID' => $patientId, 'Action' => 'Symptom Classification', 'Description' => "Pre-consultation analysis matched to {$relevanceLevel}% relevance.", 'UserID' => $userId],
+                ['PatientID' => $patientId, 'Action' => 'Doctor Assigned', 'Description' => "Consultation booked with Doctor ID #{$doctorId} for {$appDate} {$appTime}.", 'UserID' => $userId],
+                ['PatientID' => $patientId, 'Action' => 'Queue Generated', 'Description' => "Assigned Daily Queue Ticket #{$queueNum}.", 'UserID' => $userId],
+            ]);
 
             // Fetch Doctor details for response
             $doctorModel = new Doctor($this->db);

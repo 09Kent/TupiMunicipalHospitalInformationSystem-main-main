@@ -52,26 +52,40 @@ class PossibleCondition
         $stmtDel = $this->db->prepare("DELETE FROM complaint_conditions WHERE ComplaintID = :cid");
         $stmtDel->execute(['cid' => $complaintId]);
 
-        $stmtIns = $this->db->prepare("
-            INSERT INTO complaint_conditions (ComplaintID, ConditionID)
-            VALUES (:cid, :cond_id)
-        ");
-
-        $inserted = [];
+        $ids = [];
+        $names = [];
         foreach ($conditionIdsOrNames as $item) {
-            $conditionId = null;
             if (is_numeric($item)) {
-                $conditionId = (int)$item;
+                $ids[] = (int)$item;
             } else {
-                $stmtFind = $this->db->prepare("SELECT ConditionID FROM possible_conditions WHERE ConditionName = :name LIMIT 1");
-                $stmtFind->execute(['name' => trim((string)$item)]);
-                $conditionId = $stmtFind->fetchColumn();
+                $trimmed = trim((string)$item);
+                if ($trimmed !== '') {
+                    $names[] = $trimmed;
+                }
             }
+        }
 
-            if ($conditionId && !isset($inserted[$conditionId])) {
-                $inserted[$conditionId] = true;
-                $stmtIns->execute(['cid' => $complaintId, 'cond_id' => $conditionId]);
+        if (!empty($names)) {
+            $inClause = implode(',', array_fill(0, count($names), '?'));
+            $stmtFind = $this->db->prepare("SELECT ConditionID FROM possible_conditions WHERE ConditionName IN ($inClause)");
+            $stmtFind->execute($names);
+            $foundIds = $stmtFind->fetchAll(PDO::FETCH_COLUMN);
+            foreach ($foundIds as $fId) {
+                $ids[] = (int)$fId;
             }
+        }
+
+        $ids = array_unique($ids);
+        if (!empty($ids)) {
+            $values = [];
+            $params = [];
+            foreach (array_values($ids) as $i => $condId) {
+                $values[] = "(:cid{$i}, :cond_id{$i})";
+                $params["cid{$i}"] = $complaintId;
+                $params["cond_id{$i}"] = $condId;
+            }
+            $stmtIns = $this->db->prepare("INSERT INTO complaint_conditions (ComplaintID, ConditionID) VALUES " . implode(', ', $values));
+            $stmtIns->execute($params);
         }
     }
 

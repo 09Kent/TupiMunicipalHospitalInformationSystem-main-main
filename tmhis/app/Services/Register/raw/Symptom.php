@@ -45,27 +45,40 @@ class Symptom
         $stmtDel = $this->db->prepare("DELETE FROM patient_symptoms WHERE ComplaintID = :cid");
         $stmtDel->execute(['cid' => $complaintId]);
 
-        $stmtIns = $this->db->prepare("
-            INSERT INTO patient_symptoms (ComplaintID, SymptomID)
-            VALUES (:cid, :sid)
-        ");
-
-        $inserted = [];
+        $ids = [];
+        $names = [];
         foreach ($symptomIdsOrNames as $item) {
-            $symptomId = null;
             if (is_numeric($item)) {
-                $symptomId = (int)$item;
+                $ids[] = (int)$item;
             } else {
-                $sym = $this->getByName((string)$item);
-                if ($sym) {
-                    $symptomId = (int)$sym['SymptomID'];
+                $trimmed = trim((string)$item);
+                if ($trimmed !== '') {
+                    $names[] = $trimmed;
                 }
             }
+        }
 
-            if ($symptomId && !isset($inserted[$symptomId])) {
-                $inserted[$symptomId] = true;
-                $stmtIns->execute(['cid' => $complaintId, 'sid' => $symptomId]);
+        if (!empty($names)) {
+            $inClause = implode(',', array_fill(0, count($names), '?'));
+            $stmtFind = $this->db->prepare("SELECT SymptomID FROM symptoms WHERE LOWER(TRIM(SymptomName)) IN ($inClause)");
+            $stmtFind->execute(array_map('strtolower', $names));
+            $foundIds = $stmtFind->fetchAll(PDO::FETCH_COLUMN);
+            foreach ($foundIds as $fId) {
+                $ids[] = (int)$fId;
             }
+        }
+
+        $ids = array_unique($ids);
+        if (!empty($ids)) {
+            $values = [];
+            $params = [];
+            foreach (array_values($ids) as $i => $sId) {
+                $values[] = "(:cid{$i}, :sid{$i})";
+                $params["cid{$i}"] = $complaintId;
+                $params["sid{$i}"] = $sId;
+            }
+            $stmtIns = $this->db->prepare("INSERT INTO patient_symptoms (ComplaintID, SymptomID) VALUES " . implode(', ', $values));
+            $stmtIns->execute($params);
         }
     }
 

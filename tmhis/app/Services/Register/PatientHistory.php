@@ -36,6 +36,23 @@ class PatientHistory
         return (int)$this->db->lastInsertId();
     }
 
+    public function logMultiple(array $records): void
+    {
+        if (empty($records)) return;
+        $values = [];
+        $params = [];
+        foreach ($records as $i => $rec) {
+            $values[] = "(:pid{$i}, :uid{$i}, :action{$i}, :desc{$i}, NOW())";
+            $params["pid{$i}"] = $rec['PatientID'];
+            $params["uid{$i}"] = $rec['UserID'] ?? 1;
+            $params["action{$i}"] = trim($rec['Action']);
+            $params["desc{$i}"] = trim($rec['Description']);
+        }
+        $sql = "INSERT INTO patient_registration_history (PatientID, UserID, Action, Description, CreatedAt) VALUES " . implode(', ', $values);
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+    }
+
     public function getByPatientId(int $patientId): array
     {
         $stmt = $this->db->prepare("
