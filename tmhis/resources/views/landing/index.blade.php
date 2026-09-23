@@ -87,7 +87,7 @@
                         </div>
                     </div>
                     <a href="{{ route('register.registration.index') }}" class="inline-flex items-center justify-center px-5 xl:px-6 py-2.5 xl:py-3 rounded-full bg-blue-600 text-white font-semibold text-sm whitespace-nowrap shadow-md shadow-blue-500/20 hover:bg-blue-700 hover:shadow-lg hover:shadow-blue-500/30 transition-all duration-200">
-                        Book Appointment
+                        Get Started
                     </a>
                 </div>
 
@@ -121,7 +121,7 @@
                     </div>
                 </div>
                 <a href="{{ route('register.registration.index') }}" class="mobile-menu-link text-center px-4 py-3 rounded-xl bg-blue-600 text-white font-semibold text-sm">
-                    Book Appointment
+                    Get Started
                 </a>
             </div>
         </div>
@@ -159,7 +159,7 @@
                         <!-- CTA Buttons -->
                         <div class="flex flex-wrap items-center gap-4 pt-2" data-aos="fade-up" data-aos-delay="200">
                             <a href="{{ route('register.registration.index') }}" class="inline-flex items-center gap-3 px-8 py-4 rounded-full bg-blue-600 text-white font-bold text-base shadow-lg shadow-blue-600/25 hover:bg-blue-700 hover:shadow-xl hover:shadow-blue-600/35 transition-all duration-200 group">
-                                <span>Book Appointment</span>
+                                <span>Get Started</span>
                                 <i data-lucide="arrow-right" class="w-5 h-5 group-hover:translate-x-1 transition-transform"></i>
                             </a>
                             <a href="#about" class="inline-flex items-center gap-3 px-8 py-4 rounded-full bg-white text-slate-700 border border-slate-200 font-semibold text-base shadow-sm hover:bg-slate-50 hover:border-slate-300 transition-all duration-200">
@@ -172,7 +172,7 @@
                     <!-- Right Hero Image (Hospital Building) -->
                     <div class="lg:col-span-6 relative" data-aos="fade-left">
                         <div class="relative rounded-3xl overflow-hidden shadow-2xl border border-slate-200/80 aspect-[4/3] lg:aspect-[16/11]">
-                            <img src="{{ asset('assets/tupi-municipal-hall.jpg') }}" alt="Tupi Municipal Hospital in Tupi, South Cotabato" class="w-full h-full object-cover">
+                            <img src="{{ asset('assets/Tupi.jpg') }}" alt="Tupi Municipal Hospital in Tupi, South Cotabato" class="w-full h-full object-cover">
                             <div class="absolute inset-y-0 left-0 w-1/3 bg-gradient-to-r from-slate-50 via-slate-50/40 to-transparent hidden lg:block"></div>
                             
                             <div class="absolute bottom-4 right-4 bg-white/90 backdrop-blur-md px-4 py-2 rounded-xl border border-white/50 shadow-md text-xs font-semibold text-slate-700 flex items-center gap-2">
@@ -1318,7 +1318,7 @@
                 <div class="lg:col-span-2 space-y-3">
                     <h4 class="text-sm font-extrabold uppercase tracking-wider text-white">Patient Resources</h4>
                     <ul class="space-y-2 text-sm text-slate-400">
-                        <li><a href="{{ route('register.registration.index') }}" class="hover:text-white transition-colors">Book Appointment</a></li>
+                        <li><a href="{{ route('register.registration.index') }}" class="hover:text-white transition-colors">Get Started</a></li>
                         <li><a href="#services" class="hover:text-white transition-colors">PhilHealth Info</a></li>
                         <li><a href="#departments" class="hover:text-white transition-colors">Find a Doctor</a></li>
                         <li><a href="#services" class="hover:text-white transition-colors">Health Advisories</a></li>
