@@ -53,10 +53,11 @@ class Symptom
         $stmtDel->execute(['cid' => $complaintId]);
 
         $stmtIns = $this->db->prepare("
-            INSERT IGNORE INTO patient_symptoms (ComplaintID, SymptomID)
+            INSERT INTO patient_symptoms (ComplaintID, SymptomID)
             VALUES (:cid, :sid)
         ");
 
+        $inserted = [];
         foreach ($symptomIdsOrNames as $item) {
             $symptomId = null;
             if (is_numeric($item)) {
@@ -68,7 +69,8 @@ class Symptom
                 }
             }
 
-            if ($symptomId) {
+            if ($symptomId && !isset($inserted[$symptomId])) {
+                $inserted[$symptomId] = true;
                 $stmtIns->execute(['cid' => $complaintId, 'sid' => $symptomId]);
             }
         }

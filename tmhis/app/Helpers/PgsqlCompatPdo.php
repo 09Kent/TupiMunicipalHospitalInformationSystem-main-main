@@ -356,6 +356,7 @@ if (!class_exists('PgsqlCompatPdo', false)) {
             $sql = preg_replace('/\bDATE_ADD\s*\(\s*(CURDATE\(\)|CURRENT_DATE)\s*,\s*INTERVAL\s+(\d+)\s+DAY\s*\)/i', "($1 + INTERVAL '$2 DAY')", $sql);
             $sql = preg_replace('/\bCURDATE\(\)/i', 'CURRENT_DATE', $sql);
             $sql = preg_replace('/\bLAST_INSERT_ID\s*\(\s*\)/i', 'lastval()', $sql);
+            $sql = preg_replace('/\bINSERT\s+IGNORE\s+INTO\b/i', 'INSERT INTO', $sql);
             
             // MySQL GROUP_CONCAT -> PostgreSQL STRING_AGG with ::text cast
             $sql = preg_replace('/\bGROUP_CONCAT\s*\(\s*(DISTINCT\s+)?(.*?)\s+SEPARATOR\s+([\'"].*?[\'"])\s*\)/is', 'STRING_AGG($1($2)::text, $3)', $sql);

@@ -46,10 +46,11 @@ class PossibleCondition
         $stmtDel->execute(['cid' => $complaintId]);
 
         $stmtIns = $this->db->prepare("
-            INSERT IGNORE INTO complaint_conditions (ComplaintID, ConditionID)
+            INSERT INTO complaint_conditions (ComplaintID, ConditionID)
             VALUES (:cid, :cond_id)
         ");
 
+        $inserted = [];
         foreach ($conditionIdsOrNames as $item) {
             $conditionId = null;
             if (is_numeric($item)) {
@@ -60,7 +61,8 @@ class PossibleCondition
                 $conditionId = $stmtFind->fetchColumn();
             }
 
-            if ($conditionId) {
+            if ($conditionId && !isset($inserted[$conditionId])) {
+                $inserted[$conditionId] = true;
                 $stmtIns->execute(['cid' => $complaintId, 'cond_id' => $conditionId]);
             }
         }
