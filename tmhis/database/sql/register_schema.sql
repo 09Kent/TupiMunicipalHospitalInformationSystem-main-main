@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS `patients` (
   `Address` TEXT NOT NULL,
   `BloodType` VARCHAR(10) NOT NULL DEFAULT 'Unknown',
   `PatientCategory` ENUM('Outpatient', 'Emergency', 'Inpatient', 'Consultation', 'Admitted') NOT NULL DEFAULT 'Outpatient',
-  `Status` ENUM('Active', 'Inactive', 'Discharged', 'Transferred') NOT NULL DEFAULT 'Active',
+  `Status` ENUM('Active', 'Inactive', 'Discharged', 'Transferred', 'Archived') NOT NULL DEFAULT 'Active',
   `RegisteredBy` INT NULL,
   `CreatedAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `UpdatedAt` DATETIME NULL ON UPDATE CURRENT_TIMESTAMP,

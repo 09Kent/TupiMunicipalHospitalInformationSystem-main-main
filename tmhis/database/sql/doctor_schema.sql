@@ -180,7 +180,7 @@ CREATE TABLE IF NOT EXISTS `laboratory_requests` (
   `TestType` VARCHAR(150) NOT NULL,
   `Priority` ENUM('Routine', 'Urgent', 'STAT') NOT NULL DEFAULT 'Routine',
   `ClinicalNotes` TEXT NULL,
-  `Status` ENUM('Pending', 'Sample Collected', 'In Progress', 'Completed', 'Cancelled') NOT NULL DEFAULT 'Pending',
+  `Status` ENUM('Pending', 'Received', 'Processing', 'Sample Collected', 'In Progress', 'Completed', 'Cancelled') NOT NULL DEFAULT 'Pending',
   `RequestedDate` DATE NOT NULL DEFAULT (CURRENT_DATE),
   `CreatedAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (`PatientID`) REFERENCES `patients`(`PatientID`) ON DELETE CASCADE,
