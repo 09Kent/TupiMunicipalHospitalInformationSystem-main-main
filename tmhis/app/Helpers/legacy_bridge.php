@@ -242,4 +242,19 @@ namespace {
             }
         }
     }
+
+    if (!function_exists('asset')) {
+        function asset(string $path): string {
+            if (function_exists('url')) {
+                return url($path);
+            }
+            $sub = '';
+            if (!empty($_SERVER['SCRIPT_NAME'])) {
+                $sub = dirname($_SERVER['SCRIPT_NAME']);
+                $sub = ($sub === '/' || $sub === '\\') ? '' : str_replace('\\', '/', $sub);
+            }
+            return $sub . '/' . ltrim($path, '/');
+        }
+    }
 }
+

@@ -5,16 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Login | Tupi Municipal Hospital Information Management System</title>
   
-  <!-- Tailwind CSS -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Lucide Icons -->
-  <script src="https://unpkg.com/lucide@latest"></script>
-  <!-- Fonts -->
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@500;600;700;800;900&display=swap" rel="stylesheet">
+  <!-- Offline Vendor Libraries -->
+  <link rel="stylesheet" href="{{ asset('vendor/fonts/fonts.css') }}">
+  <script src="{{ asset('vendor/tailwindcss/tailwind.js') }}"></script>
+  <script src="{{ asset('vendor/lucide/lucide.min.js') }}"></script>
 
   <style>
-    body { font-family: 'Inter', sans-serif; }
-    h1, h2, h3, .font-display { font-family: 'Outfit', sans-serif; }
+    body { font-family: var(--font-sans, 'Inter', sans-serif); }
+    h1, h2, h3, .font-display { font-family: var(--font-display, 'Outfit', sans-serif); }
     @keyframes shake {
       0%, 100% { transform: translateX(0); }
       20%, 60% { transform: translateX(-6px); }
@@ -34,7 +32,7 @@
     <div class="md:w-1/2 relative bg-slate-900 flex flex-col justify-between p-8 sm:p-12 text-white overflow-hidden min-h-[280px] md:min-h-full">
       
       <!-- Modern Hospital Building Background Image -->
-      <img src="https://images.unsplash.com/photo-1587351021759-3e566b6af7cc?auto=format&fit=crop&q=80&w=1200" 
+      <img src="{{ asset('assets/hospital-building.jpg') }}" 
            alt="Modern Hospital Center" 
            class="absolute inset-0 w-full h-full object-cover object-center scale-105 transition-transform duration-1000 hover:scale-100 opacity-40">
 

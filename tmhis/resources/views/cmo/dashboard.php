@@ -19,7 +19,7 @@ require_once __DIR__ . '/config/db.php';
   <title>Medical Director Dashboard | Tupi Municipal Hospital Information Management System</title>
   <meta name="description" content="Hospital Chief / Medical Director Executive Dashboard for Tupi Municipal Hospital Information Management System. View operational reports, staff activity, department performance, and DOH compliance.">
   <link rel="stylesheet" href="css/styles.css">
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+  <script src="<?= asset('vendor/chartjs/chart.min.js') ?>"></script>
 </head>
 <body>
 <div class="app-container">

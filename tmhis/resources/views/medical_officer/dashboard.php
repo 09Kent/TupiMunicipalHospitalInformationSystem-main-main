@@ -23,8 +23,8 @@ require_once __DIR__ . '/config/data.php';
   <!-- CSS Stylesheet -->
   <link rel="stylesheet" href="<?= asset('section/records/css/styles.css') ?>?v=<?= file_exists(public_path('section/records/css/styles.css')) ? filemtime(public_path('section/records/css/styles.css')) : time() ?>">
   
-  <!-- Lucide Icons CDN -->
-  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- Offline Lucide Icons -->
+  <script src="<?= asset('vendor/lucide/lucide.min.js') ?>"></script>
 </head>
 <body>
 

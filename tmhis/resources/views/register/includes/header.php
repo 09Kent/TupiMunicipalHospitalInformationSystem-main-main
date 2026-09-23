@@ -19,13 +19,11 @@ $pageTitle = $pageTitle ?? 'Tupi Municipal Hospital Information Management Syste
   <title><?= e($pageTitle) ?></title>
   <meta name="description" content="Tupi Municipal Hospital Information Management System - Registration Portal" />
 
-  <!-- Google Fonts (Plus Jakarta Sans & Inter) -->
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <!-- Offline Typography & Fonts -->
+  <link rel="stylesheet" href="<?= asset('vendor/fonts/fonts.css') ?>" />
 
-  <!-- Tailwind CSS CDN with Custom Blue Healthcare Palette -->
-  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Offline Tailwind CSS with Custom Blue Healthcare Palette -->
+  <script src="<?= asset('vendor/tailwindcss/tailwind.js') ?>"></script>
   <script>
     tailwind.config = {
       theme: {
@@ -58,11 +56,11 @@ $pageTitle = $pageTitle ?? 'Tupi Municipal Hospital Information Management Syste
     }
   </script>
 
-  <!-- Lucide Icons -->
-  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- Offline Lucide Icons -->
+  <script src="<?= asset('vendor/lucide/lucide.min.js') ?>"></script>
 
-  <!-- Chart.js for Reports & Analytics -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Offline Chart.js for Reports & Analytics -->
+  <script src="<?= asset('vendor/chartjs/chart.min.js') ?>"></script>
 
   <!-- Custom Stylesheet -->
   <link rel="stylesheet" href="<?= base_url('css/styles.css') ?>" />

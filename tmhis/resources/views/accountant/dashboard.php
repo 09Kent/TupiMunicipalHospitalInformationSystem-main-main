@@ -20,8 +20,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Billing & Cashier Dashboard | Tupi Municipal Hospital Information Management System</title>
   
-  <!-- Tailwind CSS CDN -->
-  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Offline Typography & Fonts -->
+  <link rel="stylesheet" href="<?= asset('vendor/fonts/fonts.css') ?>">
+
+  <!-- Offline Tailwind CSS -->
+  <script src="<?= asset('vendor/tailwindcss/tailwind.js') ?>"></script>
   <script>
     tailwind.config = {
       theme: {
@@ -43,8 +46,8 @@
     }
   </script>
 
-  <!-- Lucide Icons -->
-  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- Offline Lucide Icons -->
+  <script src="<?= asset('vendor/lucide/lucide.min.js') ?>"></script>
 
   <!-- Custom Styles -->
   <link rel="stylesheet" href="<?= asset('section/billing/assets/css/styles.css') ?>">

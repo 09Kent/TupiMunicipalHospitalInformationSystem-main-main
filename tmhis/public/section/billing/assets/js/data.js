@@ -10,7 +10,7 @@ const BILLING_DATA = (typeof window !== 'undefined' && window.SERVER_BILLING_DAT
     role: "Billing / Cashier Staff",
     department: "Cashier & Patient Accounts Division",
     id: "EMP-CSH-2026-089",
-    avatar: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?q=80&w=256&auto=format&fit=crop",
+    avatar: "/assets/avatars/user-avatar.svg",
     shift: "Morning Shift (7:00 AM - 3:00 PM)",
     station: "Counter 3 - Main Hospital Lobby"
   },

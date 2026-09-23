@@ -38,12 +38,10 @@ $pageTitle = 'Print Medical Certificate: ' . $cert['CertificateCode'] . ' • Tu
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title><?= e($pageTitle) ?></title>
   
-  <!-- Tailwind CSS -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Lucide Icons -->
-  <script src="https://unpkg.com/lucide@latest"></script>
-  <!-- Fonts -->
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Outfit:wght@600;700;800;900&family=Cinzel:wght@600;700;800&display=swap" rel="stylesheet">
+  <!-- Offline Vendor Libraries -->
+  <link rel="stylesheet" href="<?= asset('vendor/fonts/fonts.css') ?>">
+  <script src="<?= asset('vendor/tailwindcss/tailwind.js') ?>"></script>
+  <script src="<?= asset('vendor/lucide/lucide.min.js') ?>"></script>
 
   <style>
     body { font-family: 'Inter', sans-serif; }

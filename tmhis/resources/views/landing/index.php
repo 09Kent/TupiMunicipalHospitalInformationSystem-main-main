@@ -6,8 +6,11 @@
     <title>Tupi Municipal Hospital Information Management System | South Cotabato</title>
     <meta name="description" content="Official portal for Tupi Municipal Hospital in South Cotabato, Philippines. Access hospital services, medical departments, patient resources, health announcements, and emergency contacts.">
     
-    <!-- Tailwind CSS CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Offline Typography & Fonts -->
+    <link rel="stylesheet" href="<?= asset('vendor/fonts/fonts.css') ?>">
+
+    <!-- Offline Tailwind CSS -->
+    <script src="<?= asset('vendor/tailwindcss/tailwind.js') ?>"></script>
     <script>
         tailwind.config = {
             theme: {
@@ -27,14 +30,14 @@
         }
     </script>
     
-    <!-- AOS Animation CSS CDN -->
-    <link rel="stylesheet" href="https://unpkg.com/aos@2.3.1/dist/aos.css" />
+    <!-- Offline AOS Animation CSS -->
+    <link rel="stylesheet" href="<?= asset('vendor/aos/aos.css') ?>" />
     
     <!-- Custom CSS -->
     <link rel="stylesheet" href="css/style.css">
     
-    <!-- Lucide Icons CDN -->
-    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Offline Lucide Icons -->
+    <script src="<?= asset('vendor/lucide/lucide.min.js') ?>"></script>
 </head>
 <body class="bg-slate-50 text-slate-800 antialiased selection:bg-blue-600 selection:text-white flex flex-col min-h-screen">
 
@@ -1692,8 +1695,8 @@
         <span id="toastMessage" class="text-sm font-medium text-slate-200">Action completed successfully.</span>
     </div>
 
-    <!-- AOS Animation Script CDN -->
-    <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
+    <!-- Offline AOS Animation Script -->
+    <script src="<?= asset('vendor/aos/aos.js') ?>"></script>
 
     <!-- Custom Main JS -->
     <script src="js/main.js"></script>

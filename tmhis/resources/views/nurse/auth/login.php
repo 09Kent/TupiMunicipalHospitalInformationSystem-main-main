@@ -16,11 +16,9 @@ $pageTitle = 'Nurse Portal Login • Tupi Municipal Hospital';
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title><?= e($pageTitle) ?></title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Outfit:wght@500;600;700;800;900&display=swap" rel="stylesheet">
-  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="<?= asset('vendor/fonts/fonts.css') ?>">
+  <script src="<?= asset('vendor/tailwindcss/tailwind.js') ?>"></script>
+  <script src="<?= asset('vendor/lucide/lucide.min.js') ?>"></script>
   <script>
     tailwind.config = {
       theme: {

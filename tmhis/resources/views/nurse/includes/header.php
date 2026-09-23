@@ -15,8 +15,8 @@ $currentUser = Session::getCurrentUser();
   <title><?= e($pageTitle) ?></title>
   <meta name="description" content="Tupi Municipal Hospital Information Management System Nurse On Duty Portal — Patient vital signs recording, status monitoring, queue assistance, task coordination and department notifications.">
   
-  <!-- Tailwind CSS -->
-  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Offline Tailwind CSS -->
+  <script src="<?= asset('vendor/tailwindcss/tailwind.js') ?>"></script>
   <script>
     tailwind.config = {
       darkMode: 'class',
@@ -48,20 +48,18 @@ $currentUser = Session::getCurrentUser();
     }
   </script>
 
-  <!-- Google Fonts -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <!-- Offline Typography & Fonts -->
+  <link rel="stylesheet" href="<?= asset('vendor/fonts/fonts.css') ?>">
 
-  <!-- Lucide Icons -->
-  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- Offline Lucide Icons -->
+  <script src="<?= asset('vendor/lucide/lucide.min.js') ?>"></script>
 
-  <!-- AOS Animate On Scroll -->
-  <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
-  <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
+  <!-- Offline AOS Animate On Scroll -->
+  <link href="<?= asset('vendor/aos/aos.css') ?>" rel="stylesheet">
+  <script src="<?= asset('vendor/aos/aos.js') ?>"></script>
 
-  <!-- Chart.js -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Offline Chart.js -->
+  <script src="<?= asset('vendor/chartjs/chart.min.js') ?>"></script>
 
   <style>
     /* Custom Scrollbar */

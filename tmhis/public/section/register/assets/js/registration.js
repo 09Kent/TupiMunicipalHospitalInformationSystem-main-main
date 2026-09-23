@@ -1176,7 +1176,10 @@ function renderRegStep7() {
           <div class="bg-white rounded-3xl p-6 border border-slate-200 shadow-2xs space-y-4 flex flex-col justify-between">
             <div class="space-y-3">
               <div class="flex items-start gap-4">
-                <img src="${d.ProfileImage || 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=150'}" class="w-16 h-16 rounded-2xl object-cover border" />
+                <img src="${d.ProfileImage || ((window.SERVER_DATA?.baseUrl || '/') + 'assets/avatars/doctor-avatar.svg')}" 
+                     onerror="this.src='${(window.SERVER_DATA?.baseUrl || '/') + 'assets/avatars/doctor-avatar.svg'}'"
+                     alt="Dr. ${d.FirstName} ${d.LastName}" 
+                     class="w-16 h-16 rounded-2xl object-cover border" />
                 <div>
                   <h4 class="text-base font-extrabold text-slate-900">Dr. ${d.FirstName} ${d.LastName}</h4>
                   <div class="text-xs font-bold text-blue-600">${d.Specialty}</div>

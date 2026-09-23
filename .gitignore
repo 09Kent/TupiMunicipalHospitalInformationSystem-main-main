@@ -30,9 +30,10 @@ scratch/
 test_runner_*.php
 
 # Dependencies
-vendor/
+/vendor/
 node_modules/
 tmhis/vendor/
+!tmhis/public/vendor/
 tmhis/node_modules/
 tmhis/storage/*.key
 tmhis/public/storage/
