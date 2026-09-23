@@ -1,6 +1,7 @@
 .env
 .env.*
-vendor/
+/vendor/
+!public/vendor/
 node_modules/
 tests/
 scratch/

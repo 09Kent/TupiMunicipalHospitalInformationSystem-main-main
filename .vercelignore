@@ -1,0 +1,12 @@
+.env
+.env.*
+/vendor/
+tmhis/vendor/
+!tmhis/public/vendor/
+node_modules/
+tmhis/node_modules/
+tests/
+tmhis/tests/
+scratch/
+.git/
+.github/

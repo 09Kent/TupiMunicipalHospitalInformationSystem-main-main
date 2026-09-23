@@ -10,6 +10,11 @@ $appointmentUrl = file_exists(__DIR__ . '/tmhis/public/index.php') ? 'tmhis/publ
     <title>Tupi Municipal Hospital Information Management System | South Cotabato</title>
     <meta name="description" content="Official portal for Tupi Municipal Hospital in South Cotabato, Philippines. Access hospital services, medical departments, patient resources, health announcements, and emergency contacts.">
     
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>

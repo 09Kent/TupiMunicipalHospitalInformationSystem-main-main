@@ -6,11 +6,19 @@
     <title>Tupi Municipal Hospital Information Management System | South Cotabato</title>
     <meta name="description" content="Official portal for Tupi Municipal Hospital in South Cotabato, Philippines. Access hospital services, medical departments, patient resources, health announcements, and emergency contacts.">
     
-    <!-- Offline Typography & Fonts -->
+    <!-- Typography & Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ asset('vendor/fonts/fonts.css') }}">
 
-    <!-- Offline Tailwind CSS -->
-    <script src="{{ asset('vendor/tailwindcss/tailwind.js') }}"></script>
+    <!-- Tailwind CSS (CDN with local fallback) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        if (!window.tailwind) {
+            document.write('<script src="{{ asset('vendor/tailwindcss/tailwind.js') }}"><\/script>');
+        }
+    </script>
     <script>
         tailwind.config = {
             theme: {
@@ -30,14 +38,20 @@
         }
     </script>
     
-    <!-- Offline AOS Animation CSS -->
+    <!-- AOS Animation CSS (CDN with local fallback) -->
+    <link rel="stylesheet" href="https://unpkg.com/aos@2.3.1/dist/aos.css" />
     <link rel="stylesheet" href="{{ asset('vendor/aos/aos.css') }}" />
     
     <!-- Custom CSS -->
     <link rel="stylesheet" href="{{ asset('css/style.css') }}">
     
-    <!-- Offline Lucide Icons -->
-    <script src="{{ asset('vendor/lucide/lucide.min.js') }}"></script>
+    <!-- Lucide Icons (CDN with local fallback) -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script>
+        if (!window.lucide) {
+            document.write('<script src="{{ asset('vendor/lucide/lucide.min.js') }}"><\/script>');
+        }
+    </script>
 
     @if (file_exists(public_path('build/manifest.json')) || file_exists(public_path('hot')))
         @vite(['resources/js/app.js'])
@@ -1699,10 +1713,34 @@
         <span id="toastMessage" class="text-sm font-medium text-slate-200">Action completed successfully.</span>
     </div>
 
-    <!-- Offline AOS Animation Script -->
-    <script src="{{ asset('vendor/aos/aos.js') }}"></script>
+    <!-- AOS Animation Script (CDN with local fallback) -->
+    <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
+    <script>
+        if (!window.AOS) {
+            document.write('<script src="{{ asset('vendor/aos/aos.js') }}"><\/script>');
+        }
+    </script>
 
     <!-- Custom Main JS -->
     <script src="{{ asset('js/main.js') }}"></script>
+    <script>
+        // Guaranteed fallback initialization
+        (function() {
+            function initPage() {
+                if (typeof lucide !== 'undefined' && lucide.createIcons) {
+                    lucide.createIcons();
+                }
+                if (typeof AOS !== 'undefined' && AOS.init) {
+                    AOS.init({ duration: 800, once: true });
+                }
+            }
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', initPage);
+            } else {
+                initPage();
+            }
+            window.addEventListener('load', initPage);
+        })();
+    </script>
 </body>
 </html>
