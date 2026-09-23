@@ -4,10 +4,14 @@ if (!class_exists('PgsqlCompatPdo', false)) {
     {
         private static ?string $pattern = null;
 
+        #[\ReturnTypeWillChange]
         public function query(string $query, ?int $fetchMode = null, mixed ...$fetchModeArgs): PDOStatement|false
         {
             $query = self::rewriteSql($query);
-            return parent::query($query, ...$fetchModeArgs);
+            if ($fetchMode !== null) {
+                return parent::query($query, $fetchMode, ...$fetchModeArgs);
+            }
+            return parent::query($query);
         }
 
         public function prepare(string $query, array $options = []): PDOStatement|false
