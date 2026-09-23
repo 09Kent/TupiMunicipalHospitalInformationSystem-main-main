@@ -5,7 +5,7 @@ if (!class_exists('PgsqlCompatPdo', false)) {
         private static ?string $pattern = null;
 
         #[\ReturnTypeWillChange]
-        public function query(string $query, ?int $fetchMode = null, mixed ...$fetchModeArgs): PDOStatement|false
+        public function query(string $query, ?int $fetchMode = null, mixed ...$fetchModeArgs)
         {
             $query = self::rewriteSql($query);
             if ($fetchMode !== null) {
