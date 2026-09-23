@@ -107,17 +107,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $appId = (int)$stmtFindApp->fetchColumn();
         }
 
-        $noteId = $noteModel->create([
-            'patient_id'     => $patientId,
-            'doctor_id'      => $doctorId,
-            'appointment_id' => $appId ?: null,
-            'subjective'     => $subjective,
-            'objective'      => $objective,
-            'assessment'     => $assessment,
-            'plan'           => $plan,
-            'clinical_notes' => $clinicalNotes,
-            'vitals'         => $vitals
-        ]);
+        // Check if existing note already exists for this patient/appointment to update rather than duplicate
+        $existingNoteForApp = ($appId > 0) ? $noteModel->findByAppointment($appId) : null;
+        if (!$existingNoteForApp && !empty($existingNotes)) {
+            $existingNoteForApp = $existingNotes[0];
+        }
+
+        if ($existingNoteForApp && !empty($existingNoteForApp['NoteID'])) {
+            $noteId = (int)$existingNoteForApp['NoteID'];
+            $noteModel->update($noteId, [
+                'subjective'     => $subjective,
+                'objective'      => $objective,
+                'assessment'     => $assessment,
+                'plan'           => $plan,
+                'clinical_notes' => $clinicalNotes,
+                'vitals'         => $vitals
+            ]);
+        } else {
+            $noteId = $noteModel->create([
+                'patient_id'     => $patientId,
+                'doctor_id'      => $doctorId,
+                'appointment_id' => $appId ?: null,
+                'subjective'     => $subjective,
+                'objective'      => $objective,
+                'assessment'     => $assessment,
+                'plan'           => $plan,
+                'clinical_notes' => $clinicalNotes,
+                'vitals'         => $vitals
+            ]);
+        }
 
         // Also persist vitals to patient_vitals table
         try {
@@ -171,7 +189,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         if ($noteId) {
-            Session::setFlash('success', 'Consultation SOAP note recorded successfully.');
+            Session::setFlash('success', 'Consultation SOAP note recorded and updated successfully.');
             header("Location: " . doctor_url("views/diagnosis/index.php?patient_id=$patientId&app_id=$appId"));
             if (function_exists('app') && app()->environment('testing')) { return; }
             exit;
@@ -198,8 +216,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'notes'          => $notes
             ]);
 
+            // Synchronize assessment into consultation note so doctor's diagnosis updates the note immediately
+            try {
+                $latestNotes = $noteModel->findByPatient($patientId);
+                if (!empty($latestNotes)) {
+                    $targetNoteId = (int)$latestNotes[0]['NoteID'];
+                    $currAss = trim($latestNotes[0]['Assessment'] ?? '');
+                    $updatedAss = (empty($currAss) || $currAss === 'Consultation completed' || $currAss === 'Clinical Differential & Impression evaluated')
+                        ? $diagName
+                        : ($currAss . '; ' . $diagName);
+                    $noteModel->update($targetNoteId, [
+                        'assessment'     => $updatedAss,
+                        'clinical_notes' => trim(($latestNotes[0]['Subjective'] ?? '') . ' | Assessment: ' . $updatedAss . ' | Plan: ' . ($latestNotes[0]['Plan'] ?? ''))
+                    ]);
+                } else {
+                    $noteModel->create([
+                        'patient_id'     => $patientId,
+                        'doctor_id'      => $doctorId,
+                        'appointment_id' => $appId ?: null,
+                        'subjective'     => $patient['Complaint']['ComplaintDescription'] ?? 'General Consultation',
+                        'objective'      => 'Clinical physical examination conducted',
+                        'assessment'     => $diagName,
+                        'plan'           => 'Formulate treatment regimen and follow up',
+                        'clinical_notes' => "Diagnosis: $diagName ($diagType)",
+                        'vitals'         => ['bp' => '120/80', 'hr' => '74 bpm', 'temp' => '36.7 °C', 'spo2' => '98%', 'weight' => '72 kg']
+                    ]);
+                }
+            } catch (\Throwable $ne) {}
+
             if ($diagId) {
-                Session::setFlash('success', "Diagnosis '$diagName' recorded in patient EMR.");
+                Session::setFlash('success', "Diagnosis '$diagName' recorded in patient chart and updated in consultation note.");
                 header("Location: " . doctor_url("views/diagnosis/index.php?patient_id=$patientId&app_id=$appId"));
                 if (function_exists('app') && app()->environment('testing')) { return; }
                 exit;
@@ -268,33 +314,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         // 1. Persist or update SOAP Consultation Note
-        if (!empty($subjective) || !empty($assessment) || !empty($plan) || !empty($clinicalNotes)) {
+        $existingNoteForApp = ($appId > 0) ? $noteModel->findByAppointment($appId) : null;
+        if (!$existingNoteForApp && !empty($existingNotes)) {
+            $existingNoteForApp = $existingNotes[0];
+        }
+
+        $finalSub = $subjective ?: ($existingNoteForApp['Subjective'] ?? ($patient['Complaint']['ComplaintDescription'] ?? 'Routine consultation'));
+        $finalObj = $objective ?: ($existingNoteForApp['Objective'] ?? 'Clinical evaluation performed');
+        $finalAss = $assessment ?: ($existingNoteForApp['Assessment'] ?? (!empty($existingDiagnoses) ? $existingDiagnoses[0]['DiagnosisName'] : 'Consultation completed'));
+        $finalPlan = $plan ?: ($existingNoteForApp['Plan'] ?? ($summary ?: 'Outpatient care and follow up'));
+        $finalNotes = $clinicalNotes ?: ($summary ?: "$finalSub | $finalAss | $finalPlan");
+
+        if ($existingNoteForApp && !empty($existingNoteForApp['NoteID'])) {
+            $noteModel->update((int)$existingNoteForApp['NoteID'], [
+                'subjective'     => $finalSub,
+                'objective'      => $finalObj,
+                'assessment'     => $finalAss,
+                'plan'           => $finalPlan,
+                'clinical_notes' => $finalNotes,
+                'vitals'         => $vitals
+            ]);
+        } else {
             $noteModel->create([
                 'patient_id'     => $patientId,
                 'doctor_id'      => $doctorId,
                 'appointment_id' => $appId ?: null,
-                'subjective'     => $subjective ?: ($patient['Complaint']['ComplaintDescription'] ?? 'Routine consultation'),
-                'objective'      => $objective ?: 'Clinical evaluation performed',
-                'assessment'     => $assessment ?: 'Consultation completed',
-                'plan'           => $plan ?: ($summary ?: 'Outpatient care and follow up'),
-                'clinical_notes' => $clinicalNotes ?: ($summary ?: 'Clinical consultation completed.'),
+                'subjective'     => $finalSub,
+                'objective'      => $finalObj,
+                'assessment'     => $finalAss,
+                'plan'           => $finalPlan,
+                'clinical_notes' => $finalNotes,
                 'vitals'         => $vitals
             ]);
-        } else {
-            $existingNote = $noteModel->findByAppointment($appId) ?: $noteModel->findByPatient($patientId);
-            if (empty($existingNote)) {
-                $noteModel->create([
-                    'patient_id'     => $patientId,
-                    'doctor_id'      => $doctorId,
-                    'appointment_id' => $appId ?: null,
-                    'subjective'     => $patient['Complaint']['ComplaintDescription'] ?? 'General Consultation',
-                    'objective'      => 'Auscultation, palpation, signs reviewed',
-                    'assessment'     => 'Clinical Differential & Impression evaluated',
-                    'plan'           => $summary ?: 'Consultation completed and archived',
-                    'clinical_notes' => $summary ?: 'Clinical consultation completed and archived.',
-                    'vitals'         => $vitals
-                ]);
-            }
         }
 
         // 2. Persist Vitals to patient_vitals table
@@ -328,16 +379,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } catch (\Throwable $ve) {}
 
         // 3. Persist Active Diagnosis if assessment provided
-        if (!empty($assessment)) {
+        if (!empty($finalAss) && $finalAss !== 'Consultation completed') {
             try {
                 $diagCheck = Database::getConnection()->prepare("SELECT DiagnosisID FROM diagnoses WHERE PatientID = :pid AND DiagnosisName = :dname LIMIT 1");
-                $diagCheck->execute([':pid' => $patientId, ':dname' => $assessment]);
+                $diagCheck->execute([':pid' => $patientId, ':dname' => $finalAss]);
                 if (!$diagCheck->fetchColumn()) {
                     $diagnosisModel->create([
                         'patient_id'     => $patientId,
                         'doctor_id'      => $doctorId,
                         'appointment_id' => $appId ?: null,
-                        'diagnosis_name' => $assessment,
+                        'diagnosis_name' => $finalAss,
                         'icd10_code'     => 'Z00.0',
                         'type'           => 'Primary',
                         'severity'       => 'Moderate',
@@ -349,18 +400,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         // 4. Persist Treatment Plan if plan provided
-        if (!empty($plan)) {
+        if (!empty($finalPlan)) {
             try {
                 $planCheck = Database::getConnection()->prepare("SELECT PlanID FROM treatment_plans WHERE PatientID = :pid AND Goal = :goal LIMIT 1");
-                $planCheck->execute([':pid' => $patientId, ':goal' => $plan]);
+                $planCheck->execute([':pid' => $patientId, ':goal' => $finalPlan]);
                 if (!$planCheck->fetchColumn()) {
                     $treatmentModel->create([
                         'patient_id'                => $patientId,
                         'doctor_id'                 => $doctorId,
                         'appointment_id'            => $appId ?: null,
-                        'goal'                      => $plan,
+                        'goal'                      => $finalPlan,
                         'lifestyle_recommendations' => 'Adequate rest, balanced nutrition, and hydration.',
-                        'medication_plan'           => $plan,
+                        'medication_plan'           => $finalPlan,
                         'follow_up_schedule'        => 'Follow up in 2 weeks or PRN',
                         'status'                    => 'Active',
                         'notes'                     => 'Formulated during clinical consultation'
@@ -371,7 +422,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         // 5. Complete consultation in appointment and queue
         if ($appId > 0) {
-            $consultationModel->completeConsultation($appId, $doctorId, $summary ?: $clinicalNotes);
+            $consultationModel->completeConsultation($appId, $doctorId, $summary ?: $finalNotes);
         }
 
         Session::setFlash('success', 'Consultation marked as Completed. Clinical records archived and available in Medical Records.');
@@ -557,6 +608,21 @@ require_once __DIR__ . '/../includes/sidebar.php';
               </div>
             </div>
 
+            <?php
+              $latestNote = !empty($existingNotes) ? $existingNotes[0] : null;
+              $savedVitals = !empty($latestNote['VitalSigns']) ? (is_array($latestNote['VitalSigns']) ? $latestNote['VitalSigns'] : json_decode($latestNote['VitalSigns'], true)) : [];
+              $bpVal = $savedVitals['bp'] ?? '120/80';
+              $hrVal = $savedVitals['hr'] ?? '74 bpm';
+              $tempVal = $savedVitals['temp'] ?? '36.7 °C';
+              $spo2Val = $savedVitals['spo2'] ?? '98%';
+              $weightVal = $savedVitals['weight'] ?? '72 kg';
+
+              $subjVal = $latestNote['Subjective'] ?? ($patient['Complaint']['ComplaintDescription'] ?? '');
+              $objVal = $latestNote['Objective'] ?? '';
+              $assVal = $latestNote['Assessment'] ?? (!empty($existingDiagnoses) ? $existingDiagnoses[0]['DiagnosisName'] : '');
+              $planVal = $latestNote['Plan'] ?? (!empty($existingTreatmentPlans) ? $existingTreatmentPlans[0]['Goal'] : '');
+            ?>
+
             <form id="soapNoteForm" method="POST" action="" class="space-y-4">
               <input type="hidden" name="csrf_token" value="<?= csrf_token() ?>" />
               <input type="hidden" name="action" value="save_soap_note" />
@@ -567,27 +633,27 @@ require_once __DIR__ . '/../includes/sidebar.php';
                 <div class="grid grid-cols-2 sm:grid-cols-5 gap-3">
                   <div>
                     <label class="text-[10px] font-bold text-slate-600 block mb-1">Blood Pressure</label>
-                    <input type="text" name="vital_bp" placeholder="120/80 mmHg" value="120/80" 
+                    <input type="text" name="vital_bp" placeholder="120/80 mmHg" value="<?= e($bpVal) ?>" 
                            class="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-800" />
                   </div>
                   <div>
                     <label class="text-[10px] font-bold text-slate-600 block mb-1">Heart Rate</label>
-                    <input type="text" name="vital_hr" placeholder="72 bpm" value="74 bpm" 
+                    <input type="text" name="vital_hr" placeholder="72 bpm" value="<?= e($hrVal) ?>" 
                            class="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-800" />
                   </div>
                   <div>
                     <label class="text-[10px] font-bold text-slate-600 block mb-1">Temperature</label>
-                    <input type="text" name="vital_temp" placeholder="36.8 °C" value="36.7 °C" 
+                    <input type="text" name="vital_temp" placeholder="36.8 °C" value="<?= e($tempVal) ?>" 
                            class="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-800" />
                   </div>
                   <div>
                     <label class="text-[10px] font-bold text-slate-600 block mb-1">SpO2 Oxygen</label>
-                    <input type="text" name="vital_spo2" placeholder="99%" value="98%" 
+                    <input type="text" name="vital_spo2" placeholder="99%" value="<?= e($spo2Val) ?>" 
                            class="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-800" />
                   </div>
                   <div>
                     <label class="text-[10px] font-bold text-slate-600 block mb-1">Body Weight</label>
-                    <input type="text" name="vital_weight" placeholder="70 kg" value="72 kg" 
+                    <input type="text" name="vital_weight" placeholder="70 kg" value="<?= e($weightVal) ?>" 
                            class="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-800" />
                   </div>
                 </div>
@@ -601,7 +667,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
                 </label>
                 <textarea name="subjective" rows="2" required 
                           placeholder="e.g. Patient reports sharp retrosternal discomfort after heavy meals with nausea..." 
-                          class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition"><?= e($patient['Complaint']['ComplaintDescription'] ?? '') ?></textarea>
+                          class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition"><?= e($subjVal) ?></textarea>
               </div>
 
               <!-- O: Objective -->
@@ -612,7 +678,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
                 </label>
                 <textarea name="objective" rows="2" 
                           placeholder="e.g. Normal S1/S2 heart sounds, abdomen soft without guarding, epigastric tenderness present..." 
-                          class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition"></textarea>
+                          class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition"><?= e($objVal) ?></textarea>
               </div>
 
               <!-- A: Assessment -->
@@ -623,7 +689,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
                 </label>
                 <textarea name="assessment" rows="2" 
                           placeholder="e.g. Gastritis secondary to mucosal hyperacidity vs Functional Dyspepsia..." 
-                          class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition"></textarea>
+                          class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition"><?= e($assVal) ?></textarea>
               </div>
 
               <!-- P: Plan -->
@@ -634,7 +700,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
                 </label>
                 <textarea name="plan" rows="2" 
                           placeholder="e.g. Prescribe Proton Pump Inhibitor 40mg daily, order H. Pylori antibody test, review in 2 weeks..." 
-                          class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition"></textarea>
+                          class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition"><?= e($planVal) ?></textarea>
               </div>
 
               <div class="pt-2 flex justify-end">

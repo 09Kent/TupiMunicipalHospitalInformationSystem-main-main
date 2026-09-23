@@ -195,6 +195,152 @@ require_once __DIR__ . '/../includes/sidebar.php';
             </div>
           <?php endif; ?>
 
+        <!-- Physician Official Consultation & SOAP Notes Card -->
+        <div class="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-card space-y-5" data-aos="fade-up">
+          <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+            <div class="flex items-center gap-2">
+              <span class="p-2 rounded-xl bg-blue-50 text-blue-600">
+                <i data-lucide="clipboard-check" class="w-4 h-4"></i>
+              </span>
+              <div>
+                <h3 class="text-sm font-extrabold text-slate-900 uppercase tracking-wide font-display">Attending Physician Clinical Notes (SOAP)</h3>
+                <p class="text-[11px] text-slate-400">Official doctor evaluation and notes documented during consultation</p>
+              </div>
+            </div>
+            <a href="<?= doctor_url('views/diagnosis/index.php?patient_id=' . $patientId . '&app_id=' . ($profile['Appointment']['AppointmentID'] ?? '')) ?>" 
+               class="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold rounded-xl text-xs transition flex items-center gap-1">
+              <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
+              <span>Edit Clinical Note</span>
+            </a>
+          </div>
+
+          <?php if (!empty($notes)): 
+            $n = $notes[0];
+            $nVitals = !empty($n['VitalSigns']) ? (is_array($n['VitalSigns']) ? $n['VitalSigns'] : json_decode($n['VitalSigns'], true)) : [];
+          ?>
+            <!-- Active SOAP Note Body -->
+            <div class="space-y-3.5 text-xs">
+              
+              <!-- Vitals Strip if present -->
+              <?php if (!empty($nVitals)): ?>
+                <div class="p-3 bg-slate-50 rounded-2xl border border-slate-100 grid grid-cols-2 sm:grid-cols-5 gap-2 text-center">
+                  <div>
+                    <span class="text-[9px] font-extrabold uppercase text-slate-400 block">BP</span>
+                    <span class="font-extrabold text-slate-800"><?= e($nVitals['bp'] ?? '—') ?></span>
+                  </div>
+                  <div>
+                    <span class="text-[9px] font-extrabold uppercase text-slate-400 block">Heart Rate</span>
+                    <span class="font-extrabold text-slate-800"><?= e($nVitals['hr'] ?? '—') ?></span>
+                  </div>
+                  <div>
+                    <span class="text-[9px] font-extrabold uppercase text-slate-400 block">Temp</span>
+                    <span class="font-extrabold text-slate-800"><?= e($nVitals['temp'] ?? '—') ?></span>
+                  </div>
+                  <div>
+                    <span class="text-[9px] font-extrabold uppercase text-slate-400 block">SpO2</span>
+                    <span class="font-extrabold text-slate-800"><?= e($nVitals['spo2'] ?? '—') ?></span>
+                  </div>
+                  <div>
+                    <span class="text-[9px] font-extrabold uppercase text-slate-400 block">Weight</span>
+                    <span class="font-extrabold text-slate-800"><?= e($nVitals['weight'] ?? '—') ?></span>
+                  </div>
+                </div>
+              <?php endif; ?>
+
+              <div class="p-3.5 bg-blue-50/40 rounded-2xl border border-blue-100/70">
+                <span class="text-[10px] font-extrabold uppercase tracking-wider text-blue-700 block mb-1">Subjective (History & Complaint)</span>
+                <p class="font-medium text-slate-800 leading-relaxed"><?= nl2br(e($n['Subjective'] ?: 'Routine consultation notes')) ?></p>
+              </div>
+
+              <div class="p-3.5 bg-slate-50 rounded-2xl border border-slate-100">
+                <span class="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 block mb-1">Objective (Physical Examination Findings)</span>
+                <p class="font-medium text-slate-800 leading-relaxed"><?= nl2br(e($n['Objective'] ?: 'Auscultation, palpation, signs reviewed')) ?></p>
+              </div>
+
+              <div class="p-3.5 bg-emerald-50/50 rounded-2xl border border-emerald-100">
+                <span class="text-[10px] font-extrabold uppercase tracking-wider text-emerald-800 block mb-1">Assessment (Physician Diagnostic Impression)</span>
+                <p class="font-bold text-emerald-950 text-sm leading-relaxed"><?= nl2br(e($n['Assessment'] ?: 'Clinical evaluation completed')) ?></p>
+              </div>
+
+              <div class="p-3.5 bg-indigo-50/40 rounded-2xl border border-indigo-100">
+                <span class="text-[10px] font-extrabold uppercase tracking-wider text-indigo-700 block mb-1">Plan (Medical Management & Regimen)</span>
+                <p class="font-medium text-slate-800 leading-relaxed"><?= nl2br(e($n['Plan'] ?: 'Outpatient care and follow-up')) ?></p>
+              </div>
+
+              <div class="flex items-center justify-between text-[11px] text-slate-400 pt-1">
+                <span>Recorded by: <strong class="text-slate-700">Dr. <?= e($n['DoctorFirstName'] . ' ' . $n['DoctorLastName']) ?> (<?= e($n['Specialty']) ?>)</strong></span>
+                <span><?= format_date($n['CreatedAt'], 'd M Y, h:i A') ?></span>
+              </div>
+            </div>
+          <?php else: ?>
+            <div class="p-6 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200 text-slate-400 text-xs">
+              <i data-lucide="file-question" class="w-8 h-8 mx-auto mb-2 text-slate-300"></i>
+              <p class="font-bold text-slate-600">No consultation note recorded yet.</p>
+              <p class="text-[11px] text-slate-400 mt-0.5">Click "Edit Clinical Note" or "Launch Clinical Exam & Notes" to document findings.</p>
+            </div>
+          <?php endif; ?>
+        </div>
+
+        <!-- Physician Formal Diagnoses & Treatment Regimens Card -->
+        <div class="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-card space-y-4" data-aos="fade-up">
+          <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+            <div class="flex items-center gap-2">
+              <span class="p-2 rounded-xl bg-emerald-50 text-emerald-600">
+                <i data-lucide="file-check-2" class="w-4 h-4"></i>
+              </span>
+              <h3 class="text-sm font-extrabold text-slate-900 uppercase tracking-wide font-display">Physician Confirmed Diagnoses (<?= count($diagnoses) ?>)</h3>
+            </div>
+            <a href="<?= doctor_url('views/diagnosis/index.php?patient_id=' . $patientId . '&app_id=' . ($profile['Appointment']['AppointmentID'] ?? '')) ?>" 
+               class="text-xs font-bold text-blue-600 hover:text-blue-800">
+              + Add Diagnosis
+            </a>
+          </div>
+
+          <div class="space-y-2.5">
+            <?php if (empty($diagnoses)): ?>
+              <p class="text-xs text-slate-400 italic bg-slate-50 p-4 rounded-2xl text-center border border-dashed border-slate-200">No formal diagnoses documented yet.</p>
+            <?php else: ?>
+              <?php foreach ($diagnoses as $d): ?>
+                <div class="p-3.5 bg-slate-50 rounded-2xl border border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <div class="flex items-center gap-2">
+                      <strong class="text-slate-900 text-sm"><?= e($d['DiagnosisName']) ?></strong>
+                      <span class="px-2 py-0.5 text-[10px] font-mono font-bold rounded-full bg-blue-100 text-blue-800"><?= e($d['ICD10Code'] ?: 'ICD-10') ?></span>
+                      <span class="px-2 py-0.5 text-[9px] font-bold rounded-full bg-emerald-100 text-emerald-800"><?= e($d['Status']) ?></span>
+                    </div>
+                    <?php if (!empty($d['Notes'])): ?>
+                      <p class="text-[11px] text-slate-600 mt-1"><?= e($d['Notes']) ?></p>
+                    <?php endif; ?>
+                  </div>
+                  <div class="text-[10px] text-slate-400 text-left sm:text-right shrink-0">
+                    <span class="font-bold text-slate-600"><?= e($d['Type']) ?> • <?= e($d['Severity']) ?></span>
+                    <div class="text-[10px] text-slate-400"><?= format_date($d['DiagnosedDate']) ?></div>
+                  </div>
+                </div>
+              <?php endforeach; ?>
+            <?php endif; ?>
+          </div>
+
+          <?php if (!empty($treatmentPlans)): ?>
+            <div class="pt-3 border-t border-slate-100 space-y-2">
+              <span class="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 block">Active Treatment Regimens</span>
+              <?php foreach ($treatmentPlans as $tp): ?>
+                <div class="p-3 bg-emerald-50/40 rounded-2xl border border-emerald-100/70 text-xs space-y-1">
+                  <div class="font-extrabold text-emerald-950"><?= e($tp['Goal']) ?></div>
+                  <?php if (!empty($tp['MedicationPlan'])): ?>
+                    <p class="text-[11px] text-slate-700"><strong>Medications:</strong> <?= e($tp['MedicationPlan']) ?></p>
+                  <?php endif; ?>
+                  <?php if (!empty($tp['LifestyleRecommendations'])): ?>
+                    <p class="text-[11px] text-slate-600"><strong>Lifestyle:</strong> <?= e($tp['LifestyleRecommendations']) ?></p>
+                  <?php endif; ?>
+                  <div class="text-[10px] text-slate-400 flex items-center justify-between pt-1">
+                    <span>Follow-up: <strong class="text-slate-600"><?= e($tp['FollowUpSchedule'] ?: 'PRN') ?></strong></span>
+                    <span><?= format_date($tp['CreatedAt']) ?></span>
+                  </div>
+                </div>
+              <?php endforeach; ?>
+            </div>
+          <?php endif; ?>
         </div>
 
         <!-- 2. Chief Complaint & Symptoms Recorded by Registrator -->
