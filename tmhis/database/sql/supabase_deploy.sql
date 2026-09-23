@@ -2306,3 +2306,14 @@ SELECT setval(pg_get_serial_sequence('"backup_logs"', 'BackupID'), COALESCE((SEL
 SELECT setval(pg_get_serial_sequence('"migrations"', 'id'), COALESCE((SELECT MAX("id") FROM "migrations"), 1), true);
 SELECT setval(pg_get_serial_sequence('"jobs"', 'id'), COALESCE((SELECT MAX("id") FROM "jobs"), 1), true);
 SELECT setval(pg_get_serial_sequence('"failed_jobs"', 'id'), COALESCE((SELECT MAX("id") FROM "failed_jobs"), 1), true);
+
+CREATE TABLE IF NOT EXISTS "sessions" (
+    "id" VARCHAR(255) PRIMARY KEY,
+    "user_id" BIGINT NULL,
+    "ip_address" VARCHAR(45) NULL,
+    "user_agent" TEXT NULL,
+    "payload" TEXT NOT NULL,
+    "last_activity" INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS "sessions_user_id_index" ON "sessions" ("user_id");
+CREATE INDEX IF NOT EXISTS "sessions_last_activity_index" ON "sessions" ("last_activity");
