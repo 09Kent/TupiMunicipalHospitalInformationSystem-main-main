@@ -3,7 +3,7 @@
   "framework": null,
   "outputDirectory": "tmhis/public",
   "functions": {
-    "tmhis/api/index.php": {
+    "api/index.php": {
       "runtime": "vercel-php@0.7.4",
       "memory": 1024,
       "maxDuration": 30
@@ -20,7 +20,7 @@
     },
     {
       "src": "/(.*)",
-      "dest": "/tmhis/api/index.php"
+      "dest": "/api/index.php"
     }
   ],
   "env": {
