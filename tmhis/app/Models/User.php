@@ -33,4 +33,10 @@ class User extends Authenticatable
     {
         return $this->hasOne(Doctor::class, 'UserID', 'UserID');
     }
+
+    public function departments()
+    {
+        return $this->belongsToMany(Department::class, 'user_departments', 'UserID', 'DepartmentID')
+            ->withPivot('IsPrimary');
+    }
 }

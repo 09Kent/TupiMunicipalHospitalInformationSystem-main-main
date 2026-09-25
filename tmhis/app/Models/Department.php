@@ -16,4 +16,21 @@ class Department extends Model
     const UPDATED_AT = 'UpdatedAt';
 
     protected $guarded = [];
+
+    public function doctors()
+    {
+        return $this->hasMany(Doctor::class, 'DepartmentID', 'DepartmentID');
+    }
+
+    public function specialties()
+    {
+        return $this->belongsToMany(Specialty::class, 'department_specialties', 'DepartmentID', 'SpecialtyID')
+            ->withPivot('IsPrimary');
+    }
+
+    public function users()
+    {
+        return $this->belongsToMany(User::class, 'user_departments', 'DepartmentID', 'UserID')
+            ->withPivot('IsPrimary');
+    }
 }

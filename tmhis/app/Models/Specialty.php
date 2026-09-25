@@ -15,4 +15,15 @@ class Specialty extends Model
     public $timestamps = false;
 
     protected $guarded = [];
+
+    public function doctors()
+    {
+        return $this->hasMany(Doctor::class, 'SpecialtyID', 'SpecialtyID');
+    }
+
+    public function departments()
+    {
+        return $this->belongsToMany(Department::class, 'department_specialties', 'SpecialtyID', 'DepartmentID')
+            ->withPivot('IsPrimary');
+    }
 }

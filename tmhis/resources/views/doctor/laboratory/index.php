@@ -373,23 +373,17 @@ require_once __DIR__ . '/../includes/sidebar.php';
         </select>
       </div>
 
-      <!-- Test Type Quick Selector -->
+      <!-- Searchable Test Type -->
       <div>
         <label class="block font-bold text-slate-700 mb-1">Diagnostic Test Type *</label>
-        <select name="test_type" required 
-                class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500">
-          <option value="12-Lead Electrocardiogram (ECG)">12-Lead Electrocardiogram (ECG)</option>
-          <option value="Complete Blood Count (CBC)">Complete Blood Count (CBC)</option>
-          <option value="Blood Chemistry & Electrolytes">Blood Chemistry & Electrolytes</option>
-          <option value="Fasting Lipid Profile">Fasting Lipid Profile</option>
-          <option value="Brain MRI (without contrast)">Brain MRI (without contrast)</option>
-          <option value="Chest X-Ray (PA View)">Chest X-Ray (PA View)</option>
-          <option value="Abdominal Ultrasound">Abdominal Ultrasound</option>
-          <option value="Routine Urinalysis">Routine Urinalysis</option>
-          <option value="Echocardiogram (2D Echo)">Echocardiogram (2D Echo)</option>
-          <option value="Thyroid Function Panel (TSH, FT3, FT4)">Thyroid Function Panel (TSH, FT3, FT4)</option>
-          <option value="CT Scan (Head/Torso)">CT Scan (Head/Torso)</option>
-        </select>
+        <input type="hidden" name="test_type" id="selectedLabTest" required>
+        <div class="relative">
+          <input type="search" id="labTestSearch" autocomplete="off" required
+                 placeholder="Search test name, code, or category..."
+                 class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <div id="labTestResults" class="hidden absolute z-20 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden"></div>
+        </div>
+        <p id="labTestStatus" class="text-[11px] text-slate-400 mt-1" aria-live="polite">Type at least 2 characters to search the active laboratory catalog.</p>
       </div>
 
       <!-- Priority -->
@@ -503,5 +497,67 @@ require_once __DIR__ . '/../includes/sidebar.php';
   </div>
 </div>
 <?php endif; ?>
+
+<script>
+(() => {
+  const search = document.getElementById('labTestSearch');
+  const hidden = document.getElementById('selectedLabTest');
+  const results = document.getElementById('labTestResults');
+  const status = document.getElementById('labTestStatus');
+  if (!search || !hidden || !results || !status) return;
+
+  let timer;
+  let controller;
+  search.addEventListener('input', () => {
+    clearTimeout(timer);
+    hidden.value = '';
+    const term = search.value.trim();
+    results.innerHTML = '';
+    results.classList.add('hidden');
+    if (term.length < 2) {
+      status.textContent = 'Type at least 2 characters to search the active laboratory catalog.';
+      return;
+    }
+
+    status.textContent = 'Searching laboratory catalog...';
+    timer = setTimeout(async () => {
+      controller?.abort();
+      controller = new AbortController();
+      try {
+        const response = await fetch('<?= url('/doctor/api/laboratory-tests') ?>?q=' + encodeURIComponent(term), { signal: controller.signal, headers: { Accept: 'application/json' } });
+        const payload = await response.json();
+        if (!response.ok || !payload.success) throw new Error('Search failed');
+        if (!payload.data.length) {
+          status.textContent = 'No matching active laboratory tests found.';
+          return;
+        }
+        payload.data.forEach(test => {
+          const option = document.createElement('button');
+          option.type = 'button';
+          option.className = 'w-full text-left px-3.5 py-2.5 hover:bg-blue-50 border-b border-slate-100 last:border-b-0';
+          option.innerHTML = '<span class="block font-bold text-slate-800"></span><span class="block text-[10px] text-slate-400"></span>';
+          option.children[0].textContent = test.TestName;
+          option.children[1].textContent = [test.TestCode, test.Category, test.SpecimenType].filter(Boolean).join(' • ');
+          option.addEventListener('click', () => {
+            search.value = test.TestName;
+            hidden.value = test.TestName;
+            results.classList.add('hidden');
+            status.textContent = 'Selected from the active laboratory catalog.';
+          });
+          results.appendChild(option);
+        });
+        results.classList.remove('hidden');
+        status.textContent = 'Select a matching laboratory test.';
+      } catch (error) {
+        if (error.name !== 'AbortError') status.textContent = 'Laboratory catalog search is temporarily unavailable.';
+      }
+    }, 250);
+  });
+
+  document.addEventListener('click', event => {
+    if (!search.contains(event.target) && !results.contains(event.target)) results.classList.add('hidden');
+  });
+})();
+</script>
 
 <?php require_once __DIR__ . '/../includes/footer.php'; ?>

@@ -16,4 +16,25 @@ class Doctor extends Model
     const UPDATED_AT = null;
 
     protected $guarded = [];
+
+    public function user()
+    {
+        return $this->belongsTo(User::class, 'UserID', 'UserID');
+    }
+
+    public function department()
+    {
+        return $this->belongsTo(Department::class, 'DepartmentID', 'DepartmentID');
+    }
+
+    public function specialty()
+    {
+        return $this->belongsTo(Specialty::class, 'SpecialtyID', 'SpecialtyID');
+    }
+
+    public function specialties()
+    {
+        return $this->belongsToMany(Specialty::class, 'doctor_specialties', 'DoctorID', 'SpecialtyID')
+            ->withPivot('IsPrimary');
+    }
 }

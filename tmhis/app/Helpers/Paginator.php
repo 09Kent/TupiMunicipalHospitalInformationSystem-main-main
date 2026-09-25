@@ -1,7 +1,7 @@
 <?php
 /**
  * Tupi Municipal Hospital Information Management System
- * Standard Table Paginator Component (Strict 8 Records Per Page with 1, 2, 3... Navigation)
+ * Standard Table Paginator Component (10 Records Per Page with 1, 2, 3... Navigation)
  */
 
 class Paginator
@@ -15,7 +15,7 @@ class Paginator
     public int $offset;
     private array $queryParams;
 
-    public function __construct(int $totalRecords, int $recordsPerPage = 8, int $currentPage = 1, array $queryParams = [])
+    public function __construct(int $totalRecords, int $recordsPerPage = 10, int $currentPage = 1, array $queryParams = [])
     {
         $this->totalRecords = max(0, $totalRecords);
         $this->recordsPerPage = max(1, $recordsPerPage);

@@ -42,7 +42,7 @@ class MultiUserMultiDeviceTest extends TestCase
     public function test_multi_user_session_isolation_and_independent_logout(): void
     {
         $registrarUser = User::where('Username', 'registrator')->firstOrFail();
-        $doctorUser    = User::where('Username', 'cardio')->firstOrFail();
+        $doctorUser    = User::where('Username', 'dr.chen')->firstOrFail();
         $nurseUser      = User::where('Username', 'nurse')->firstOrFail();
         $medtechUser   = User::where('Username', 'medtech')->firstOrFail();
         $pharmacistUser= User::where('Username', 'pharmacist')->firstOrFail();

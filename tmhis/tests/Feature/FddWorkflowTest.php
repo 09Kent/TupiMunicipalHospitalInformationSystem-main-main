@@ -15,15 +15,15 @@ class FddWorkflowTest extends TestCase
     public function test_all_nine_fdd_roles_can_authenticate_and_redirect_correctly(): void
     {
         $roles = [
-            'admin'       => '/admin',
-            'director'    => '/director',
-            'records'     => '/records',
-            'registrator' => '/register',
-            'cardio'      => '/doctor',
-            'nurse'       => '/nurse',
-            'medtech'     => '/medtech',
-            'pharmacist'  => '/pharmacy',
-            'cashier'     => '/billing',
+            'admin.official'    => '/admin',
+            'chief.medical'      => '/director',
+            'records.officer'    => '/records',
+            'registrar.main'     => '/register',
+            'dr.chen'            => '/doctor',
+            'duty.nurse'         => '/nurse',
+            'medtech.supervisor' => '/medtech',
+            'pharmacy.supervisor'=> '/pharmacy',
+            'cashier.supervisor' => '/billing',
         ];
 
         foreach ($roles as $username => $expectedDashboard) {
@@ -171,7 +171,7 @@ class FddWorkflowTest extends TestCase
      */
     public function test_doctor_portal_subpages_render_cleanly(): void
     {
-        $doctor = User::where('Username', 'cardio')->first();
+        $doctor = User::where('Username', 'dr.chen')->first();
         $this->actingAs($doctor);
 
         $doctorPages = [
@@ -624,7 +624,7 @@ class FddWorkflowTest extends TestCase
      */
     public function test_doctor_and_nurse_clean_and_legacy_routes(): void
     {
-        $doctor = User::where('Username', 'cardio')->first();
+        $doctor = User::where('Username', 'dr.chen')->first();
         $this->actingAs($doctor);
 
         // Clean routes should return 200 OK

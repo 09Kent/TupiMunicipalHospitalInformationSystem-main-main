@@ -7,7 +7,7 @@ class TablePaginator {
     constructor(options) {
         this.containerId = options.containerId;
         this.items = options.items || [];
-        this.pageSize = options.pageSize || 8;
+        this.pageSize = options.pageSize || 10;
         this.currentPage = options.initialPage || 1;
         this.recordLabel = options.recordLabel || 'records';
         this.onPageChange = options.onPageChange || function() {};
@@ -112,7 +112,7 @@ class TablePaginator {
         const tbody = table.querySelector('tbody');
         if (!tbody) return null;
         
-        const pageSize = options.pageSize || 8;
+        const pageSize = options.pageSize || 10;
         const recordLabel = options.recordLabel || 'records';
         let currentPage = options.initialPage || 1;
         

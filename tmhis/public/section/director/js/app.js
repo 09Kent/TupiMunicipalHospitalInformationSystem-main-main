@@ -175,6 +175,9 @@ function loadNotifications() {
     .catch(err => console.error('Notifications load error:', err));
 }
 
+  // Keep executive alerts current while the dashboard is open.
+  window.setInterval(loadNotifications, 30000);
+
 // ===== DASHBOARD =====
 function loadDashboard() {
   fetch(getApiUrl('dashboard-stats.php'))

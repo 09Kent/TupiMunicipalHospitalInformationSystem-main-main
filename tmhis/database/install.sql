@@ -417,6 +417,19 @@ PREPARE alterIfNotExists FROM @preparedStatement;
 EXECUTE alterIfNotExists;
 DEALLOCATE PREPARE alterIfNotExists;
 
+SET @columnname = "DepartmentID";
+SET @preparedStatement = (SELECT IF(
+  (
+    SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE (TABLE_NAME = @tablename) AND (TABLE_SCHEMA = @dbname) AND (COLUMN_NAME = @columnname)
+  ) > 0,
+  "SELECT 1",
+  "ALTER TABLE `doctors` ADD COLUMN `DepartmentID` INT NULL AFTER `SpecialtyID`"
+));
+PREPARE alterIfNotExists FROM @preparedStatement;
+EXECUTE alterIfNotExists;
+DEALLOCATE PREPARE alterIfNotExists;
+
 -- 2. Doctor Specialties Table (For multiple specialties in future)
 CREATE TABLE IF NOT EXISTS `doctor_specialties` (
   `DoctorSpecialtyID` INT AUTO_INCREMENT PRIMARY KEY,
@@ -427,6 +440,28 @@ CREATE TABLE IF NOT EXISTS `doctor_specialties` (
   FOREIGN KEY (`DoctorID`) REFERENCES `doctors`(`DoctorID`) ON DELETE CASCADE,
   FOREIGN KEY (`SpecialtyID`) REFERENCES `specialties`(`SpecialtyID`) ON DELETE CASCADE,
   UNIQUE KEY `unique_doc_spec` (`DoctorID`, `SpecialtyID`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `department_specialties` (
+  `DepartmentID` INT NOT NULL,
+  `SpecialtyID` INT NOT NULL,
+  `IsPrimary` TINYINT(1) NOT NULL DEFAULT 0,
+  `CreatedAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`DepartmentID`, `SpecialtyID`),
+  INDEX `idx_department_specialty` (`SpecialtyID`),
+  FOREIGN KEY (`DepartmentID`) REFERENCES `departments`(`DepartmentID`) ON DELETE CASCADE,
+  FOREIGN KEY (`SpecialtyID`) REFERENCES `specialties`(`SpecialtyID`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `user_departments` (
+  `UserID` INT NOT NULL,
+  `DepartmentID` INT NOT NULL,
+  `IsPrimary` TINYINT(1) NOT NULL DEFAULT 1,
+  `CreatedAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`UserID`, `DepartmentID`),
+  INDEX `idx_user_department` (`DepartmentID`),
+  FOREIGN KEY (`UserID`) REFERENCES `users`(`UserID`) ON DELETE CASCADE,
+  FOREIGN KEY (`DepartmentID`) REFERENCES `departments`(`DepartmentID`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 3. Consultation Notes Table
@@ -1137,11 +1172,14 @@ CREATE TABLE IF NOT EXISTS `billing_charges` (
   `DiscountAmount` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
   `NetAmount` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
   `BillingStatus` ENUM('Unbilled', 'Invoiced', 'Billed', 'Paid', 'Waived') NOT NULL DEFAULT 'Unbilled',
+  `source_type` VARCHAR(50) NULL,
+  `source_id` BIGINT UNSIGNED NULL,
   `CreatedBy` VARCHAR(100) NOT NULL DEFAULT 'Billing Staff',
   `CreatedAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (`PatientID`) REFERENCES `patients`(`PatientID`) ON DELETE CASCADE,
   FOREIGN KEY (`FeeID`) REFERENCES `service_fees`(`FeeID`) ON DELETE SET NULL,
   INDEX `idx_chg_patient` (`PatientID`, `BillingStatus`)
+  , INDEX `idx_charge_source` (`source_type`, `source_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS `billing_invoices` (

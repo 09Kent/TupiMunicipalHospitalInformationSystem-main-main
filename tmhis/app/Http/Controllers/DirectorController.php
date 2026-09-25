@@ -193,6 +193,13 @@ class DirectorController extends Controller
                     $pendingTasks = 0;
                 }
 
+                $mappedStaffStmt = $pdo->prepare("SELECT COUNT(DISTINCT UserID) FROM user_departments WHERE DepartmentID = :department_id");
+                $mappedStaffStmt->execute([':department_id' => $deptId]);
+                $mappedStaff = (int)$mappedStaffStmt->fetchColumn();
+                if ($mappedStaff > 0) {
+                    $staffCount = $mappedStaff;
+                }
+
                 $totalStaffAll += $staffCount;
                 $totalDeptTasks = $completedTasks + $pendingTasks;
                 $efficiencyScore = $totalDeptTasks > 0 
@@ -259,12 +266,14 @@ class DirectorController extends Controller
             $sql = "SELECT 
                 d.DoctorID,
                 CONCAT(d.FirstName, ' ', d.LastName, ', MD') as doctor_name,
-                COALESCE(d.Clinic, 'Clinical Outpatient') as department_name,
-                COALESCE(d.Specialty, 'General Practitioner') as specialty,
+                COALESCE(dep.DepartmentName, d.Clinic, 'Clinical Outpatient') as department_name,
+                COALESCE(s.SpecialtyName, d.Specialty, 'General Practitioner') as specialty,
                 (SELECT COUNT(*) FROM consultation_notes cn WHERE cn.DoctorID = d.DoctorID) as total_consultations,
                 (SELECT COUNT(*) FROM patient_queue pq WHERE pq.DoctorID = d.DoctorID AND pq.QueueStatus = 'Completed') as completed_consultations,
                 (SELECT COUNT(*) FROM patient_queue pq WHERE pq.DoctorID = d.DoctorID AND pq.QueueStatus = 'Cancelled') as cancelled_consultations
                 FROM doctors d
+                LEFT JOIN departments dep ON dep.DepartmentID = d.DepartmentID
+                LEFT JOIN specialties s ON s.SpecialtyID = d.SpecialtyID
                 WHERE d.Status != 'Inactive'";
 
             $params = [];
@@ -275,8 +284,9 @@ class DirectorController extends Controller
                 $params[':s3'] = "%$search%";
             }
             if ($deptFilter !== 'all' && $deptFilter !== '') {
-                $sql .= " AND d.Clinic = :dept";
+                $sql .= " AND (dep.DepartmentName = :dept OR d.Clinic = :dept_fallback)";
                 $params[':dept'] = $deptFilter;
+                $params[':dept_fallback'] = $deptFilter;
             }
 
             $stmt = $pdo->prepare($sql);

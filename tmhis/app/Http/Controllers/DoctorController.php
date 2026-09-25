@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 require_once app_path('Services/Doctor/Doctor.php');
 require_once app_path('Services/Doctor/Patient.php');
@@ -53,6 +54,29 @@ class DoctorController extends Controller
     public function dashboard(Request $request)
     {
         return $this->handlePage($request, 'dashboard');
+    }
+
+    public function laboratoryTests(Request $request)
+    {
+        $term = trim((string)$request->query('q', ''));
+
+        if (mb_strlen($term) < 2) {
+            return response()->json(['success' => true, 'data' => []]);
+        }
+
+        $results = DB::table('test_catalog')
+            ->select(['CatalogID', 'TestCode', 'TestName', 'Category', 'SpecimenType', 'TurnaroundTime', 'StandardPrice'])
+            ->where('Status', 'Active')
+            ->where(function ($query) use ($term) {
+                $query->where('TestName', 'like', "%{$term}%")
+                    ->orWhere('TestCode', 'like', "%{$term}%")
+                    ->orWhere('Category', 'like', "%{$term}%");
+            })
+            ->orderBy('TestName')
+            ->limit(20)
+            ->get();
+
+        return response()->json(['success' => true, 'data' => $results]);
     }
 
     public function handleLegacyView(Request $request, $path = '')

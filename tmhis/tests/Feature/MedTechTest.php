@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use Tests\TestCase;
 use App\Models\User;
 use App\Models\Patient;
+use App\Models\Doctor;
 use App\Models\LaboratoryRequest;
 use App\Models\LaboratorySample;
 use App\Models\LaboratoryResult;
@@ -68,7 +69,7 @@ class MedTechTest extends TestCase
             ['RequestCode' => 'LAB-TEST-001'],
             [
                 'PatientID' => $patient->PatientID,
-                'DoctorID' => 1,
+                'DoctorID' => Doctor::whereIn('Status', ['Available', 'Busy'])->orderBy('DoctorID')->value('DoctorID'),
                 'TestType' => 'Complete Blood Count (CBC)',
                 'Priority' => 'STAT',
                 'Status' => 'Pending',

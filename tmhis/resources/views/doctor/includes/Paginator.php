@@ -16,7 +16,7 @@ if (!class_exists('Paginator')) {
         public int $offset;
         private array $queryParams;
 
-        public function __construct(int $totalRecords, int $recordsPerPage = 8, int $currentPage = 1, array $queryParams = [])
+        public function __construct(int $totalRecords, int $recordsPerPage = 10, int $currentPage = 1, array $queryParams = [])
         {
             $this->totalRecords = max(0, $totalRecords);
             $this->recordsPerPage = max(1, $recordsPerPage);
