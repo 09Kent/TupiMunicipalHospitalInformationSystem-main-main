@@ -3,7 +3,7 @@
 
 const regState = {
   currentStep: 1,
-  totalSteps: 8,
+  totalSteps: 7,
 
   personal: {
     firstName: "",
@@ -39,7 +39,7 @@ const regState = {
   relieving: "",
   symptoms: [],
 
-  bodyLocation: "abdomen",
+  bodyLocation: null,
   subRegion: "Epigastric & Umbilical Quadrants",
   bodySystemId: 1,
   bodySystemData: null,
@@ -121,10 +121,9 @@ function updateRegStepper() {
     { num: 2, title: "Verification" },
     { num: 3, title: "Complaint" },
     { num: 4, title: "Classification" },
-    { num: 5, title: "Body Map" },
-    { num: 6, title: "Summary Review" },
-    { num: 7, title: "Doctor Match" },
-    { num: 8, title: "Complete" }
+    { num: 5, title: "Summary Review" },
+    { num: 6, title: "Doctor Match" },
+    { num: 7, title: "Complete" }
   ];
 
   const desktopStepper = document.getElementById("registration-desktop-stepper");
@@ -235,10 +234,9 @@ function renderRegStep(step) {
     case 2: mount.innerHTML = renderRegStep2(); attachRegStep2Events(); break;
     case 3: mount.innerHTML = renderRegStep3(); attachRegStep3Events(); break;
     case 4: mount.innerHTML = renderRegStep4(); attachRegStep4Events(); break;
-    case 5: mount.innerHTML = renderRegStep5(); attachRegStep5Events(); break;
-    case 6: mount.innerHTML = renderRegStep6(); attachRegStep6Events(); break;
-    case 7: mount.innerHTML = renderRegStep7(); attachRegStep7Events(); break;
-    case 8: mount.innerHTML = renderRegStep8(); attachRegStep8Events(); break;
+    case 5: mount.innerHTML = renderRegStep6(); attachRegStep6Events(); break;
+    case 6: mount.innerHTML = renderRegStep7(); attachRegStep7Events(); break;
+    case 7: mount.innerHTML = renderRegStep8(); attachRegStep8Events(); break;
     default: mount.innerHTML = renderRegStep1(); attachRegStep1Events();
   }
 
@@ -808,8 +806,6 @@ function showRegVerifiedAnimation(onComplete) {
 // ----------------------------------------------------
 function renderRegStep3() {
   const dbSymptoms = window.SERVER_DATA?.symptoms || [];
-  const dbLocations = window.SERVER_DATA?.bodyLocations || [];
-
   return `
     <div class="step-container space-y-8">
       
@@ -832,27 +828,6 @@ function renderRegStep3() {
                     placeholder="Example: My stomach hurts after eating and I sometimes feel nauseous." 
                     class="w-full p-4 rounded-xl border border-slate-200 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50 leading-relaxed">${regState.complaint}</textarea>
           <p id="err-complaint" class="reg-form-err text-rose-500 text-[11px] mt-1 hidden"></p>
-        </div>
-
-        <!-- Where do you feel the problem? -->
-        <div>
-          <label class="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wide">
-            Where is the issue primarily located?
-          </label>
-          <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5">
-            ${dbLocations.map(loc => `
-              <button type="button" 
-                      data-loc-code="${loc.LocationCode}"
-                      class="reg-loc-btn p-3 rounded-xl border text-left transition-all ${
-                        regState.bodyLocation === loc.LocationCode 
-                          ? 'border-blue-600 bg-blue-50 text-blue-900 font-bold ring-2 ring-blue-400/20' 
-                          : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-700'
-                      }">
-                <div class="text-xs font-bold truncate">${loc.LocationName}</div>
-                <div class="text-[10px] text-slate-400 truncate">${loc.SubRegion}</div>
-              </button>
-            `).join('')}
-          </div>
         </div>
 
         <!-- Severity Scale 1-5 -->
@@ -938,14 +913,6 @@ function attachRegStep3Events() {
   const txt = document.getElementById("reg-complaint-text");
   if (txt) txt.addEventListener("input", (e) => regState.complaint = e.target.value);
 
-  // Location selector
-  document.querySelectorAll(".reg-loc-btn").forEach(btn => {
-    btn.addEventListener("click", () => {
-      regState.bodyLocation = btn.getAttribute("data-loc-code");
-      renderRegStep(3);
-    });
-  });
-
   // Severity
   document.querySelectorAll(".reg-sev-btn").forEach(btn => {
     btn.addEventListener("click", () => {
@@ -998,7 +965,7 @@ async function runServerSideClassification() {
       body: JSON.stringify({
         complaint: regState.complaint,
         symptoms: regState.symptoms,
-        bodyLocation: regState.bodyLocation
+        bodyLocation: null
       })
     });
 
@@ -1023,8 +990,6 @@ function renderRegStep4() {
     Emoji: '🩺',
     Description: 'Involves esophagus, stomach, intestines, liver, and pancreas.'
   };
-
-  const allSystems = window.SERVER_DATA?.bodySystems || [];
 
   return `
     <div class="step-container space-y-8">
@@ -1077,26 +1042,6 @@ function renderRegStep4() {
         </div>
       </div>
 
-      <!-- 9 Systems Grid -->
-      <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-2xs space-y-3">
-        <h4 class="text-xs font-bold text-slate-700 uppercase">Switch or Explore System:</h4>
-        <div class="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-          ${allSystems.map(s => `
-            <button type="button" data-sys-id="${s.BodySystemID}" 
-                    class="reg-sys-card p-3 rounded-xl border text-left transition ${
-                      regState.bodySystemId == s.BodySystemID 
-                        ? 'border-blue-600 bg-blue-50 text-blue-900 font-bold ring-2 ring-blue-400/20' 
-                        : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-700'
-                    }">
-              <div class="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center mb-1.5">
-                <i data-lucide="${getSystemLucideIcon(s)}" class="w-4 h-4"></i>
-              </div>
-              <div class="text-xs font-bold truncate">${s.SystemName}</div>
-            </button>
-          `).join('')}
-        </div>
-      </div>
-
       <div class="flex items-center justify-between pt-2">
         <button type="button" id="btn-reg4-back" class="px-5 py-2.5 text-xs font-bold text-slate-700 hover:text-blue-600 bg-white border border-slate-200 rounded-xl transition flex items-center gap-1.5">
           <i data-lucide="arrow-left" class="w-4 h-4"></i>
@@ -1104,7 +1049,7 @@ function renderRegStep4() {
         </button>
 
         <button type="button" id="btn-reg4-continue" class="px-7 py-3 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-lg shadow-blue-600/20 transition flex items-center gap-2 group">
-          <span>Continue to Body Location</span>
+          <span>Continue to Summary</span>
           <i data-lucide="arrow-right" class="w-4 h-4 transition-transform group-hover:translate-x-1"></i>
         </button>
       </div>
@@ -1114,15 +1059,7 @@ function renderRegStep4() {
 }
 
 function attachRegStep4Events() {
-  document.querySelectorAll(".reg-sys-card").forEach(btn => {
-    btn.addEventListener("click", () => {
-      const sid = parseInt(btn.getAttribute("data-sys-id"), 10);
-      regState.bodySystemId = sid;
-      const all = window.SERVER_DATA?.bodySystems || [];
-      regState.bodySystemData = all.find(s => s.BodySystemID == sid);
-      renderRegStep(4);
-    });
-  });
+  showDiseaseSuggestionPopup();
 
   const btnBack = document.getElementById("btn-reg4-back");
   if (btnBack) btnBack.addEventListener("click", () => goToRegStep(3));
@@ -1131,58 +1068,28 @@ function attachRegStep4Events() {
   if (btnContinue) btnContinue.addEventListener("click", () => goToRegStep(5));
 }
 
-// ----------------------------------------------------
-// STEP 5: BODY MAP
-// ----------------------------------------------------
-function renderRegStep5() {
-  return `
-    <div class="step-container space-y-8">
-      
-      <div class="border-b border-slate-200/80 pb-5">
-        <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200/60 mb-2">
-          <span class="w-1.5 h-1.5 rounded-full bg-blue-600"></span>
-          Step 5: Interactive Body Mapping
-        </div>
-        <h2 class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">Interactive Human Body Location</h2>
-        <p class="text-xs sm:text-sm text-slate-500 mt-1">Pinpoint anatomical location on the vector model (Front / Back).</p>
+function showDiseaseSuggestionPopup() {
+  if (document.getElementById('disease-suggestion-popup')) return;
+  const sys = regState.bodySystemData || { SystemName: 'Clinical symptoms', Description: 'Your complaint will be reviewed by a doctor.' };
+  const conditions = regState.possibleConditions || [];
+  const modal = document.createElement('div');
+  modal.id = 'disease-suggestion-popup';
+  modal.className = 'fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs';
+  modal.innerHTML = `
+    <div class="bg-white rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-2xl border border-blue-100 animate-in zoom-in-95">
+      <div class="flex items-start gap-3">
+        <div class="w-11 h-11 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0"><i data-lucide="stethoscope" class="w-5 h-5"></i></div>
+        <div><h3 class="text-lg font-extrabold text-slate-900">Possible Conditions From the Complaint</h3><p class="text-xs text-slate-500 mt-1">Classification area: ${sys.SystemName}</p></div>
       </div>
-
-      <!-- Mount Visualizer -->
-      <div id="reg-body-map-mount"></div>
-
-      <div class="flex items-center justify-between pt-2">
-        <button type="button" id="btn-reg5-back" class="px-5 py-2.5 text-xs font-bold text-slate-700 hover:text-blue-600 bg-white border border-slate-200 rounded-xl transition flex items-center gap-1.5">
-          <i data-lucide="arrow-left" class="w-4 h-4"></i>
-          <span>Back to Classification</span>
-        </button>
-
-        <button type="button" id="btn-reg5-continue" class="px-7 py-3 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-lg shadow-blue-600/20 transition flex items-center gap-2 group">
-          <span>Confirm Location & Review</span>
-          <i data-lucide="arrow-right" class="w-4 h-4 transition-transform group-hover:translate-x-1"></i>
-        </button>
+      <div class="mt-5 space-y-2">
+        ${conditions.length ? conditions.map(c => `<div class="p-3 bg-blue-50/60 rounded-xl border border-blue-100"><div class="text-xs font-bold text-slate-800">${c.ConditionName}</div><div class="text-[11px] text-slate-500 mt-0.5">${c.Description || ''}</div></div>`).join('') : '<div class="p-3 bg-slate-50 rounded-xl text-xs text-slate-600">No specific condition suggestion was found. A doctor will assess the complaint.</div>'}
       </div>
-
-    </div>
-  `;
-}
-
-function attachRegStep5Events() {
-  const mount = document.getElementById("reg-body-map-mount");
-  if (mount && typeof BodyVisualizer !== 'undefined') {
-    regBodyVisualizer = new BodyVisualizer("reg-body-map-mount", {
-      initialRegion: regState.bodyLocation || "abdomen",
-      initialView: "front",
-      onSelect: (regionId) => {
-        regState.bodyLocation = regionId;
-      }
-    });
-  }
-
-  const btnBack = document.getElementById("btn-reg5-back");
-  if (btnBack) btnBack.addEventListener("click", () => goToRegStep(4));
-
-  const btnContinue = document.getElementById("btn-reg5-continue");
-  if (btnContinue) btnContinue.addEventListener("click", () => goToRegStep(6));
+      <div class="mt-5 p-3 bg-amber-50 border border-amber-200 rounded-xl text-[11px] text-amber-900">This is a preparation suggestion, not a diagnosis. A licensed doctor must evaluate the patient.</div>
+      <button type="button" id="close-disease-suggestion" class="mt-5 w-full px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold">Continue to Summary</button>
+    </div>`;
+  document.body.appendChild(modal);
+  initLucideIcons();
+  document.getElementById('close-disease-suggestion')?.addEventListener('click', () => modal.remove());
 }
 
 // ----------------------------------------------------
@@ -1256,10 +1163,10 @@ function renderRegStep6() {
 
 function attachRegStep6Events() {
   const btnBack = document.getElementById("btn-reg6-back");
-  if (btnBack) btnBack.addEventListener("click", () => goToRegStep(5));
+  if (btnBack) btnBack.addEventListener("click", () => goToRegStep(4));
 
   const btnContinue = document.getElementById("btn-reg6-continue");
-  if (btnContinue) btnContinue.addEventListener("click", () => goToRegStep(7));
+  if (btnContinue) btnContinue.addEventListener("click", () => goToRegStep(6));
 }
 
 // ----------------------------------------------------
@@ -1327,7 +1234,7 @@ function renderRegStep7() {
 
 function attachRegStep7Events() {
   const btnBack = document.getElementById("btn-reg7-back");
-  if (btnBack) btnBack.addEventListener("click", () => goToRegStep(6));
+  if (btnBack) btnBack.addEventListener("click", () => goToRegStep(5));
 }
 
 // ----------------------------------------------------
@@ -1380,7 +1287,7 @@ async function selectDoctorAndSubmit(doctorId) {
 
     if (res.ok && data.success) {
       regState.createdRecord = data;
-      goToRegStep(8);
+      goToRegStep(7);
     } else {
       let errMsg = data.message || (data.errors ? Object.values(data.errors).join(', ') : `Registration failed with status ${res.status}.`);
       if (data.duplicate_warning) {

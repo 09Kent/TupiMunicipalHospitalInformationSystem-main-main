@@ -110,6 +110,8 @@ Route::middleware(['auth'])->group(function () {
     Route::middleware('role:Doctor,Admin')->prefix('doctor')->name('doctor.')->group(function () {
         Route::get('/', [DoctorController::class, 'dashboard'])->name('dashboard');
         Route::get('/api/laboratory-tests', [DoctorController::class, 'laboratoryTests'])->name('api.laboratory-tests');
+        Route::get('/api/prescription-patients', [DoctorController::class, 'prescriptionPatients'])->name('api.prescription-patients');
+        Route::get('/api/prescription-medicines', [DoctorController::class, 'prescriptionMedicines'])->name('api.prescription-medicines');
         Route::match(['get', 'post'], '/views/{path}', [DoctorController::class, 'handleLegacyView'])->where('path', '.*')->name('legacy');
         Route::match(['get', 'post'], '/{page}', [DoctorController::class, 'handlePage'])->name('page');
         Route::match(['get', 'post'], '/{page}/{sub}', [DoctorController::class, 'handlePage'])->name('page.sub');

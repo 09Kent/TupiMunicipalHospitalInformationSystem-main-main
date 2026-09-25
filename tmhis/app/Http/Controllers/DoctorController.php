@@ -79,6 +79,68 @@ class DoctorController extends Controller
         return response()->json(['success' => true, 'data' => $results]);
     }
 
+    public function prescriptionPatients(Request $request)
+    {
+        $doctorId = (int)$this->resolveDoctor();
+        $term = trim((string)$request->query('q', ''));
+
+        if ($doctorId <= 0 || mb_strlen($term) < 2) {
+            return response()->json(['success' => true, 'data' => []]);
+        }
+
+        $like = "%{$term}%";
+        $patients = DB::table('patients as p')
+            ->select(['p.PatientID', 'p.PatientCode', 'p.FirstName', 'p.MiddleName', 'p.LastName', 'p.DateOfBirth', 'p.Age', 'p.Gender', 'p.ContactNumber'])
+            ->where(function ($query) use ($doctorId) {
+                $query->whereExists(function ($subquery) use ($doctorId) {
+                    $subquery->select(DB::raw(1))->from('appointments as a')
+                        ->whereColumn('a.PatientID', 'p.PatientID')->where('a.DoctorID', $doctorId);
+                })->orWhereExists(function ($subquery) use ($doctorId) {
+                    $subquery->select(DB::raw(1))->from('patient_queue as q')
+                        ->whereColumn('q.PatientID', 'p.PatientID')->where('q.DoctorID', $doctorId);
+                });
+            })
+            ->where(function ($query) use ($like) {
+                $query->where('p.PatientCode', 'like', $like)
+                    ->orWhere('p.FirstName', 'like', $like)
+                    ->orWhere('p.LastName', 'like', $like)
+                    ->orWhere(DB::raw("CONCAT(p.FirstName, ' ', p.LastName)"), 'like', $like)
+                    ->orWhere('p.ContactNumber', 'like', $like);
+            })
+            ->where('p.Status', '!=', 'Archived')
+            ->orderBy('p.LastName')
+            ->orderBy('p.FirstName')
+            ->limit(20)
+            ->get();
+
+        return response()->json(['success' => true, 'data' => $patients]);
+    }
+
+    public function prescriptionMedicines(Request $request)
+    {
+        $term = trim((string)$request->query('q', ''));
+
+        if (mb_strlen($term) < 2) {
+            return response()->json(['success' => true, 'data' => []]);
+        }
+
+        $like = "%{$term}%";
+        $medicines = DB::table('pharmacy_inventory')
+            ->select(['InventoryID', 'ItemCode', 'GenericName', 'BrandName', 'Strength', 'DosageForm', 'CurrentStock', 'Status'])
+            ->where('Status', '!=', 'Inactive')
+            ->where(function ($query) use ($like) {
+                $query->where('GenericName', 'like', $like)
+                    ->orWhere('BrandName', 'like', $like)
+                    ->orWhere('ItemCode', 'like', $like)
+                    ->orWhere('Strength', 'like', $like);
+            })
+            ->orderBy('GenericName')
+            ->limit(20)
+            ->get();
+
+        return response()->json(['success' => true, 'data' => $medicines]);
+    }
+
     public function handleLegacyView(Request $request, $path = '')
     {
         $path = trim($path, '/');

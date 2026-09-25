@@ -264,25 +264,85 @@ require_once __DIR__ . '/../includes/sidebar.php';
       <!-- Patient Select -->
       <div>
         <label class="block font-bold text-slate-700 mb-1">Select Patient *</label>
-        <select name="patient_id" required 
-                class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500">
-          <option value="">-- Choose Assigned Patient --</option>
-          <?php foreach ($doctorPatients as $dp): ?>
-            <option value="<?= $dp['PatientID'] ?>" <?= ($selectedPatientId === (int)$dp['PatientID']) ? 'selected' : '' ?>>
-              <?= e($dp['FirstName'] . ' ' . $dp['LastName']) ?> (<?= e($dp['PatientCode']) ?>) — <?= e($dp['Age']) ?>y, <?= e($dp['Gender']) ?>
-            </option>
-          <?php endforeach; ?>
-        </select>
+        <input type="hidden" name="patient_id" id="rxPatientId" value="<?= $selectedPatientId ?: '' ?>" required>
+        <div class="relative">
+          <input type="search" id="rxPatientSearch" autocomplete="off" required
+                 placeholder="Search assigned patient by name, ID, or phone..."
+                 class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <div id="rxPatientResults" class="hidden absolute z-30 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden"></div>
+        </div>
+        <p id="rxPatientStatus" class="text-[11px] text-slate-400 mt-1" aria-live="polite">Type at least 2 characters to search assigned patients.</p>
       </div>
 
       <!-- Medicine Name & Dosage -->
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
           <label class="block font-bold text-slate-700 mb-1">Medication Name *</label>
-          <input type="text" name="medicine_name" required placeholder="e.g. Paracetamol, Metoprolol..." 
-                 class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          <div class="relative">
+            <input type="text" name="medicine_name" id="rxMedicineSearch" required autocomplete="off" placeholder="e.g. Paracetamol, Metoprolol..."
+                   class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            <div id="rxMedicineResults" class="hidden absolute z-30 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden"></div>
+          </div>
+          <p id="rxMedicineStatus" class="text-[11px] text-slate-400 mt-1" aria-live="polite">Type at least 2 characters to search pharmacy inventory.</p>
         </div>
         <div>
+
+        <script>
+        (() => {
+          const search = document.getElementById('rxMedicineSearch');
+          const results = document.getElementById('rxMedicineResults');
+          const status = document.getElementById('rxMedicineStatus');
+          if (!search || !results || !status) return;
+          let timer;
+          let controller;
+
+          search.addEventListener('input', () => {
+            clearTimeout(timer);
+            results.innerHTML = '';
+            results.classList.add('hidden');
+            const term = search.value.trim();
+            if (term.length < 2) {
+              status.textContent = 'Type at least 2 characters to search pharmacy inventory.';
+              return;
+            }
+            status.textContent = 'Searching pharmacy inventory...';
+            timer = setTimeout(async () => {
+              controller?.abort();
+              controller = new AbortController();
+              try {
+                const response = await fetch('<?= url('/doctor/api/prescription-medicines') ?>?q=' + encodeURIComponent(term), { signal: controller.signal, headers: { Accept: 'application/json' } });
+                const payload = await response.json();
+                if (!response.ok || !payload.success) throw new Error('Search failed');
+                if (!payload.data.length) {
+                  status.textContent = 'No matching medicine found in pharmacy inventory.';
+                  return;
+                }
+                payload.data.forEach(medicine => {
+                  const option = document.createElement('button');
+                  option.type = 'button';
+                  option.className = 'w-full text-left px-3.5 py-2.5 hover:bg-blue-50 border-b border-slate-100 last:border-b-0';
+                  option.innerHTML = '<span class="block text-xs font-bold text-slate-800"></span><span class="block text-[10px] text-slate-500"></span>';
+                  option.children[0].textContent = [medicine.GenericName, medicine.Strength].filter(Boolean).join(' ');
+                  option.children[1].textContent = [medicine.BrandName, medicine.DosageForm, medicine.ItemCode, `Stock: ${medicine.CurrentStock}`].filter(Boolean).join(' • ');
+                  option.addEventListener('click', () => {
+                    search.value = [medicine.GenericName, medicine.Strength].filter(Boolean).join(' ');
+                    results.classList.add('hidden');
+                    status.textContent = 'Medicine selected from pharmacy inventory.';
+                  });
+                  results.appendChild(option);
+                });
+                results.classList.remove('hidden');
+                status.textContent = 'Select a medicine from pharmacy inventory, or continue typing a non-formulary medicine.';
+              } catch (error) {
+                if (error.name !== 'AbortError') status.textContent = 'Pharmacy inventory search is temporarily unavailable.';
+              }
+            }, 250);
+          });
+          document.addEventListener('click', event => {
+            if (!search.contains(event.target) && !results.contains(event.target)) results.classList.add('hidden');
+          });
+        })();
+        </script>
           <label class="block font-bold text-slate-700 mb-1">Dosage / Strength *</label>
           <input type="text" name="dosage" required placeholder="e.g. 500mg, 25mg, 10ml..." 
                  class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500" />
@@ -340,5 +400,65 @@ require_once __DIR__ . '/../includes/sidebar.php';
 
   </div>
 </div>
+
+<script>
+(() => {
+  const search = document.getElementById('rxPatientSearch');
+  const hidden = document.getElementById('rxPatientId');
+  const results = document.getElementById('rxPatientResults');
+  const status = document.getElementById('rxPatientStatus');
+  if (!search || !hidden || !results || !status) return;
+  let timer;
+  let controller;
+
+  search.addEventListener('input', () => {
+    clearTimeout(timer);
+    hidden.value = '';
+    results.innerHTML = '';
+    results.classList.add('hidden');
+    const term = search.value.trim();
+    if (term.length < 2) {
+      status.textContent = 'Type at least 2 characters to search assigned patients.';
+      return;
+    }
+    status.textContent = 'Searching assigned patients...';
+    timer = setTimeout(async () => {
+      controller?.abort();
+      controller = new AbortController();
+      try {
+        const response = await fetch('<?= url('/doctor/api/prescription-patients') ?>?q=' + encodeURIComponent(term), { signal: controller.signal, headers: { Accept: 'application/json' } });
+        const payload = await response.json();
+        if (!response.ok || !payload.success) throw new Error('Search failed');
+        if (!payload.data.length) {
+          status.textContent = 'No assigned patient matches this search.';
+          return;
+        }
+        payload.data.forEach(patient => {
+          const option = document.createElement('button');
+          option.type = 'button';
+          option.className = 'w-full text-left px-3.5 py-2.5 hover:bg-blue-50 border-b border-slate-100 last:border-b-0';
+          option.innerHTML = '<span class="block text-xs font-bold text-slate-800"></span><span class="block text-[10px] text-slate-500"></span>';
+          option.children[0].textContent = `${patient.FirstName} ${patient.LastName}`;
+          option.children[1].textContent = `${patient.PatientCode} • ${patient.Age}y, ${patient.Gender} • ${patient.ContactNumber || 'No phone'}`;
+          option.addEventListener('click', () => {
+            hidden.value = patient.PatientID;
+            search.value = `${patient.FirstName} ${patient.LastName} (${patient.PatientCode})`;
+            results.classList.add('hidden');
+            status.textContent = 'Patient selected.';
+          });
+          results.appendChild(option);
+        });
+        results.classList.remove('hidden');
+        status.textContent = 'Select the patient for this prescription.';
+      } catch (error) {
+        if (error.name !== 'AbortError') status.textContent = 'Patient search is temporarily unavailable.';
+      }
+    }, 250);
+  });
+  document.addEventListener('click', event => {
+    if (!search.contains(event.target) && !results.contains(event.target)) results.classList.add('hidden');
+  });
+})();
+</script>
 
 <?php require_once __DIR__ . '/../includes/footer.php'; ?>
