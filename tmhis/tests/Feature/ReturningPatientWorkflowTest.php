@@ -48,6 +48,14 @@ class ReturningPatientWorkflowTest extends TestCase
             $this->assertSame($appointmentsBefore + 1, DB::table('appointments')->where('PatientID', $patient->PatientID)->count());
             $this->assertSame($historyBefore, DB::table('medical_histories')->where('PatientID', $patient->PatientID)->count());
             $this->assertSame(1, DB::table('patients')->where('PatientID', $patient->PatientID)->count());
+            $this->assertDatabaseHas('billing_charges', [
+                'AppointmentID' => $result['appointment_id'],
+                'ChargeCategory' => 'Consultation',
+                'source_type' => 'consultation',
+                'source_id' => $result['appointment_id'],
+                'BillingStatus' => 'Unbilled',
+                'UnitPrice' => '500.00',
+            ]);
         } finally {
             DB::rollBack();
         }

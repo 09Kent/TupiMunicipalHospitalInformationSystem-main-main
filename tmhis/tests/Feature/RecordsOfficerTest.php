@@ -6,9 +6,23 @@ use Tests\TestCase;
 use App\Models\User;
 use App\Models\Patient;
 use App\Models\RecordReleaseRequest;
+use Illuminate\Support\Facades\DB;
 
 class RecordsOfficerTest extends TestCase
 {
+    private ?int $createdPatientId = null;
+
+    protected function tearDown(): void
+    {
+        if ($this->createdPatientId) {
+            DB::statement('SET FOREIGN_KEY_CHECKS=0');
+            DB::table('patients')->where('PatientID', $this->createdPatientId)->delete();
+            DB::statement('SET FOREIGN_KEY_CHECKS=1');
+        }
+
+        parent::tearDown();
+    }
+
     private function getRecordsUser(): User
     {
         $user = User::where('Role', 'Records')->first();
@@ -53,6 +67,7 @@ class RecordsOfficerTest extends TestCase
         ]);
         $createRes->assertStatus(201);
         $patientId = $createRes->json('patient.PatientID');
+        $this->createdPatientId = (int)$patientId;
         $this->assertNotNull($patientId);
 
         // 2. Verify Patient

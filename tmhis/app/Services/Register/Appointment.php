@@ -90,6 +90,8 @@ class Appointment
 
         $appId = (int)$this->db->lastInsertId();
 
+        $this->createConsultationCharge($appId, (int)$data['PatientID'], $doctorId);
+
         // Log to Patient History
         $this->historyModel->log(
             (int)$data['PatientID'],
@@ -99,6 +101,46 @@ class Appointment
         );
 
         return $appId;
+    }
+
+    private function createConsultationCharge(int $appointmentId, int $patientId, int $doctorId): void
+    {
+        $existing = $this->db->prepare("SELECT ChargeID FROM billing_charges WHERE source_type = 'consultation' AND source_id = :source_id LIMIT 1");
+        $existing->execute([':source_id' => $appointmentId]);
+        if ($existing->fetchColumn()) {
+            return;
+        }
+
+        $doctor = $this->db->prepare("SELECT FirstName, LastName, SpecialtyID FROM doctors WHERE DoctorID = :doctor_id LIMIT 1");
+        $doctor->execute([':doctor_id' => $doctorId]);
+        $doctorRecord = $doctor->fetch(PDO::FETCH_ASSOC);
+        if (!$doctorRecord) {
+            return;
+        }
+
+        $feeCode = ((int)($doctorRecord['SpecialtyID'] ?? 0) === 1) ? 'FEE-CON-GP' : 'FEE-CON-SP';
+        $fee = $this->db->prepare("SELECT FeeID, ServiceName, StandardRate FROM service_fees WHERE ServiceCode = :code AND Category = 'Consultation' AND Status = 'Active' LIMIT 1");
+        $fee->execute([':code' => $feeCode]);
+        $feeRecord = $fee->fetch(PDO::FETCH_ASSOC);
+        if (!$feeRecord) {
+            return;
+        }
+
+        $rate = (float)$feeRecord['StandardRate'];
+        $charge = $this->db->prepare("
+            INSERT INTO billing_charges (PatientID, AppointmentID, FeeID, ChargeCategory, ItemDescription, Quantity, UnitPrice, SubTotal, DiscountAmount, NetAmount, BillingStatus, source_type, source_id, CreatedBy, CreatedAt)
+            VALUES (:patient_id, :appointment_id, :fee_id, 'Consultation', :description, 1, :unit_price, :subtotal, 0, :net_amount, 'Unbilled', 'consultation', :source_id, 'Registration', NOW())
+        ");
+        $charge->execute([
+            ':patient_id' => $patientId,
+            ':appointment_id' => $appointmentId,
+            ':fee_id' => (int)$feeRecord['FeeID'],
+            ':description' => $feeRecord['ServiceName'] . ' - Dr. ' . $doctorRecord['FirstName'] . ' ' . $doctorRecord['LastName'],
+            ':unit_price' => $rate,
+            ':subtotal' => $rate,
+            ':net_amount' => $rate,
+            ':source_id' => $appointmentId,
+        ]);
     }
 
     public function getById(int $id): ?array

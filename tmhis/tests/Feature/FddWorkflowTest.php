@@ -6,9 +6,23 @@ use Tests\TestCase;
 use App\Models\User;
 use App\Models\Patient;
 use App\Models\Appointment;
+use Illuminate\Support\Facades\DB;
 
 class FddWorkflowTest extends TestCase
 {
+    private array $createdPatientIds = [];
+
+    protected function tearDown(): void
+    {
+        if (!empty($this->createdPatientIds)) {
+            DB::statement('SET FOREIGN_KEY_CHECKS=0');
+            DB::table('patients')->whereIn('PatientID', $this->createdPatientIds)->delete();
+            DB::statement('SET FOREIGN_KEY_CHECKS=1');
+        }
+
+        parent::tearDown();
+    }
+
     /**
      * 1. Test Authentication for all 9 FDD Roles
      */
@@ -552,6 +566,7 @@ class FddWorkflowTest extends TestCase
         $res = $this->postJson('/api/registration/submit.php', $payload);
         $res->assertStatus(201);
         $res->assertJson(['success' => true]);
+        $this->createdPatientIds[] = (int)$res->json('patient_id');
         $this->assertNotEmpty($res->json('patient_code'));
         $this->assertNotEmpty($res->json('appointment_id'));
     }
