@@ -47,6 +47,7 @@ const regState = {
   possibleConditions: [],
 
   selectedDoctor: null,
+  existingPatient: null,
   selectedSlot: "02:30 PM",
   consultationType: "In-Person Consultation",
   appointmentDate: new Date().toISOString().split('T')[0],
@@ -177,6 +178,8 @@ function validateRegStep(step) {
   hideRegErrors();
 
   if (step === 1) {
+    if (regState.existingPatient) return true;
+
     const p = regState.personal;
     const emg = regState.emergency;
     let valid = true;
@@ -249,6 +252,7 @@ function renderRegStep1() {
   const p = regState.personal;
   const emg = regState.emergency;
   const med = regState.medical;
+  const existing = regState.existingPatient;
   p.age = calculateAgeFromDob(p.dob);
 
   return `
@@ -278,9 +282,32 @@ function renderRegStep1() {
       </div>
 
       <form id="reg-form-1" class="space-y-8" onsubmit="return false;">
+
+        <div class="bg-blue-50/70 rounded-2xl p-5 border border-blue-200 space-y-3">
+          <div class="flex items-center gap-2">
+            <i data-lucide="search" class="w-4 h-4 text-blue-600"></i>
+            <h3 class="text-sm font-bold text-slate-900">Find Existing Patient</h3>
+          </div>
+          <p class="text-xs text-slate-600">Search by patient ID, name, phone, or email before entering registration information.</p>
+          <div class="relative">
+            <input type="search" id="reg-existing-search" autocomplete="off" placeholder="Search patient ID, name, phone, or email..."
+                   class="w-full px-3.5 py-2.5 bg-white border border-blue-200 rounded-xl text-xs font-medium text-slate-800 focus:ring-2 focus:ring-blue-500 focus:bg-white" />
+            <div id="reg-existing-results" class="hidden absolute z-30 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden"></div>
+          </div>
+          <div id="reg-existing-status" class="text-[11px] text-slate-500" aria-live="polite">Existing patient found? Select the record to skip repeated information.</div>
+          ${existing ? `
+            <div class="flex items-center justify-between gap-3 p-3 bg-white border border-emerald-200 rounded-xl">
+              <div>
+                <div class="text-xs font-extrabold text-slate-900">Existing patient selected</div>
+                <div class="text-[11px] text-slate-600">${existing.FirstName} ${existing.LastName} • ${existing.PatientCode} • DOB: ${existing.DateOfBirth}</div>
+              </div>
+              <button type="button" id="reg-clear-existing" class="px-3 py-1.5 text-[11px] font-bold text-blue-700 bg-blue-50 rounded-lg">Change</button>
+            </div>
+          ` : ''}
+        </div>
         
         <!-- Personal Information Card -->
-        <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-2xs space-y-5">
+        <div class="${existing ? 'hidden' : ''} bg-white rounded-2xl p-6 border border-slate-200 shadow-2xs space-y-5">
           <h3 class="text-sm font-bold text-slate-900 pb-3 border-b border-slate-100 flex items-center gap-2">
             <i data-lucide="user" class="w-4 h-4 text-blue-600"></i>
             <span>Personal Information</span>
@@ -379,7 +406,7 @@ function renderRegStep1() {
         </div>
 
         <!-- Emergency Contact Card -->
-        <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-2xs space-y-4">
+        <div class="${existing ? 'hidden' : ''} bg-white rounded-2xl p-6 border border-slate-200 shadow-2xs space-y-4">
           <h3 class="text-sm font-bold text-slate-900 pb-3 border-b border-slate-100 flex items-center gap-2">
             <i data-lucide="heart-handshake" class="w-4 h-4 text-amber-600"></i>
             <span>Emergency Contact Person</span>
@@ -413,7 +440,7 @@ function renderRegStep1() {
         </div>
 
         <!-- Medical Background Card -->
-        <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-2xs space-y-4">
+        <div class="${existing ? 'hidden' : ''} bg-white rounded-2xl p-6 border border-slate-200 shadow-2xs space-y-4">
           <h3 class="text-sm font-bold text-slate-900 pb-3 border-b border-slate-100 flex items-center gap-2">
             <i data-lucide="clipboard-list" class="w-4 h-4 text-emerald-600"></i>
             <span>Medical Information (Optional)</span>
@@ -475,6 +502,88 @@ function attachRegStep1Events() {
   const p = regState.personal;
   const emg = regState.emergency;
   const med = regState.medical;
+
+  const searchInput = document.getElementById("reg-existing-search");
+  const searchResults = document.getElementById("reg-existing-results");
+  const searchStatus = document.getElementById("reg-existing-status");
+  let searchTimer;
+  let searchController;
+
+  const selectExistingPatient = (patient) => {
+    regState.existingPatient = patient;
+    regState.personal = {
+      firstName: patient.FirstName || '',
+      middleName: patient.MiddleName || '',
+      lastName: patient.LastName || '',
+      dob: patient.DateOfBirth || '',
+      age: Number(patient.Age || 0),
+      gender: patient.Gender || 'Other',
+      civilStatus: patient.CivilStatus || 'Single',
+      phone: patient.ContactNumber || '',
+      email: patient.Email || '',
+      address: patient.Address || ''
+    };
+    searchInput.value = `${patient.FirstName} ${patient.LastName} (${patient.PatientCode})`;
+    renderRegStep(1);
+    updateRegStepper();
+    initLucideIcons();
+  };
+
+  if (searchInput && searchResults && searchStatus) {
+    searchInput.addEventListener('input', () => {
+      clearTimeout(searchTimer);
+      const term = searchInput.value.trim();
+      searchResults.innerHTML = '';
+      searchResults.classList.add('hidden');
+      if (term.length < 2) {
+        searchStatus.textContent = 'Existing patient found? Select the record to skip repeated information.';
+        return;
+      }
+      searchStatus.textContent = 'Searching patient records...';
+      searchTimer = setTimeout(async () => {
+        searchController?.abort();
+        searchController = new AbortController();
+        try {
+          const endpoint = window.SERVER_DATA?.apiEndpoints?.patients || '/api/register/patients';
+          const response = await fetch(endpoint + '?search=' + encodeURIComponent(term), { signal: searchController.signal, headers: { Accept: 'application/json' } });
+          const payload = await response.json();
+          if (!response.ok || !payload.success) throw new Error('Patient search failed');
+          if (!payload.data.length) {
+            searchStatus.textContent = 'No matching patient found. Continue below to register a new patient.';
+            return;
+          }
+          payload.data.forEach(patient => {
+            const option = document.createElement('button');
+            option.type = 'button';
+            option.className = 'w-full text-left px-3.5 py-2.5 hover:bg-blue-50 border-b border-slate-100 last:border-b-0';
+            option.innerHTML = '<span class="block text-xs font-bold text-slate-800"></span><span class="block text-[10px] text-slate-500"></span>';
+            option.children[0].textContent = `${patient.FirstName} ${patient.LastName}`;
+            option.children[1].textContent = `${patient.PatientCode} • DOB: ${patient.DateOfBirth} • ${patient.ContactNumber || 'No phone'}`;
+            option.addEventListener('click', () => selectExistingPatient(patient));
+            searchResults.appendChild(option);
+          });
+          searchResults.classList.remove('hidden');
+          searchStatus.textContent = 'Select the matching patient after confirming identity.';
+        } catch (error) {
+          if (error.name !== 'AbortError') searchStatus.textContent = 'Patient search is temporarily unavailable.';
+        }
+      }, 250);
+    });
+    document.addEventListener('click', event => {
+      if (!searchInput.contains(event.target) && !searchResults.contains(event.target)) searchResults.classList.add('hidden');
+    }, { once: true });
+  }
+
+  const clearExisting = document.getElementById("reg-clear-existing");
+  if (clearExisting) {
+    clearExisting.addEventListener("click", () => {
+      regState.existingPatient = null;
+      searchInput.value = '';
+      renderRegStep(1);
+      updateRegStepper();
+      initLucideIcons();
+    });
+  }
 
   const dobInput = document.getElementById("reg-dob");
   const ageDisplay = document.getElementById("reg-age-badge");
@@ -1230,6 +1339,7 @@ async function selectDoctorAndSubmit(doctorId) {
   // Submit complete record to PHP backend
   try {
     const payload = {
+      patient_id: regState.existingPatient?.PatientID || null,
       personal: regState.personal,
       emergency: regState.emergency,
       medical: regState.medical,

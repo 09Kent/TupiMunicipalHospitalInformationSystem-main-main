@@ -65,7 +65,8 @@
       classify: '<?= url('/api/register/classify') ?>',
       submit: '<?= url('/api/register/submit') ?>',
       doctors: '<?= url('/api/register/doctors') ?>',
-      symptoms: '<?= url('/api/register/symptoms') ?>'
+      symptoms: '<?= url('/api/register/symptoms') ?>',
+      patients: '<?= url('/api/register/patients') ?>'
     },
     baseUrl: '<?= rtrim(url('/'), '/') ?>/',
     dashboardUrl: '<?= $dashboardUrl ?>',
