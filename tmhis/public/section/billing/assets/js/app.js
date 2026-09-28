@@ -552,6 +552,69 @@ function renderChargesTable() {
   lucide.createIcons();
 }
 
+// Patient search helpers for Bill Processing
+function onBillPatientSearchInput(query) {
+  const container = document.getElementById('bill-patient-search-results');
+  if (!container) return;
+  const q = (query || '').toLowerCase().trim();
+  const matched = AppState.patients.filter(p => 
+    p.name.toLowerCase().includes(q) ||
+    p.id.toLowerCase().includes(q) ||
+    (p.studentId && p.studentId.toLowerCase().includes(q))
+  );
+
+  if (matched.length === 0) {
+    container.innerHTML = `<div class="p-3 text-xs text-slate-400 text-center">No matching patients found</div>`;
+    container.classList.remove('hidden');
+    return;
+  }
+
+  let html = '';
+  matched.slice(0, 10).forEach(p => {
+    html += `
+      <div onclick="selectBillPatient('${p.id}')" class="p-2.5 hover:bg-brand-50 cursor-pointer transition-colors flex items-center justify-between">
+        <div>
+          <div class="font-bold text-xs text-slate-800">${p.name}</div>
+          <div class="text-[11px] text-slate-500 font-mono">${p.id} ${p.studentId ? '• Student ID: ' + p.studentId : ''}</div>
+        </div>
+        <div class="text-right text-[11px] text-slate-400">
+          <div>${p.room || 'Outpatient'}</div>
+          <span class="text-brand-600 font-semibold text-[10px]">Select &rarr;</span>
+        </div>
+      </div>
+    `;
+  });
+  container.innerHTML = html;
+  container.classList.remove('hidden');
+}
+
+function onBillPatientSearchFocus() {
+  const val = document.getElementById('bill-patient-search-input')?.value || '';
+  onBillPatientSearchInput(val);
+}
+
+function selectBillPatient(patientId) {
+  AppState.selectedPatientForBill = patientId;
+  const sel = document.getElementById('bill-patient-select');
+  if (sel) sel.value = patientId;
+  const p = AppState.patients.find(x => x.id === patientId);
+  const input = document.getElementById('bill-patient-search-input');
+  if (input && p) {
+    input.value = `${p.name} (${p.id})`;
+  }
+  document.getElementById('bill-patient-search-results')?.classList.add('hidden');
+  renderBillProcessing();
+}
+
+// Close search dropdown on click outside
+document.addEventListener('click', (e) => {
+  const box = document.getElementById('bill-patient-search-results');
+  const input = document.getElementById('bill-patient-search-input');
+  if (box && input && !box.contains(e.target) && e.target !== input) {
+    box.classList.add('hidden');
+  }
+});
+
 // Bill Processing View Interactive Computation
 function renderBillProcessing() {
   const patientSelect = document.getElementById('bill-patient-select');
@@ -569,6 +632,12 @@ function renderBillProcessing() {
   const selectedId = patientSelect.value || AppState.selectedPatientForBill;
   const patient = AppState.patients.find(p => p.id === selectedId) || AppState.patients[0];
   
+  // Update the search bar text if needed
+  const searchInput = document.getElementById('bill-patient-search-input');
+  if (searchInput && (!searchInput.value || !searchInput.matches(':focus'))) {
+    searchInput.value = `${patient.name} (${patient.id})`;
+  }
+
   // Find or construct bill for patient
   let bill = AppState.bills.find(b => b.patientId === selectedId);
   if (!bill) {
@@ -590,6 +659,8 @@ function renderBillProcessing() {
         { service: "Attending Specialist Consultation", department: "Internal Medicine", quantity: 1, unitPrice: 500, amount: 500 }
       ],
       subtotal: subtotal || 500,
+      philhealthDeduction: 0,
+      philhealthId: "",
       discountType: "None",
       discountRate: 0,
       discountAmount: 0,
@@ -630,26 +701,58 @@ function renderBillProcessing() {
   });
   itemsTbody.innerHTML = itemsHtml;
 
-  // Compute live amounts
+  // Compute live amounts according to healthcare formula:
+  // Total Hospital Charges (Subtotal)
+  // - PhilHealth Deduction
+  // - Other Deductions
+  // = Remaining Balance (Amount Due)
+  // Remaining Balance - Amount Paid = Balance Due
   const subtotal = bill.items.reduce((acc, curr) => acc + curr.amount, 0);
   bill.subtotal = subtotal;
-  const discountAmt = bill.discountAmount || 0;
-  const totalBill = Math.max(0, subtotal - discountAmt);
-  bill.totalBill = totalBill;
-  const outstanding = Math.max(0, totalBill - bill.amountPaid);
-  bill.outstandingBalance = outstanding;
 
-  document.getElementById('bill-subtotal').innerText = formatPeso(subtotal);
-  document.getElementById('bill-discount').innerText = `- ${formatPeso(discountAmt)}`;
-  document.getElementById('bill-discount-label').innerText = bill.discountType !== 'None' ? `(${bill.discountType})` : '';
-  document.getElementById('bill-total').innerText = formatPeso(totalBill);
-  document.getElementById('bill-paid').innerText = formatPeso(bill.amountPaid);
-  document.getElementById('bill-outstanding').innerText = formatPeso(outstanding);
+  const philhealth = parseFloat(bill.philhealthDeduction) || 0;
+  const otherDeductions = parseFloat(bill.discountAmount) || 0;
+  const amountCovered = Math.min(subtotal, philhealth + otherDeductions);
+  const remainingBalance = Math.max(0, subtotal - amountCovered);
+  bill.totalBill = remainingBalance;
+
+  const amountPaid = parseFloat(bill.amountPaid) || 0;
+  const balanceDue = Math.max(0, remainingBalance - amountPaid);
+  bill.outstandingBalance = balanceDue;
+
+  bill.status = balanceDue === 0 ? 'PAID' : (amountPaid > 0 ? 'PARTIALLY PAID' : 'UNPAID');
+
+  // Update UI Elements
+  const subtotalEl = document.getElementById('bill-subtotal');
+  if (subtotalEl) subtotalEl.innerText = formatPeso(subtotal);
+
+  const phEl = document.getElementById('bill-philhealth-deduction');
+  if (phEl) phEl.innerText = `- ${formatPeso(philhealth)}`;
+
+  const discEl = document.getElementById('bill-discount');
+  if (discEl) discEl.innerText = `- ${formatPeso(otherDeductions)}`;
+
+  const discLabelEl = document.getElementById('bill-discount-label');
+  if (discLabelEl) discLabelEl.innerText = bill.discountType !== 'None' ? `(${bill.discountType})` : '';
+
+  const covEl = document.getElementById('bill-amount-covered');
+  if (covEl) covEl.innerText = formatPeso(amountCovered);
+
+  const totalEl = document.getElementById('bill-total');
+  if (totalEl) totalEl.innerText = formatPeso(remainingBalance);
+
+  const paidEl = document.getElementById('bill-paid');
+  if (paidEl) paidEl.innerText = formatPeso(amountPaid);
+
+  const outEl = document.getElementById('bill-outstanding');
+  if (outEl) outEl.innerText = formatPeso(balanceDue);
 
   const statusBadge = document.getElementById('bill-status-badge');
-  const badgeClass = bill.status === 'PAID' ? 'badge-paid' : bill.status === 'PARTIALLY PAID' ? 'badge-partially-paid' : bill.status === 'OVERDUE' ? 'badge-overdue' : 'badge-unpaid';
-  statusBadge.className = `inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${badgeClass}`;
-  statusBadge.innerText = bill.status;
+  if (statusBadge) {
+    const badgeClass = bill.status === 'PAID' ? 'badge-paid' : bill.status === 'PARTIALLY PAID' ? 'badge-partially-paid' : bill.status === 'OVERDUE' ? 'badge-overdue' : 'badge-unpaid';
+    statusBadge.className = `inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${badgeClass}`;
+    statusBadge.innerText = bill.status;
+  }
 
   lucide.createIcons();
 }
@@ -1179,7 +1282,36 @@ function viewChargeDetails(chargeId) {
   lucide.createIcons();
 }
 
-// 5. Apply Discount Modal
+// 5. Apply Deductions & PhilHealth Benefit Modal
+function onDiscountTypeChange() {
+  const type = document.getElementById('discount-type').value;
+  const modeSel = document.getElementById('discount-mode');
+  const valInput = document.getElementById('discount-rate-value');
+  const reasonInput = document.getElementById('discount-reason');
+
+  if (type === 'Senior Citizen') {
+    modeSel.value = 'percentage';
+    valInput.value = '20';
+    if (!reasonInput.value) reasonInput.value = 'Senior Citizen RA 9994';
+  } else if (type === 'PWD') {
+    modeSel.value = 'percentage';
+    valInput.value = '20';
+    if (!reasonInput.value) reasonInput.value = 'PWD RA 10754';
+  } else if (type === 'Hospital Employee') {
+    modeSel.value = 'percentage';
+    valInput.value = '15';
+    if (!reasonInput.value) reasonInput.value = 'TMH Hospital Employee Discount';
+  } else if (type === 'Indigent') {
+    modeSel.value = 'percentage';
+    valInput.value = '100';
+    if (!reasonInput.value) reasonInput.value = 'MSWD Indigent Coverage Assistance';
+  } else if (type === 'None') {
+    valInput.value = '0';
+    reasonInput.value = '';
+  }
+  updateDiscountLivePreview();
+}
+
 function openApplyDiscountModal() {
   const selectedId = AppState.selectedPatientForBill;
   const bill = AppState.bills.find(b => b.patientId === selectedId);
@@ -1187,11 +1319,19 @@ function openApplyDiscountModal() {
 
   const modal = document.getElementById('modal-apply-discount');
   document.getElementById('discount-original-amount').innerText = formatPeso(bill.subtotal);
-  document.getElementById('discount-type').value = 'Senior Citizen';
-  document.getElementById('discount-mode').value = 'percentage';
-  document.getElementById('discount-rate-value').value = '20';
-  document.getElementById('discount-reason').value = 'Senior Citizen Republic Act 9994';
-  document.getElementById('discount-authorized-by').value = 'Dr. Roberto Mendoza, MD';
+  
+  // PhilHealth Fields
+  const phIdInput = document.getElementById('discount-philhealth-id');
+  if (phIdInput) phIdInput.value = bill.philhealthId || '';
+  const phAmtInput = document.getElementById('discount-philhealth-amount');
+  if (phAmtInput) phAmtInput.value = bill.philhealthDeduction || 0;
+
+  // Other Discount Fields
+  document.getElementById('discount-type').value = bill.discountType || 'None';
+  document.getElementById('discount-mode').value = bill.discountMode || 'percentage';
+  document.getElementById('discount-rate-value').value = bill.discountRate || (bill.discountType === 'Senior Citizen' || bill.discountType === 'PWD' ? 20 : 0);
+  document.getElementById('discount-reason').value = bill.discountReason || '';
+  document.getElementById('discount-authorized-by').value = bill.authorizedBy || 'Dr. Roberto Mendoza, MD';
 
   updateDiscountLivePreview();
 
@@ -1204,21 +1344,38 @@ function updateDiscountLivePreview() {
   const bill = AppState.bills.find(b => b.patientId === selectedId);
   if (!bill) return;
 
-  const mode = document.getElementById('discount-mode').value;
-  const val = parseFloat(document.getElementById('discount-rate-value').value) || 0;
-  let discountAmt = 0;
+  const subtotal = bill.subtotal || 0;
+  const philhealth = Math.max(0, parseFloat(document.getElementById('discount-philhealth-amount')?.value) || 0);
 
-  if (mode === 'percentage') {
-    discountAmt = (bill.subtotal * val) / 100;
-  } else {
-    discountAmt = val;
+  const mode = document.getElementById('discount-mode').value;
+  const val = Math.max(0, parseFloat(document.getElementById('discount-rate-value').value) || 0);
+  let otherDeduction = 0;
+
+  if (document.getElementById('discount-type').value !== 'None') {
+    if (mode === 'percentage') {
+      otherDeduction = (subtotal * val) / 100;
+    } else {
+      otherDeduction = val;
+    }
   }
 
-  discountAmt = Math.min(bill.subtotal, discountAmt);
-  const finalAmount = Math.max(0, bill.subtotal - discountAmt);
+  const totalCovered = Math.min(subtotal, philhealth + otherDeduction);
+  const remainingBalance = Math.max(0, subtotal - totalCovered);
 
-  document.getElementById('discount-calculated-amount').innerText = `- ${formatPeso(discountAmt)}`;
-  document.getElementById('discount-final-amount').innerText = formatPeso(finalAmount);
+  const origEl = document.getElementById('discount-original-amount');
+  if (origEl) origEl.innerText = formatPeso(subtotal);
+
+  const phPrevEl = document.getElementById('discount-philhealth-preview');
+  if (phPrevEl) phPrevEl.innerText = `- ${formatPeso(philhealth)}`;
+
+  const calcEl = document.getElementById('discount-calculated-amount');
+  if (calcEl) calcEl.innerText = `- ${formatPeso(otherDeduction)}`;
+
+  const covEl = document.getElementById('discount-total-covered');
+  if (covEl) covEl.innerText = formatPeso(totalCovered);
+
+  const finalEl = document.getElementById('discount-final-amount');
+  if (finalEl) finalEl.innerText = formatPeso(remainingBalance);
 }
 
 function saveDiscount(event) {
@@ -1227,36 +1384,87 @@ function saveDiscount(event) {
   const bill = AppState.bills.find(b => b.patientId === selectedId);
   if (!bill) return;
 
+  const subtotal = bill.subtotal || 0;
+  const phId = document.getElementById('discount-philhealth-id')?.value || '';
+  const philhealth = Math.max(0, parseFloat(document.getElementById('discount-philhealth-amount')?.value) || 0);
+
   const discType = document.getElementById('discount-type').value;
   const mode = document.getElementById('discount-mode').value;
-  const val = parseFloat(document.getElementById('discount-rate-value').value) || 0;
+  const val = Math.max(0, parseFloat(document.getElementById('discount-rate-value').value) || 0);
   const reason = document.getElementById('discount-reason').value;
   const authBy = document.getElementById('discount-authorized-by').value;
 
-  let discountAmt = 0;
-  if (mode === 'percentage') {
-    discountAmt = (bill.subtotal * val) / 100;
-  } else {
-    discountAmt = val;
+  let otherDeduction = 0;
+  if (discType !== 'None') {
+    if (mode === 'percentage') {
+      otherDeduction = (subtotal * val) / 100;
+    } else {
+      otherDeduction = val;
+    }
   }
-  discountAmt = Math.min(bill.subtotal, discountAmt);
 
+  const amountCovered = Math.min(subtotal, philhealth + otherDeduction);
+  const remainingBalance = Math.max(0, subtotal - amountCovered);
+
+  bill.philhealthId = phId;
+  bill.philhealthDeduction = philhealth;
   bill.discountType = discType;
-  bill.discountAmount = discountAmt;
+  bill.discountMode = mode;
+  bill.discountRate = val;
+  bill.discountAmount = otherDeduction;
+  bill.amountCovered = amountCovered;
   bill.discountReason = reason;
   bill.authorizedBy = authBy;
-  bill.totalBill = Math.max(0, bill.subtotal - discountAmt);
-  bill.outstandingBalance = Math.max(0, bill.totalBill - bill.amountPaid);
+  bill.totalBill = remainingBalance;
+  bill.outstandingBalance = Math.max(0, remainingBalance - bill.amountPaid);
+  bill.status = bill.outstandingBalance === 0 ? 'PAID' : (bill.amountPaid > 0 ? 'PARTIALLY PAID' : 'UNPAID');
 
   closeModal('modal-apply-discount');
-  showToast(`Discount of ${formatPeso(discountAmt)} applied to bill`);
-  addActivityLog('discount', 'Discount applied', `${discType} discount (${formatPeso(discountAmt)}) applied to ${bill.patientName}.`, 'Tag', 'text-purple-600 bg-purple-50');
+  showToast(`Deductions saved! Total covered: ${formatPeso(amountCovered)}. Remaining Due: ${formatPeso(remainingBalance)}`);
+  addActivityLog('discount', 'Billing deductions applied', `PhilHealth (${formatPeso(philhealth)}) + ${discType} (${formatPeso(otherDeduction)}) applied to ${bill.patientName}.`, 'Tag', 'text-blue-600 bg-blue-50');
+
+  // Sync to database if available
+  const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+  if (csrfToken && bill.invoiceId) {
+    fetch('/billing/api/discounts/compute', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-TOKEN': csrfToken,
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify({
+        invoice_id: bill.invoiceId,
+        patient_id: bill.patientId,
+        subtotal: bill.subtotal,
+        philhealth_deduction: bill.philhealthDeduction,
+        other_deductions: bill.discountAmount,
+        discount_type: bill.discountType,
+        reason: bill.discountReason
+      })
+    }).catch(err => console.log('Live sync note:', err));
+  }
 
   renderBillProcessing();
   recalculateMetrics();
 }
 
 // 6. Record Payment Modal
+function onPaymentMethodChange(val) {
+  const refLabel = document.getElementById('payment-ref-label');
+  const refInput = document.getElementById('payment-ref-no');
+  const details = document.getElementById('payment-cashless-details');
+  if (val === 'Cash') {
+    if (refLabel) refLabel.innerText = 'Official Slip / Receipt Reference';
+    if (refInput) refInput.placeholder = 'e.g. CSH-' + Math.floor(1000 + Math.random() * 9000);
+    if (details) details.classList.add('hidden');
+  } else {
+    if (refLabel) refLabel.innerText = `${val} Reference / Transaction ID *`;
+    if (refInput) refInput.placeholder = `e.g. ${val.toUpperCase().replace(/\s+/g, '')}-TXN-` + Math.floor(100000 + Math.random() * 900000);
+    if (details) details.classList.remove('hidden');
+  }
+}
+
 function openPaymentModalForBill(billId) {
   const bill = AppState.bills.find(b => b.billId === billId);
   if (!bill) return;
@@ -1275,6 +1483,11 @@ function openPaymentModalForBill(billId) {
   document.getElementById('payment-notes').value = 'Full settlement of bill';
   document.getElementById('payment-warning').classList.add('hidden');
 
+  const recByEl = document.getElementById('payment-recorded-by');
+  if (recByEl) recByEl.innerText = AppState.currentUser.name || 'Collecting Cashier';
+
+  onPaymentMethodChange('Cash');
+
   modal.classList.remove('hidden');
   modal.classList.add('flex');
 }
@@ -1289,7 +1502,7 @@ function onPaymentAmountInput() {
 
   if (entered > bill.outstandingBalance) {
     warningEl.classList.remove('hidden');
-    warningEl.innerText = `Warning: Payment amount (₱${entered}) exceeds the outstanding balance (₱${bill.outstandingBalance}).`;
+    warningEl.innerText = `Warning: Payment amount (₱${entered}) exceeds the balance due (₱${bill.outstandingBalance}).`;
   } else {
     warningEl.classList.add('hidden');
   }
@@ -1308,13 +1521,16 @@ function processPaymentSubmit(event) {
   }
 
   if (amount > bill.outstandingBalance) {
-    if (!confirm('Payment amount exceeds outstanding balance. Do you wish to proceed with change/credit?')) {
+    if (!confirm('Payment amount exceeds balance due. Do you wish to proceed with change/credit?')) {
       return;
     }
   }
 
   const method = document.getElementById('payment-method-select').value;
-  const refNo = document.getElementById('payment-ref-no').value;
+  let refNo = document.getElementById('payment-ref-no').value;
+  if (!refNo && method !== 'Cash') {
+    refNo = `${method.toUpperCase().replace(/\s+/g, '')}-` + Math.floor(100000 + Math.random() * 900000);
+  }
   const notes = document.getElementById('payment-notes').value;
 
   // Create payment record
@@ -1326,7 +1542,7 @@ function processPaymentSubmit(event) {
     invoiceId: bill.invoiceId,
     amount: amount,
     method: method,
-    referenceNo: refNo,
+    referenceNo: refNo || ('CSH-' + Math.floor(1000 + Math.random() * 9000)),
     date: "Aug 28, 2026 " + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     cashier: AppState.currentUser.name,
     status: "Completed",
@@ -1363,8 +1579,29 @@ function processPaymentSubmit(event) {
   AppState.officialReceipts.unshift(orObj);
 
   closeModal('modal-create-payment');
-  showToast(`Payment of ${formatPeso(amount)} recorded! Receipt ${newOrNum} issued.`);
-  addActivityLog('payment', 'Payment received', `${formatPeso(amount)} received from ${bill.patientName} via ${method}.`, 'CreditCard', 'text-emerald-600 bg-emerald-50');
+  showToast(`Payment of ${formatPeso(amount)} recorded via ${method}! Receipt ${newOrNum} issued.`);
+  addActivityLog('payment', 'Payment received', `${formatPeso(amount)} received from ${bill.patientName} via ${method} (Ref: ${paymentObj.referenceNo}).`, 'CreditCard', 'text-emerald-600 bg-emerald-50');
+
+  // Sync to database if available
+  const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+  if (csrfToken && bill.invoiceId) {
+    fetch('/billing/api/payments', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-TOKEN': csrfToken,
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify({
+        invoice_id: bill.invoiceId,
+        patient_id: bill.patientId,
+        amount: amount,
+        payment_method: method,
+        reference_no: paymentObj.referenceNo,
+        notes: notes
+      })
+    }).catch(err => console.log('Payment sync note:', err));
+  }
 
   recalculateMetrics();
   renderPaymentsTable();
@@ -1571,6 +1808,16 @@ function printCurrentInvoice() {
   `;
 
   window.print();
+}
+
+function openOfficialTMHISPrintInvoice() {
+  const invId = AppState.activeInvoice?.inv?.invoiceId || 'INV-2026-001';
+  window.open(`/print/billing/${encodeURIComponent(invId)}`, '_blank');
+}
+
+function openOfficialTMHISPrintReceipt() {
+  const orNum = AppState.activeReceipt?.orNumber || 'OR-2026-001';
+  window.open(`/print/receipt/${encodeURIComponent(orNum)}`, '_blank');
 }
 
 // 9. View & Print Official Receipt (OR)

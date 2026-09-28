@@ -106,38 +106,56 @@ class BillingManager
     }
 
     /**
-     * Compute statutory discount (Senior Citizen / PWD 20%) and PhilHealth deduction
-     * Strictly applies 20% discount once even if patient qualifies for both.
+     * Compute statutory discount (Senior Citizen / PWD 20%), PhilHealth deduction, and other valid deductions
+     * Fulfills Requirement 2.1: Total Charges - PhilHealth Deduction - Other Valid Deductions = Amount Due
      */
-    public function computeDiscounts(float $grossAmount, array $qualifications = [], float $philHealthDeduction = 0.0): array
+    public function computeDiscounts(float $grossAmount, array $qualifications = [], float $philHealthDeduction = 0.0, float $otherDeductions = 0.0): array
     {
+        $grossAmount = max(0, round($grossAmount, 2));
         $hasSenior = in_array('Senior Citizen', $qualifications, true) || in_array('senior', $qualifications, true);
         $hasPWD    = in_array('PWD', $qualifications, true) || in_array('pwd', $qualifications, true);
+        $hasIndigent = in_array('Indigent', $qualifications, true) || in_array('indigent', $qualifications, true);
+        $hasEmployee = in_array('Hospital Employee', $qualifications, true) || in_array('employee', $qualifications, true);
 
         $discountType = 'None';
-        $discountAmount = 0.0;
+        $statutoryDiscount = 0.0;
 
-        if ($hasSenior && $hasPWD) {
+        if ($hasIndigent) {
+            $discountType = 'Indigent / Barangay (100%)';
+            $statutoryDiscount = $grossAmount;
+        } elseif ($hasEmployee) {
+            $discountType = 'Hospital Employee (50%)';
+            $statutoryDiscount = round($grossAmount * 0.50, 2);
+        } elseif ($hasSenior && $hasPWD) {
             $discountType = 'Senior Citizen + PWD (20% Max Statutory)';
-            $discountAmount = round($grossAmount * 0.20, 2);
+            $statutoryDiscount = round($grossAmount * 0.20, 2);
         } elseif ($hasSenior) {
             $discountType = 'Senior Citizen (20%)';
-            $discountAmount = round($grossAmount * 0.20, 2);
+            $statutoryDiscount = round($grossAmount * 0.20, 2);
         } elseif ($hasPWD) {
             $discountType = 'PWD (20%)';
-            $discountAmount = round($grossAmount * 0.20, 2);
+            $statutoryDiscount = round($grossAmount * 0.20, 2);
         }
 
-        $afterDiscount = max(0, $grossAmount - $discountAmount);
-        $finalPhilHealth = min($afterDiscount, round($philHealthDeduction, 2));
-        $totalPayable = round(max(0, $afterDiscount - $finalPhilHealth), 2);
+        $otherValidDeductions = max(0, round($otherDeductions + $statutoryDiscount, 2));
+        $afterOtherDeductions = max(0, $grossAmount - $otherValidDeductions);
+        
+        // PhilHealth covers up to the remaining charges after statutory deductions
+        $finalPhilHealth = min($afterOtherDeductions, max(0, round($philHealthDeduction, 2)));
+        $totalCovered = round($finalPhilHealth + $otherValidDeductions, 2);
+        $remainingBalance = round(max(0, $grossAmount - $totalCovered), 2);
 
         return [
-            'gross_amount'         => round($grossAmount, 2),
-            'discount_type'        => $discountType,
-            'discount_amount'      => $discountAmount,
-            'philhealth_deduction' => $finalPhilHealth,
-            'total_payable'        => $totalPayable
+            'gross_amount'              => $grossAmount,
+            'total_charges'             => $grossAmount,
+            'discount_type'             => $discountType,
+            'discount_amount'           => $statutoryDiscount,
+            'other_deductions'          => $otherValidDeductions,
+            'philhealth_deduction'      => $finalPhilHealth,
+            'amount_covered'            => $totalCovered,
+            'remaining_balance'         => $remainingBalance,
+            'total_payable'             => $remainingBalance,
+            'balance_due'               => $remainingBalance
         ];
     }
 
@@ -162,7 +180,8 @@ class BillingManager
     }
 
     /**
-     * Process payment and accurately track remaining balance
+     * Process payment with expanded payment methods and accurate balance tracking
+     * Fulfills Requirement 3: Cash, Cashless Payment, PayMaya, GCash, MedicalEMS, Credit Card
      */
     public function processPayment(array $data): array
     {
@@ -180,16 +199,38 @@ class BillingManager
         }
 
         $receiptNo = $data['ReceiptNumber'] ?? $this->generateReceiptNumber();
-        $words = $data['AmountInWords'] ?? 'Pesos Only';
+        $words = $data['AmountInWords'] ?? (number_format($amountPaid, 2) . ' Pesos Only');
+
+        $method = $data['PaymentMethod'] ?? 'Cash';
+        $refNumber = $data['ReferenceNumber'] ?? null;
+
+        // Auto-generate realistic transaction ID for cashless methods if empty
+        if (empty($refNumber)) {
+            $prefix = match(strtolower($method)) {
+                'gcash'            => 'GCASH-TXN-',
+                'paymaya'          => 'PAYMAYA-TXN-',
+                'medicalems'       => 'EMS-TXN-',
+                'credit card', 'card' => 'CC-AUTH-',
+                'cashless payment' => 'DIGITAL-TXN-',
+                default            => 'REF-'
+            };
+            if (strtolower($method) !== 'cash') {
+                $refNumber = $prefix . date('Ymd') . '-' . rand(100000, 999999);
+            }
+        }
+
+        $cashierName = $data['CashierName'] ?? (session('full_name') ?: 'Maria Santos');
+        $recordedBy = $data['RecordedBy'] ?? $cashierName;
+        $paymentStatus = $data['PaymentStatus'] ?? 'Completed';
 
         $this->db->beginTransaction();
         try {
             $sql = "INSERT INTO billing_payments (
                         ReceiptNumber, InvoiceID, PatientID, AmountPaid, 
-                        PaymentMethod, ReferenceNumber, AmountInWords, CashierName, PaymentDate
+                        PaymentStatus, PaymentMethod, ReferenceNumber, AmountInWords, CashierName, RecordedBy, PaymentDate
                     ) VALUES (
                         :ReceiptNumber, :InvoiceID, :PatientID, :AmountPaid, 
-                        :PaymentMethod, :ReferenceNumber, :AmountInWords, :CashierName, NOW()
+                        :PaymentStatus, :PaymentMethod, :ReferenceNumber, :AmountInWords, :CashierName, :RecordedBy, NOW()
                     )";
             $stmt = $this->db->prepare($sql);
             $stmt->execute([
@@ -197,17 +238,19 @@ class BillingManager
                 ':InvoiceID'        => $invoiceId,
                 ':PatientID'        => $patientId,
                 ':AmountPaid'       => $amountPaid,
-                ':PaymentMethod'    => $data['PaymentMethod'] ?? 'Cash',
-                ':ReferenceNumber'  => $data['ReferenceNumber'] ?? null,
+                ':PaymentStatus'    => $paymentStatus,
+                ':PaymentMethod'    => $method,
+                ':ReferenceNumber'  => $refNumber,
                 ':AmountInWords'    => $words,
-                ':CashierName'      => $data['CashierName'] ?? (session('full_name') ?: 'Maria Santos')
+                ':CashierName'      => $cashierName,
+                ':RecordedBy'       => $recordedBy
             ]);
 
-            // Calculate updated balance
+            // Calculate updated balance (Prevent negative balances)
             $newTotalPaid = round((float)$inv['AmountPaid'] + $amountPaid, 2);
             $totalPayable = (float)$inv['TotalPayable'];
             $newBalance = round(max(0, $totalPayable - $newTotalPaid), 2);
-            $paymentStatus = ($newBalance <= 0.001) ? 'Paid In Full' : 'Partially Paid';
+            $invoicePaymentStatus = ($newBalance <= 0.001) ? 'Paid In Full' : 'Partially Paid';
 
             $up = $this->db->prepare("
                 UPDATE billing_invoices 
@@ -217,7 +260,7 @@ class BillingManager
             $up->execute([
                 ':paid'   => $newTotalPaid,
                 ':bal'    => $newBalance,
-                ':status' => $paymentStatus,
+                ':status' => $invoicePaymentStatus,
                 ':invId'  => $invoiceId
             ]);
 
@@ -229,7 +272,11 @@ class BillingManager
                 'amount_paid'      => $amountPaid,
                 'new_total_paid'   => $newTotalPaid,
                 'balance_due'      => $newBalance,
-                'payment_status'   => $paymentStatus
+                'payment_status'   => $invoicePaymentStatus,
+                'payment_method'   => $method,
+                'reference_number' => $refNumber,
+                'recorded_by'      => $recordedBy,
+                'print_url'        => "/print/receipt/{$this->db->lastInsertId()}"
             ];
         } catch (Throwable $e) {
             $this->db->rollBack();

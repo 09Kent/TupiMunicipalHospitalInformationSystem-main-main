@@ -20,11 +20,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Billing & Cashier Dashboard | Tupi Municipal Hospital Information Management System</title>
   
+  <meta name="csrf-token" content="<?= csrf_token() ?>">
+
   <!-- Offline Typography & Fonts -->
   <link rel="stylesheet" href="<?= asset('vendor/fonts/fonts.css') ?>">
 
   <!-- Offline Tailwind CSS -->
   <script src="<?= asset('vendor/tailwindcss/tailwind.js') ?>"></script>
+  <script src="<?= asset('js/tmhis-patient-search.js') ?>"></script>
   <script>
     tailwind.config = {
       theme: {
@@ -592,9 +595,25 @@
             <p class="text-xs text-slate-400">Select a patient to compute charges, apply discounts & generate official invoices</p>
           </div>
 
-          <div class="flex items-center gap-3">
-            <label class="text-xs font-bold text-slate-600 uppercase">Patient:</label>
-            <select id="bill-patient-select" onchange="onPatientBillChange()" class="px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 min-w-[280px]">
+          <div class="flex flex-col sm:flex-row sm:items-center gap-2 relative">
+            <label class="text-xs font-bold text-slate-600 uppercase flex items-center gap-1.5">
+              <i data-lucide="search" class="w-3.5 h-3.5 text-brand-600"></i>
+              Find Patient:
+            </label>
+            <div class="relative min-w-[280px] sm:min-w-[340px]">
+              <input type="text" id="bill-patient-search-input" 
+                     placeholder="Search Patient Name, ID, Student ID..." 
+                     oninput="onBillPatientSearchInput(this.value)" 
+                     onfocus="onBillPatientSearchFocus()"
+                     autocomplete="off"
+                     class="w-full px-3.5 py-2 pl-9 bg-white border border-slate-300 rounded-xl text-xs font-semibold text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 shadow-sm">
+              <i data-lucide="user-search" class="w-4 h-4 text-slate-400 absolute left-3 top-2.5 pointer-events-none"></i>
+              <div id="bill-patient-search-results" class="hidden absolute left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-2xl z-50 max-h-64 overflow-y-auto divide-y divide-slate-100">
+                <!-- Live search results rendered in app.js -->
+              </div>
+            </div>
+            <!-- Hidden original select kept for programmatic script compatibility -->
+            <select id="bill-patient-select" onchange="onPatientBillChange()" class="hidden">
               <!-- Populated in JS -->
             </select>
           </div>
@@ -658,52 +677,70 @@
           <div class="hospity-card p-6 flex flex-col justify-between space-y-6">
             <div>
               <div class="flex items-center justify-between pb-3 border-b border-slate-100">
-                <h3 class="text-sm font-bold text-slate-900 font-heading uppercase tracking-wide">BILL SUMMARY</h3>
+                <div>
+                  <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Statement of Account</span>
+                  <h3 class="text-sm font-bold text-slate-900 font-heading uppercase tracking-wide">BILLING & DEDUCTIONS</h3>
+                </div>
                 <span id="bill-status-badge" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold badge-partially-paid">
                   PARTIALLY PAID
                 </span>
               </div>
 
               <!-- Mathematical Computation List -->
-              <div class="space-y-3.5 py-4 text-sm">
-                <!-- Subtotal -->
+              <div class="space-y-3 py-3 text-xs">
+                <!-- Total Hospital Charges -->
                 <div class="flex items-center justify-between text-slate-600">
-                  <span>Subtotal:</span>
-                  <span id="bill-subtotal" class="font-semibold text-slate-800">₱2,300</span>
+                  <span class="font-medium">Total Hospital Charges:</span>
+                  <span id="bill-subtotal" class="font-semibold text-slate-900">₱2,300.00</span>
                 </div>
 
-                <!-- Discount -->
-                <div class="flex items-center justify-between text-purple-700">
-                  <div class="flex items-center gap-1">
-                    <span>Discount:</span>
-                    <span id="bill-discount-label" class="text-xs font-medium text-purple-500">(Senior Citizen)</span>
+                <!-- PhilHealth Deduction -->
+                <div class="flex items-center justify-between text-blue-700 bg-blue-50/60 px-2.5 py-1.5 rounded-lg border border-blue-100">
+                  <div class="flex items-center gap-1.5">
+                    <i data-lucide="shield-check" class="w-3.5 h-3.5 text-blue-600"></i>
+                    <span class="font-bold">PhilHealth Deduction:</span>
                   </div>
-                  <span id="bill-discount" class="font-bold">- ₱200</span>
+                  <span id="bill-philhealth-deduction" class="font-bold text-blue-800">- ₱0.00</span>
                 </div>
 
-                <!-- Total Bill Line -->
-                <div class="pt-3 border-t border-slate-200 flex items-center justify-between text-slate-900 font-extrabold text-lg font-heading">
-                  <span>TOTAL BILL:</span>
-                  <span id="bill-total" class="text-brand-700">₱2,100</span>
+                <!-- Other Deductions -->
+                <div class="flex items-center justify-between text-purple-700 bg-purple-50/60 px-2.5 py-1.5 rounded-lg border border-purple-100">
+                  <div class="flex items-center gap-1">
+                    <span class="font-bold">Other Deductions:</span>
+                    <span id="bill-discount-label" class="text-[11px] font-medium text-purple-600">(Senior/PWD)</span>
+                  </div>
+                  <span id="bill-discount" class="font-bold text-purple-800">- ₱0.00</span>
+                </div>
+
+                <!-- Total Amount Covered -->
+                <div class="flex items-center justify-between text-slate-500 px-1 text-[11px]">
+                  <span>Total Amount Covered:</span>
+                  <span id="bill-amount-covered" class="font-semibold text-slate-700">₱0.00</span>
+                </div>
+
+                <!-- Remaining Balance / Amount Due Line -->
+                <div class="pt-2.5 border-t border-slate-200 flex items-center justify-between text-slate-900 font-extrabold text-sm font-heading">
+                  <span>REMAINING BALANCE (Due):</span>
+                  <span id="bill-total" class="text-brand-700 text-base">₱2,300.00</span>
                 </div>
 
                 <!-- Amount Paid -->
-                <div class="flex items-center justify-between text-emerald-600 text-sm">
+                <div class="flex items-center justify-between text-emerald-700 text-xs">
                   <span>Amount Paid:</span>
-                  <span id="bill-paid" class="font-bold">₱1,000</span>
+                  <span id="bill-paid" class="font-bold">₱0.00</span>
                 </div>
 
-                <!-- Outstanding Balance -->
-                <div class="pt-3 border-t border-dashed border-slate-200 flex items-center justify-between text-rose-600 font-bold text-base">
-                  <span>Outstanding Balance:</span>
-                  <span id="bill-outstanding" class="text-xl font-black">₱1,100</span>
+                <!-- Balance Due -->
+                <div class="pt-2.5 border-t border-dashed border-slate-200 flex items-center justify-between text-rose-600 font-bold text-sm">
+                  <span>BALANCE DUE:</span>
+                  <span id="bill-outstanding" class="text-lg font-black">₱2,300.00</span>
                 </div>
               </div>
 
-              <!-- Apply Discount Trigger -->
-              <button onclick="openApplyDiscountModal()" class="w-full py-2.5 px-4 rounded-xl border border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100 text-xs font-bold flex items-center justify-center gap-2 transition-colors">
-                <i data-lucide="tag" class="w-4 h-4"></i>
-                <span>Apply Senior / PWD / Employee Discount</span>
+              <!-- Apply Deductions Trigger -->
+              <button onclick="openApplyDiscountModal()" class="w-full py-2.5 px-4 rounded-xl border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 text-xs font-bold flex items-center justify-center gap-2 transition-colors shadow-sm">
+                <i data-lucide="calculator" class="w-4 h-4 text-blue-600"></i>
+                <span>Apply PhilHealth & Other Deductions</span>
               </button>
             </div>
 
@@ -733,11 +770,13 @@
         <!-- Filter and Action Bar -->
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div class="flex items-center gap-2 overflow-x-auto pb-1">
-            <button onclick="AppState.paymentFilter='all'; renderPaymentsTable();" class="px-3.5 py-1.5 text-xs font-semibold rounded-xl bg-slate-900 text-white transition-colors">All Methods</button>
-            <button onclick="AppState.paymentFilter='cash'; renderPaymentsTable();" class="px-3.5 py-1.5 text-xs font-semibold rounded-xl bg-white text-slate-600 border border-slate-200 hover:bg-slate-50 transition-colors">Cash</button>
-            <button onclick="AppState.paymentFilter='card'; renderPaymentsTable();" class="px-3.5 py-1.5 text-xs font-semibold rounded-xl bg-white text-slate-600 border border-slate-200 hover:bg-slate-50 transition-colors">Credit/Debit Card</button>
-            <button onclick="AppState.paymentFilter='gcash'; renderPaymentsTable();" class="px-3.5 py-1.5 text-xs font-semibold rounded-xl bg-white text-slate-600 border border-slate-200 hover:bg-slate-50 transition-colors">GCash</button>
-            <button onclick="AppState.paymentFilter='bank'; renderPaymentsTable();" class="px-3.5 py-1.5 text-xs font-semibold rounded-xl bg-white text-slate-600 border border-slate-200 hover:bg-slate-50 transition-colors">Bank Transfer</button>
+            <button onclick="AppState.paymentFilter='all'; renderPaymentsTable();" class="px-3 py-1.5 text-xs font-semibold rounded-xl bg-slate-900 text-white transition-colors">All Methods</button>
+            <button onclick="AppState.paymentFilter='cash'; renderPaymentsTable();" class="px-3 py-1.5 text-xs font-semibold rounded-xl bg-white text-slate-600 border border-slate-200 hover:bg-slate-50 transition-colors">Cash</button>
+            <button onclick="AppState.paymentFilter='cashless'; renderPaymentsTable();" class="px-3 py-1.5 text-xs font-semibold rounded-xl bg-white text-slate-600 border border-slate-200 hover:bg-slate-50 transition-colors">Cashless</button>
+            <button onclick="AppState.paymentFilter='paymaya'; renderPaymentsTable();" class="px-3 py-1.5 text-xs font-semibold rounded-xl bg-white text-slate-600 border border-slate-200 hover:bg-slate-50 transition-colors">PayMaya</button>
+            <button onclick="AppState.paymentFilter='gcash'; renderPaymentsTable();" class="px-3 py-1.5 text-xs font-semibold rounded-xl bg-white text-slate-600 border border-slate-200 hover:bg-slate-50 transition-colors">GCash</button>
+            <button onclick="AppState.paymentFilter='medicalems'; renderPaymentsTable();" class="px-3 py-1.5 text-xs font-semibold rounded-xl bg-white text-slate-600 border border-slate-200 hover:bg-slate-50 transition-colors">MedicalEMS</button>
+            <button onclick="AppState.paymentFilter='card'; renderPaymentsTable();" class="px-3 py-1.5 text-xs font-semibold rounded-xl bg-white text-slate-600 border border-slate-200 hover:bg-slate-50 transition-colors">Credit Card</button>
           </div>
 
           <button onclick="openPaymentModalForBill('BILL-2026-001')" class="btn-primary px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 shadow-sm whitespace-nowrap">
@@ -1272,18 +1311,18 @@
   </div>
 
   <!-- ========================================================
-       MODAL 5: APPLY DISCOUNT ENTRY
+       MODAL 5: APPLY DEDUCTIONS & PHILHEALTH BENEFIT
        ======================================================== -->
   <div id="modal-apply-discount" class="modal-wrapper hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-    <div class="modal-content bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 relative">
+    <div class="modal-content bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 relative">
       <div class="flex items-center justify-between pb-4 border-b border-slate-100">
-        <div class="flex items-center gap-2">
-          <div class="w-8 h-8 rounded-lg bg-purple-100 text-purple-700 flex items-center justify-center">
-            <i data-lucide="tag" class="w-4 h-4"></i>
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center">
+            <i data-lucide="shield-check" class="w-4 h-4"></i>
           </div>
           <div>
-            <h3 class="text-base font-bold text-slate-900 font-heading">APPLY DISCOUNT ENTRY</h3>
-            <p class="text-xs text-slate-400">Senior Citizen, PWD or Employee Discount</p>
+            <h3 class="text-base font-bold text-slate-900 font-heading">BILLING DEDUCTIONS & PHILHEALTH</h3>
+            <p class="text-xs text-slate-400">Compute PhilHealth benefit coverage and statutory discounts</p>
           </div>
         </div>
         <button onclick="closeModal('modal-apply-discount')" class="p-1 rounded-lg text-slate-400 hover:text-slate-600">
@@ -1292,34 +1331,67 @@
       </div>
 
       <form onsubmit="saveDiscount(event)" class="mt-4 space-y-4 text-xs">
-        <div>
-          <label class="block font-bold text-slate-700 mb-1">Discount Type *</label>
-          <select id="discount-type" class="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-800">
-            <option value="Senior Citizen">Senior Citizen (20%) - RA 9994</option>
-            <option value="PWD">Person with Disability (20%) - RA 10754</option>
-            <option value="Hospital Employee">Hospital Employee (15%)</option>
-            <option value="Other">Special Charity / Other</option>
-          </select>
-        </div>
-
-        <div class="grid grid-cols-2 gap-3">
-          <div>
-            <label class="block font-bold text-slate-700 mb-1">Calculation Mode</label>
-            <select id="discount-mode" onchange="updateDiscountLivePreview()" class="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-800">
-              <option value="percentage">Percentage (%)</option>
-              <option value="fixed">Fixed Amount (₱)</option>
-            </select>
+        <!-- 1. PhilHealth Deduction Section -->
+        <div class="p-3.5 bg-blue-50/70 border border-blue-100 rounded-xl space-y-2.5">
+          <div class="flex items-center justify-between">
+            <div class="font-bold text-blue-900 flex items-center gap-1.5 text-xs">
+              <i data-lucide="badge-check" class="w-4 h-4 text-blue-600"></i>
+              PhilHealth Benefit Deduction
+            </div>
+            <span class="text-[10px] text-blue-600 font-semibold uppercase tracking-wider">Hospital Coverage</span>
           </div>
 
-          <div>
-            <label class="block font-bold text-slate-700 mb-1">Discount Value</label>
-            <input type="number" id="discount-rate-value" value="20" min="0" oninput="updateDiscountLivePreview()" required class="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-800">
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block font-semibold text-slate-700 mb-1">PhilHealth PIN / ID</label>
+              <input type="text" id="discount-philhealth-id" placeholder="e.g. 12-345678901-2" class="w-full px-3 py-2 bg-white border border-blue-200 rounded-lg text-xs font-medium text-slate-800 focus:ring-1 focus:ring-blue-500">
+            </div>
+            <div>
+              <label class="block font-semibold text-slate-700 mb-1">PhilHealth Deduction (₱) *</label>
+              <input type="number" id="discount-philhealth-amount" value="0" min="0" step="0.01" oninput="updateDiscountLivePreview()" class="w-full px-3 py-2 bg-white border border-blue-200 rounded-lg text-xs font-bold text-blue-800 focus:ring-1 focus:ring-blue-500">
+            </div>
           </div>
         </div>
 
-        <div>
-          <label class="block font-bold text-slate-700 mb-1">Reason / ID Card Number *</label>
-          <input type="text" id="discount-reason" placeholder="e.g. Senior Citizen OSCA ID #12345" required class="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-800">
+        <!-- 2. Other Applicable Deductions Section -->
+        <div class="p-3.5 bg-purple-50/60 border border-purple-100 rounded-xl space-y-2.5">
+          <div class="font-bold text-purple-900 flex items-center gap-1.5 text-xs">
+            <i data-lucide="tag" class="w-4 h-4 text-purple-600"></i>
+            Other Applicable Deductions (Senior / PWD / Indigent)
+          </div>
+
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block font-semibold text-slate-700 mb-1">Deduction Type</label>
+              <select id="discount-type" onchange="onDiscountTypeChange()" class="w-full px-3 py-2 bg-white border border-purple-200 rounded-lg text-xs font-medium text-slate-800">
+                <option value="None">None (₱0.00)</option>
+                <option value="Senior Citizen">Senior Citizen (20%) - RA 9994</option>
+                <option value="PWD">Person with Disability (20%) - RA 10754</option>
+                <option value="Hospital Employee">Hospital Employee (15%)</option>
+                <option value="Indigent">Indigent / Medical Social Work (Full/Partial)</option>
+                <option value="Other">Special Charity / Other</option>
+              </select>
+            </div>
+
+            <div>
+              <label class="block font-semibold text-slate-700 mb-1">Calculation Mode</label>
+              <select id="discount-mode" onchange="updateDiscountLivePreview()" class="w-full px-3 py-2 bg-white border border-purple-200 rounded-lg text-xs font-medium text-slate-800">
+                <option value="percentage">Percentage (%)</option>
+                <option value="fixed">Fixed Amount (₱)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block font-semibold text-slate-700 mb-1">Rate / Fixed Value</label>
+              <input type="number" id="discount-rate-value" value="0" min="0" step="0.01" oninput="updateDiscountLivePreview()" class="w-full px-3 py-2 bg-white border border-purple-200 rounded-lg text-xs font-semibold text-slate-800">
+            </div>
+            <div>
+              <label class="block font-semibold text-slate-700 mb-1">OSCA ID / PWD ID / Reason</label>
+              <input type="text" id="discount-reason" placeholder="e.g. OSCA #10928" class="w-full px-3 py-2 bg-white border border-purple-200 rounded-lg text-xs font-medium text-slate-800">
+            </div>
+          </div>
         </div>
 
         <div>
@@ -1327,19 +1399,27 @@
           <input type="text" id="discount-authorized-by" value="Dr. Roberto Mendoza, MD" required class="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-800">
         </div>
 
-        <!-- Live Preview -->
-        <div class="p-3.5 bg-purple-50 rounded-xl border border-purple-100 space-y-1.5">
+        <!-- Live Calculation Preview -->
+        <div class="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-1.5 text-xs">
           <div class="flex justify-between text-slate-600">
-            <span>Original Bill:</span>
-            <span id="discount-original-amount" class="font-semibold text-slate-900">₱2,300</span>
+            <span>Total Hospital Charges:</span>
+            <span id="discount-original-amount" class="font-semibold text-slate-900">₱0.00</span>
           </div>
-          <div class="flex justify-between text-purple-700 font-bold">
-            <span>Discount Applied:</span>
-            <span id="discount-calculated-amount">- ₱200</span>
+          <div class="flex justify-between text-blue-700 font-semibold">
+            <span>PhilHealth Deduction:</span>
+            <span id="discount-philhealth-preview">- ₱0.00</span>
           </div>
-          <div class="flex justify-between text-slate-900 font-extrabold border-t border-purple-200 pt-1.5 text-sm">
-            <span>Final Amount:</span>
-            <span id="discount-final-amount" class="text-purple-900">₱2,100</span>
+          <div class="flex justify-between text-purple-700 font-semibold">
+            <span>Other Valid Deductions:</span>
+            <span id="discount-calculated-amount">- ₱0.00</span>
+          </div>
+          <div class="flex justify-between text-slate-700 font-bold border-t border-slate-200 pt-1">
+            <span>Total Amount Covered:</span>
+            <span id="discount-total-covered" class="text-emerald-700">₱0.00</span>
+          </div>
+          <div class="flex justify-between text-slate-900 font-extrabold border-t border-slate-300 pt-1.5 text-sm">
+            <span>Remaining Balance Due:</span>
+            <span id="discount-final-amount" class="text-brand-700">₱0.00</span>
           </div>
         </div>
 
@@ -1348,7 +1428,7 @@
             Cancel
           </button>
           <button type="submit" class="btn-primary px-5 py-2 rounded-xl font-bold">
-            Apply Discount
+            Save Deductions
           </button>
         </div>
       </form>
@@ -1389,7 +1469,7 @@
             <span id="payment-invoice-num" class="font-mono font-bold text-slate-700">INV-2026-001</span>
           </div>
           <div class="flex justify-between">
-            <span class="text-slate-500">Total Bill:</span>
+            <span class="text-slate-500">Remaining Balance (Amount Due):</span>
             <span id="payment-total-bill" class="font-semibold text-slate-800">₱2,100</span>
           </div>
           <div class="flex justify-between text-emerald-600">
@@ -1397,7 +1477,7 @@
             <span id="payment-already-paid" class="font-bold">₱1,000</span>
           </div>
           <div class="flex justify-between text-rose-600 font-bold border-t border-slate-200 pt-1">
-            <span>Outstanding Balance:</span>
+            <span>Balance Due:</span>
             <span id="payment-outstanding" class="text-sm font-black">₱1,100</span>
           </div>
         </div>
@@ -1411,18 +1491,31 @@
         <div class="grid grid-cols-2 gap-3">
           <div>
             <label class="block font-bold text-slate-700 mb-1">Payment Method *</label>
-            <select id="payment-method-select" required class="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-800">
+            <select id="payment-method-select" onchange="onPaymentMethodChange(this.value)" required class="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-800">
               <option value="Cash" selected>Cash</option>
-              <option value="Credit/Debit Card">Credit/Debit Card</option>
+              <option value="Cashless Payment">Cashless Payment</option>
+              <option value="PayMaya">PayMaya</option>
               <option value="GCash">GCash E-Wallet</option>
+              <option value="MedicalEMS">MedicalEMS</option>
+              <option value="Credit Card">Credit Card</option>
               <option value="Bank Transfer">Bank Transfer</option>
-              <option value="Other">Other</option>
             </select>
           </div>
 
           <div>
-            <label class="block font-bold text-slate-700 mb-1">Reference / Slip Number</label>
+            <label id="payment-ref-label" class="block font-bold text-slate-700 mb-1">Reference / Slip Number</label>
             <input type="text" id="payment-ref-no" placeholder="e.g. CSH-9912 or POS-8812" class="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-800">
+          </div>
+        </div>
+
+        <!-- Cashless / Card / Wallet Details Notice -->
+        <div id="payment-cashless-details" class="p-2.5 bg-emerald-50 border border-emerald-100 rounded-xl flex items-center justify-between text-[11px] text-emerald-800">
+          <div class="flex items-center gap-1.5">
+            <i data-lucide="check-circle" class="w-3.5 h-3.5 text-emerald-600"></i>
+            <span>Status: <strong class="font-bold">Completed (Verified Transaction)</strong></span>
+          </div>
+          <div>
+            <span>Recorded By: <strong id="payment-recorded-by" class="font-bold">Collecting Cashier</strong></span>
           </div>
         </div>
 
@@ -1475,10 +1568,12 @@
           <label class="block font-bold text-slate-700 mb-1">Payment Method</label>
           <select id="edit-payment-method" class="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-800">
             <option value="Cash">Cash</option>
-            <option value="Credit/Debit Card">Credit/Debit Card</option>
+            <option value="Cashless Payment">Cashless Payment</option>
+            <option value="PayMaya">PayMaya</option>
             <option value="GCash">GCash E-Wallet</option>
+            <option value="MedicalEMS">MedicalEMS</option>
+            <option value="Credit Card">Credit Card</option>
             <option value="Bank Transfer">Bank Transfer</option>
-            <option value="Other">Other</option>
           </select>
         </div>
 
@@ -1518,6 +1613,10 @@
       <div class="flex items-center justify-between pb-4 border-b border-slate-100">
         <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Hospital Invoice Document</span>
         <div class="flex items-center gap-2">
+          <button onclick="openOfficialTMHISPrintInvoice()" class="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-blue-50 text-blue-700 hover:bg-blue-100 flex items-center gap-1.5 shadow-sm border border-blue-200">
+            <i data-lucide="external-link" class="w-4 h-4"></i>
+            <span>Official TMHIMS Printout</span>
+          </button>
           <button onclick="printCurrentInvoice()" class="btn-primary px-4 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm">
             <i data-lucide="printer" class="w-4 h-4"></i>
             <span>Print Invoice</span>
@@ -1634,6 +1733,10 @@
       <div class="flex items-center justify-between pb-4 border-b border-slate-100">
         <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Official Receipt Document</span>
         <div class="flex items-center gap-2">
+          <button onclick="openOfficialTMHISPrintReceipt()" class="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 flex items-center gap-1.5 shadow-sm border border-indigo-200">
+            <i data-lucide="external-link" class="w-4 h-4"></i>
+            <span>Official TMHIMS Printout</span>
+          </button>
           <button onclick="printCurrentReceipt()" class="btn-primary px-4 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm">
             <i data-lucide="printer" class="w-4 h-4"></i>
             <span>Print Official Receipt</span>

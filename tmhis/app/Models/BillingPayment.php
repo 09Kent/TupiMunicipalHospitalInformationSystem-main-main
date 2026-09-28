@@ -15,4 +15,15 @@ class BillingPayment extends Model
     public $timestamps = false;
 
     protected $guarded = [];
+
+    public function invoice()
+    {
+        return $this->belongsTo(BillingInvoice::class, 'InvoiceID', 'InvoiceID');
+    }
+
+    public function patient()
+    {
+        return $this->belongsTo(Patient::class, 'PatientID', 'PatientID');
+    }
 }
+

@@ -21,19 +21,31 @@
       </h1>
     </div>
 
-    <!-- Actions (Edit & Print) -->
-    <div class="flex items-center gap-2 shrink-0 no-print">
+    <!-- Actions (Edit, Universal Print & Doctor Assignment) -->
+    <div class="flex items-center gap-2 shrink-0 flex-wrap no-print">
       <a href="<?= base_url('views/patients/edit.php?id=' . $patient['PatientID']) ?>" 
-         class="px-4 py-2.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-2 shadow-2xs">
+         class="px-3.5 py-2.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-2xs">
         <i data-lucide="edit-3" class="w-4 h-4 text-amber-600"></i>
         <span>Edit Patient</span>
       </a>
 
-      <button type="button" onclick="window.print()" 
-              class="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-md shadow-blue-600/20 transition flex items-center gap-2">
-        <i data-lucide="printer" class="w-4 h-4"></i>
-        <span>Print Full Profile</span>
+      <button type="button" onclick="document.getElementById('doctorAssignModal').classList.remove('hidden')"
+              class="px-3.5 py-2.5 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-2xs">
+        <i data-lucide="user-check" class="w-4 h-4"></i>
+        <span>Assign Doctor</span>
       </button>
+
+      <a href="/print/patient/<?= $patient['PatientID'] ?>" target="_blank"
+         class="px-3.5 py-2.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-2xs" title="Official TMHIMS Electronic Health Record">
+        <i data-lucide="printer" class="w-4 h-4 text-blue-600"></i>
+        <span>Print Chart</span>
+      </a>
+
+      <a href="/print/registration/<?= $patient['PatientID'] ?>" target="_blank" 
+         class="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-md shadow-blue-600/20 transition flex items-center gap-1.5" title="Official Hospital Registration Intake Form">
+        <i data-lucide="file-text" class="w-4 h-4"></i>
+        <span>Print Reg. Form</span>
+      </a>
     </div>
   </div>
 
@@ -263,6 +275,110 @@
 
 </main>
 
+<!-- Modal: Assign Attending Doctor (Requirement 7) -->
+<div id="doctorAssignModal" class="fixed inset-0 z-50 hidden bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+  <div class="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl space-y-4 border border-slate-200">
+    <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+      <div>
+        <h3 class="text-base font-black text-slate-900 font-display">Assign Attending Physician</h3>
+        <p class="text-xs text-slate-400">Select physician and department for clinical consultation</p>
+      </div>
+      <button type="button" onclick="document.getElementById('doctorAssignModal').classList.add('hidden')" class="p-1.5 text-slate-400 hover:text-slate-600 rounded-xl">
+        <i data-lucide="x" class="w-5 h-5"></i>
+      </button>
+    </div>
+
+    <form onsubmit="submitDoctorAssignment(event)" class="space-y-4">
+      <input type="hidden" name="patient_id" value="<?= $patient['PatientID'] ?>" />
+
+      <div class="p-3 bg-blue-50/60 rounded-2xl border border-blue-100 text-xs">
+        <span class="text-slate-500">Patient:</span>
+        <strong class="text-slate-900 ml-1"><?= e($patient['FirstName'] . ' ' . $patient['LastName']) ?> (<?= e($patient['PatientCode']) ?>)</strong>
+      </div>
+
+      <div>
+        <label class="block text-xs font-bold text-slate-700 mb-1.5">Select Attending Doctor</label>
+        <select name="doctor_id" id="assign_doctor_select" required class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <option value="">-- Choose Physician --</option>
+          <?php 
+            $docs = \App\Models\Doctor::where('Status', 'Active')->orWhereNull('Status')->get();
+            foreach ($docs as $d):
+              // Compute workload
+              $workload = \Illuminate\Support\Facades\DB::table('appointments')
+                  ->where('DoctorID', $d->DoctorID)
+                  ->where('AppointmentDate', date('Y-m-d'))
+                  ->whereIn('Status', ['Scheduled', 'In Progress'])
+                  ->count();
+          ?>
+            <option value="<?= $d->DoctorID ?>">
+              Dr. <?= e($d->FirstName . ' ' . $d->LastName) ?> — <?= e($d->Specialty ?: 'General Medicine') ?> (<?= e($d->ClinicRoom ?: 'Clinic') ?>) [<?= $workload ?> active patients]
+            </option>
+          <?php endforeach; ?>
+        </select>
+      </div>
+
+      <div>
+        <label class="block text-xs font-bold text-slate-700 mb-1.5">Clinical Assignment Notes / Reason</label>
+        <textarea name="notes" rows="2" placeholder="e.g. Assigned for initial triage evaluation and primary consultation..." 
+                  class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+      </div>
+
+      <div class="flex items-center gap-2 pt-2">
+        <button type="button" onclick="document.getElementById('doctorAssignModal').classList.add('hidden')" class="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition">
+          Cancel
+        </button>
+        <button type="submit" id="assignDocSubmitBtn" class="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs shadow-md shadow-blue-600/20 transition flex items-center justify-center gap-1.5">
+          <i data-lucide="user-check" class="w-4 h-4"></i>
+          <span>Assign Doctor</span>
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+async function submitDoctorAssignment(e) {
+  e.preventDefault();
+  const form = e.target;
+  const btn = document.getElementById('assignDocSubmitBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="animate-spin">⏳</span> Assigning...';
+
+  const fd = new FormData(form);
+  try {
+    const res = await fetch('/api/assignments/doctor', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'X-CSRF-TOKEN': '<?= csrf_token() ?>'
+      },
+      body: JSON.stringify({
+        patient_id: fd.get('patient_id'),
+        doctor_id: fd.get('doctor_id'),
+        notes: fd.get('notes')
+      })
+    });
+    const data = await res.json();
+    if (data.success) {
+      alert(data.message || 'Doctor successfully assigned to patient.');
+      document.getElementById('doctorAssignModal').classList.add('hidden');
+      window.location.reload();
+    } else {
+      alert('Error: ' + (data.message || 'Unable to assign doctor.'));
+      btn.disabled = false;
+      btn.innerHTML = '<i data-lucide="user-check" class="w-4 h-4"></i><span>Assign Doctor</span>';
+      lucide.createIcons();
+    }
+  } catch (err) {
+    alert('Communication error with assignment service.');
+    btn.disabled = false;
+    btn.innerHTML = '<i data-lucide="user-check" class="w-4 h-4"></i><span>Assign Doctor</span>';
+    lucide.createIcons();
+  }
+}
+</script>
+
 <?php if (isset($_GET['print'])): ?>
   <script>
     window.addEventListener('DOMContentLoaded', () => {
@@ -271,3 +387,4 @@
   </script>
 <?php endif; ?>
 @endsection
+

@@ -76,7 +76,7 @@ $roles = [
     'director'    => '/director',
     'records'     => '/records',
     'registrator' => '/register',
-    'cardio'      => '/doctor',
+    'dr.chen'     => '/doctor',
     'nurse'       => '/nurse',
     'medtech'     => '/medtech',
     'pharmacist'  => '/pharmacy',
@@ -247,7 +247,7 @@ $createdRxId = null;
 $createdLabReqId = null;
 
 runStep("Doctor Portal Subpages (Clean & Legacy Redirects)", function () use ($kernel, $app, &$createdPatientId) {
-    $doctor = \App\Models\User::where('Username', 'cardio')->first();
+    $doctor = \App\Models\User::where('Username', 'dr.chen')->first();
     
     $pages = [
         '/doctor',
@@ -271,7 +271,7 @@ runStep("Doctor Portal Subpages (Clean & Legacy Redirects)", function () use ($k
 });
 
 runStep("Doctor Clinical Artifacts (Diagnosis, Rx, Lab, Note)", function () use ($kernel, $app, &$createdPatientId, &$createdRxId, &$createdLabReqId) {
-    $doctor = \App\Models\User::where('Username', 'cardio')->first();
+    $doctor = \App\Models\User::where('Username', 'dr.chen')->first();
     $docProfile = \App\Models\Doctor::where('UserID', $doctor->UserID)->first() ?? \App\Models\Doctor::find(11);
     $docId = $docProfile ? $docProfile->DoctorID : 11;
 

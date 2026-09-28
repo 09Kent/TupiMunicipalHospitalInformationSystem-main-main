@@ -12,7 +12,12 @@ use App\Http\Controllers\RecordsController;
 use App\Http\Controllers\MedTechController;
 use App\Http\Controllers\PharmacyController;
 use App\Http\Controllers\BillingController;
+use App\Http\Controllers\PrintController;
 use App\Http\Controllers\Api\RegisterApiController;
+use App\Http\Controllers\Api\SearchApiController;
+use App\Http\Controllers\Api\AssignmentApiController;
+use App\Http\Controllers\Api\MedicationAdministrationApiController;
+use App\Http\Controllers\Api\ReferralApiController;
 
 // Public Landing Page
 Route::get('/', [LandingController::class, 'index'])->name('landing');
@@ -229,6 +234,50 @@ $registerAdminApiRoutes('api', 'api.admin.');
 Route::match(['get', 'post'], '/api/registration/classify.php', [RegisterApiController::class, 'classify']);
 Route::match(['get', 'post'], '/api/registration/submit.php', [RegisterApiController::class, 'submitRegistration']);
 Route::match(['get', 'post'], '/api/vitals.php', [NurseController::class, 'createVital']);
+
+// =========================================================================
+// TMHIMS ENHANCED CORE MODULES (Search, Print, Assignments, Meds, Referrals)
+// =========================================================================
+
+// 1. Universal Search API (Patients, Doctors, Nurses)
+Route::prefix('api/search')->name('api.search.')->group(function () {
+    Route::get('/patients', [SearchApiController::class, 'searchPatients'])->name('patients');
+    Route::get('/doctors', [SearchApiController::class, 'searchDoctors'])->name('doctors');
+    Route::get('/nurses', [SearchApiController::class, 'searchNurses'])->name('nurses');
+});
+
+// 2. Universal Print Engine & Logs
+Route::get('/print/{type}/{id?}', [PrintController::class, 'show'])->name('print.show');
+Route::middleware(['auth'])->group(function () {
+    Route::get('/print-logs', [PrintController::class, 'logs'])->name('print.logs');
+    Route::get('/api/print/logs', [PrintController::class, 'logsApi'])->name('api.print.logs');
+});
+
+// 3. Doctor & Nurse Assignment Workflow
+Route::middleware(['auth'])->prefix('api/assignments')->name('api.assignments.')->group(function () {
+    Route::post('/doctor', [AssignmentApiController::class, 'assignDoctor'])->name('doctor');
+    Route::post('/nurse', [AssignmentApiController::class, 'assignNurse'])->name('nurse');
+    Route::get('/patient/{patientId}', [AssignmentApiController::class, 'getAssignments'])->name('patient');
+});
+
+// 4. Medication Administration (Nurse Care Workflow)
+Route::middleware(['auth'])->prefix('api/nurse/medications')->name('api.nurse.medications.')->group(function () {
+    Route::get('/schedule', [MedicationAdministrationApiController::class, 'getSchedule'])->name('schedule');
+    Route::post('/administer', [MedicationAdministrationApiController::class, 'administer'])->name('administer');
+    Route::post('/task-from-prescription', [MedicationAdministrationApiController::class, 'createTaskFromPrescription'])->name('task.prescription');
+});
+
+// 5. Internal & External Referrals Workflow
+Route::middleware(['auth'])->prefix('api/referrals')->name('api.referrals.')->group(function () {
+    Route::post('/create', [ReferralApiController::class, 'create'])->name('create');
+    Route::post('/{id}/tracking', [ReferralApiController::class, 'updateTracking'])->name('tracking');
+    Route::get('/patient/{patientId}', [ReferralApiController::class, 'listForPatient'])->name('patient');
+});
+
+// 6. Patient Longitudinal Timeline
+Route::middleware(['auth'])->get('/api/patients/{id}/timeline', function ($id) {
+    return response()->json(\App\Services\Clinical\PatientTimelineService::getTimeline($id));
+})->name('api.patients.timeline');
 
 // =========================================================================
 // Legacy View Path Compatibility Fallbacks (Ensures zero 404 on legacy URLs)

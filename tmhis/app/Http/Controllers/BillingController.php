@@ -67,8 +67,9 @@ class BillingController extends Controller
             $qualifications[] = $discountType;
         }
         $philhealth = (float)($request->input('philhealth_deduction') ?? $request->input('philhealth') ?? 0.0);
+        $otherDeductions = (float)($request->input('other_deductions') ?? $request->input('other_deduction') ?? 0.0);
 
-        $result = $this->billingManager->computeDiscounts($gross, $qualifications, $philhealth);
+        $result = $this->billingManager->computeDiscounts($gross, $qualifications, $philhealth, $otherDeductions);
 
         return response()->json([
             'success' => true,

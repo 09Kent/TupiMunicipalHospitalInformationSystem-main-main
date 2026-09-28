@@ -102,24 +102,29 @@ require_once __DIR__ . '/../includes/sidebar.php';
           <span>Start Consultation</span>
         </a>
         <a href="<?= doctor_url('views/prescriptions/index.php?patient_id=' . $patientId . '&new=1') ?>" 
-           class="px-3.5 py-2.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-bold rounded-xl text-xs shadow-xs transition flex items-center gap-1.5">
+           class="px-3 py-2.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-bold rounded-xl text-xs shadow-xs transition flex items-center gap-1.5">
           <i data-lucide="file-text" class="w-4 h-4 text-blue-600"></i>
           <span>Write Rx</span>
         </a>
         <a href="<?= doctor_url('views/laboratory/index.php?patient_id=' . $patientId . '&new=1') ?>" 
-           class="px-3.5 py-2.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-bold rounded-xl text-xs shadow-xs transition flex items-center gap-1.5">
+           class="px-3 py-2.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-bold rounded-xl text-xs shadow-xs transition flex items-center gap-1.5">
           <i data-lucide="flask-conical" class="w-4 h-4 text-indigo-600"></i>
           <span>Order Lab</span>
         </a>
         <a href="<?= doctor_url('views/referrals/index.php?patient_id=' . $patientId . '&new=1') ?>" 
-           class="px-3.5 py-2.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-bold rounded-xl text-xs shadow-xs transition flex items-center gap-1.5">
+           class="px-3 py-2.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-bold rounded-xl text-xs shadow-xs transition flex items-center gap-1.5">
           <i data-lucide="share-2" class="w-4 h-4 text-purple-600"></i>
           <span>Refer</span>
         </a>
-        <a href="<?= doctor_url('views/certificates/index.php?patient_id=' . $patientId . '&new=1') ?>" 
-           class="px-3.5 py-2.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-bold rounded-xl text-xs shadow-xs transition flex items-center gap-1.5">
-          <i data-lucide="award" class="w-4 h-4 text-emerald-600"></i>
-          <span>Cert</span>
+        <a href="/print/patient/<?= $patientId ?>" target="_blank"
+           class="px-3 py-2.5 bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-800 font-bold rounded-xl text-xs shadow-xs transition flex items-center gap-1.5" title="Print Comprehensive Medical Chart">
+          <i data-lucide="printer" class="w-4 h-4 text-slate-700"></i>
+          <span>Print Chart</span>
+        </a>
+        <a href="/print/consultation/<?= !empty($notes) ? $notes[0]['NoteID'] : $patientId ?>" target="_blank"
+           class="px-3 py-2.5 bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-800 font-bold rounded-xl text-xs shadow-xs transition flex items-center gap-1.5" title="Print Latest Consultation Note">
+          <i data-lucide="file-check" class="w-4 h-4 text-emerald-600"></i>
+          <span>Print Note</span>
         </a>
       </div>
     </div>

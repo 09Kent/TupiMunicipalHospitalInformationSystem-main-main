@@ -39,4 +39,10 @@ class User extends Authenticatable
         return $this->belongsToMany(Department::class, 'user_departments', 'UserID', 'DepartmentID')
             ->withPivot('IsPrimary');
     }
+
+    public function getFullNameAttribute()
+    {
+        $name = trim(($this->FirstName ?? '') . ' ' . ($this->LastName ?? ''));
+        return $name ?: ($this->Username ?? 'User #' . $this->UserID);
+    }
 }

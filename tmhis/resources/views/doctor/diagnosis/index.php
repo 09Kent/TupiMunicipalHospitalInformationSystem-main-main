@@ -66,6 +66,57 @@ $patient = ($patientId && $patientModel->hasDoctorAccess($doctorId, $patientId))
 $existingNotes = ($patientId && $patientModel->hasDoctorAccess($doctorId, $patientId)) ? $noteModel->findByPatient($patientId) : [];
 $existingDiagnoses = ($patientId && $patientModel->hasDoctorAccess($doctorId, $patientId)) ? $diagnosisModel->findByPatient($patientId) : [];
 $existingTreatmentPlans = ($patientId && $patientModel->hasDoctorAccess($doctorId, $patientId)) ? $treatmentModel->findByPatient($patientId) : [];
+$patientTimeline = ($patientId > 0) ? \App\Services\Clinical\PatientTimelineService::getTimeline($patientId) : [];
+$latestNoteId = !empty($existingNotes) ? (int)$existingNotes[0]['NoteID'] : 0;
+
+// Active Doctor & Nurse Assignment & Tasks
+$assignedDoctorName = ($patient['Appointment']['DoctorFirstName'] ?? '') ? ('Dr. ' . $patient['Appointment']['DoctorFirstName'] . ' ' . $patient['Appointment']['DoctorLastName']) : 'Dr. Juan Dela Cruz';
+$assignedNurseName = 'Nurse Maria Santos (General Care)';
+$currentTaskSummary = 'Inpatient Monitoring & Vitals';
+if ($patientId > 0) {
+    try {
+        $stmtNurse = Database::getConnection()->prepare("
+            SELECT na.*, u.full_name as NurseName 
+            FROM nurse_assignments na 
+            LEFT JOIN users u ON na.nurse_id = u.id 
+            WHERE na.patient_id = :pid AND na.status = 'Active' 
+            ORDER BY na.id DESC LIMIT 1
+        ");
+        $stmtNurse->execute([':pid' => $patientId]);
+        $activeNurseRow = $stmtNurse->fetch();
+        if ($activeNurseRow && !empty($activeNurseRow['NurseName'])) {
+            $assignedNurseName = 'Nurse ' . $activeNurseRow['NurseName'];
+            if (!empty($activeNurseRow['task_summary'])) {
+                $currentTaskSummary = $activeNurseRow['task_summary'];
+            }
+        }
+        
+        $stmtTask = Database::getConnection()->prepare("
+            SELECT * FROM nurse_tasks 
+            WHERE patient_id = :pid 
+            ORDER BY CASE WHEN status = 'Due' THEN 1 WHEN status = 'Scheduled' THEN 2 ELSE 3 END, id DESC 
+            LIMIT 1
+        ");
+        $stmtTask->execute([':pid' => $patientId]);
+        $taskRow = $stmtTask->fetch();
+        if ($taskRow) {
+            $currentTaskSummary = $taskRow['task_type'] . ': ' . ($taskRow['medication_name'] ?: $taskRow['description']);
+        }
+    } catch (\Throwable $e) {}
+}
+
+// Determine Clinical Stage
+$stages = [
+    ['key' => 'registered', 'label' => 'Registered', 'done' => true],
+    ['key' => 'verified', 'label' => 'Verified', 'done' => true],
+    ['key' => 'waiting', 'label' => 'Queue / Vitals', 'done' => true],
+    ['key' => 'assigned', 'label' => 'Assigned Doctor', 'done' => !empty($patient['Appointment']['DoctorID']) || $doctorId > 0],
+    ['key' => 'consultation', 'label' => 'Consultation', 'done' => !empty($existingNotes), 'active' => empty($existingDiagnoses)],
+    ['key' => 'diagnosis', 'label' => 'Diagnosis', 'done' => !empty($existingDiagnoses), 'active' => !empty($existingDiagnoses) && empty($existingTreatmentPlans)],
+    ['key' => 'treatment', 'label' => 'Treatment', 'done' => !empty($existingTreatmentPlans), 'active' => !empty($existingTreatmentPlans) && empty($patient['Prescriptions'])],
+    ['key' => 'prescription', 'label' => 'Prescription', 'done' => !empty($patient['Prescriptions']), 'active' => !empty($patient['Prescriptions']) && ($patient['Appointment']['Status'] ?? '') !== 'Completed'],
+    ['key' => 'completed', 'label' => 'Completed', 'done' => ($patient['Appointment']['Status'] ?? '') === 'Completed', 'active' => ($patient['Appointment']['Status'] ?? '') === 'Completed']
+];
 
 // Handle Form Submissions (Create Note, Diagnosis, Treatment Plan)
 $successMessage = '';
@@ -456,22 +507,34 @@ require_once __DIR__ . '/../includes/sidebar.php';
         </p>
       </div>
 
-      <!-- Quick Switch Patient -->
-      <div class="flex items-center gap-3">
-        <label class="text-xs font-bold text-slate-400 uppercase tracking-wider shrink-0">Active Patient:</label>
-        <select onchange="window.location.href='?patient_id=' + this.value;" 
-                class="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500">
-          <?php foreach ($patientList as $p): ?>
-            <option value="<?= $p['PatientID'] ?>" <?= $p['PatientID'] == $patientId ? 'selected' : '' ?>>
-              <?= e($p['FirstName'] . ' ' . $p['LastName']) ?> (<?= e($p['PatientCode']) ?>) — Q#<?= e($p['QueueNumber'] ?: '00') ?>
-            </option>
-          <?php endforeach; ?>
-        </select>
-        <?php if ($patient): ?>
-          <a href="<?= doctor_url('views/patients/view.php?id=' . $patientId) ?>" class="p-2 text-slate-400 hover:text-blue-600 bg-slate-50 hover:bg-blue-50 rounded-xl border border-slate-200 transition" title="Patient Chart">
-            <i data-lucide="external-link" class="w-4 h-4"></i>
-          </a>
-        <?php endif; ?>
+      <!-- Quick Switch & Search Patient -->
+      <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+        <div class="relative w-full sm:w-64">
+          <div class="relative">
+            <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
+            <input type="text" id="doctor-patient-search" placeholder="Search patient name, ID, student ID..." 
+                   autocomplete="off"
+                   class="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3 py-2 text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition" />
+          </div>
+          <div id="doctor-search-results" class="hidden absolute left-0 right-0 mt-1 bg-white border border-slate-200 rounded-2xl shadow-2xl z-50 max-h-72 overflow-y-auto divide-y divide-slate-100"></div>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <select onchange="if(this.value) window.location.href='?patient_id=' + this.value;" 
+                  class="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option value="">-- Assigned Queue (<?= count($patientList) ?>) --</option>
+            <?php foreach ($patientList as $p): ?>
+              <option value="<?= $p['PatientID'] ?>" <?= $p['PatientID'] == $patientId ? 'selected' : '' ?>>
+                <?= e($p['FirstName'] . ' ' . $p['LastName']) ?> (<?= e($p['PatientCode']) ?>)
+              </option>
+            <?php endforeach; ?>
+          </select>
+          <?php if ($patient): ?>
+            <a href="<?= doctor_url('views/patients/view.php?id=' . $patientId) ?>" class="p-2 text-slate-400 hover:text-blue-600 bg-slate-50 hover:bg-blue-50 rounded-xl border border-slate-200 transition shrink-0" title="Patient Full Chart">
+              <i data-lucide="external-link" class="w-4 h-4"></i>
+            </a>
+          <?php endif; ?>
+        </div>
       </div>
     </div>
 
@@ -503,8 +566,16 @@ require_once __DIR__ . '/../includes/sidebar.php';
           </div>
         </div>
 
-        <div class="flex items-center gap-3 shrink-0">
-          <form id="completeConsultationForm" method="POST" action="" onsubmit="return handleCompleteConsultationSubmit(this);">
+        <div class="flex items-center gap-2 flex-wrap shrink-0">
+          <a href="/print/consultation/<?= $latestNoteId ?: $patientId ?>" target="_blank" class="px-3.5 py-2.5 bg-white/10 hover:bg-white/20 text-white font-bold rounded-xl text-xs transition flex items-center gap-1.5 border border-white/20" title="Print SOAP Consultation Document">
+            <i data-lucide="printer" class="w-4 h-4"></i>
+            <span>Print Note</span>
+          </a>
+          <a href="/print/patient/<?= $patientId ?>" target="_blank" class="px-3.5 py-2.5 bg-white/10 hover:bg-white/20 text-white font-bold rounded-xl text-xs transition flex items-center gap-1.5 border border-white/20" title="Print Comprehensive Patient Record">
+            <i data-lucide="file-text" class="w-4 h-4"></i>
+            <span>Print Profile</span>
+          </a>
+          <form id="completeConsultationForm" method="POST" action="" onsubmit="return handleCompleteConsultationSubmit(this);" class="inline">
             <input type="hidden" name="csrf_token" value="<?= csrf_token() ?>" />
             <input type="hidden" name="action" value="complete_consultation" />
             <input type="hidden" name="subjective" value="" />
@@ -521,6 +592,80 @@ require_once __DIR__ . '/../includes/sidebar.php';
               <span>Complete Consultation</span>
             </button>
           </form>
+        </div>
+      </div>
+
+      <!-- Clinical Care Pathway Stage Tracker -->
+      <div class="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-card" data-aos="fade-up">
+        <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+          <span class="text-[11px] font-black uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+            <i data-lucide="git-commit" class="w-4 h-4 text-blue-600"></i>
+            Clinical Care Progression Pathway
+          </span>
+          <span class="text-xs font-bold px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100">
+            Current Stage: <?= empty($existingDiagnoses) ? 'In Consultation' : (!empty($existingTreatmentPlans) ? 'Treatment Regimen' : 'Differential Diagnosis') ?>
+          </span>
+        </div>
+        <div class="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-9 gap-2">
+          <?php foreach ($stages as $idx => $st): ?>
+            <div class="flex flex-col items-center text-center p-2 rounded-2xl transition <?= $st['done'] ? 'bg-emerald-50/80 border border-emerald-200 text-emerald-800' : (!empty($st['active']) ? 'bg-blue-50 border-2 border-blue-500 text-blue-900 shadow-sm' : 'bg-slate-50 border border-slate-200/60 text-slate-400') ?>">
+              <div class="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold mb-1 <?= $st['done'] ? 'bg-emerald-600 text-white' : (!empty($st['active']) ? 'bg-blue-600 text-white animate-pulse' : 'bg-slate-200 text-slate-500') ?>">
+                <?= $st['done'] ? '✓' : ($idx + 1) ?>
+              </div>
+              <span class="text-[10px] font-extrabold uppercase tracking-tight leading-tight"><?= e($st['label']) ?></span>
+            </div>
+          <?php endforeach; ?>
+        </div>
+      </div>
+
+      <!-- 5 Golden Questions Clinical Orientation Card -->
+      <div class="bg-gradient-to-br from-blue-950 via-slate-900 to-indigo-950 text-white rounded-3xl p-6 shadow-xl border border-blue-800/40" data-aos="fade-up">
+        <div class="flex items-center gap-2 mb-4 border-b border-white/10 pb-3">
+          <span class="p-1.5 rounded-lg bg-blue-500/20 text-blue-300">
+            <i data-lucide="compass" class="w-4 h-4"></i>
+          </span>
+          <h3 class="text-xs font-black uppercase tracking-wider text-blue-200 font-display">Immediate Clinical Orientation (5 Golden Questions)</h3>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 text-xs">
+          <!-- 1. WHO is the Patient? -->
+          <div class="p-3.5 rounded-2xl bg-white/5 border border-white/10 space-y-1">
+            <span class="text-[10px] font-black text-blue-300 uppercase tracking-wider block">1. WHO is Patient?</span>
+            <p class="font-extrabold text-sm text-white"><?= e($patient['FirstName'] . ' ' . $patient['LastName']) ?></p>
+            <p class="text-[11px] text-slate-300"><?= e($patient['PatientCode']) ?> • <?= e($patient['Age']) ?>y <?= e($patient['Gender']) ?></p>
+          </div>
+          <!-- 2. WHAT is Happening? -->
+          <div class="p-3.5 rounded-2xl bg-white/5 border border-white/10 space-y-1">
+            <span class="text-[10px] font-black text-amber-300 uppercase tracking-wider block">2. WHAT is Happening?</span>
+            <p class="font-bold text-white line-clamp-2"><?= e($patient['Complaint']['ComplaintDescription'] ?? 'Clinical Evaluation & Assessment') ?></p>
+          </div>
+          <!-- 3. WHO is Responsible? -->
+          <div class="p-3.5 rounded-2xl bg-white/5 border border-white/10 space-y-1">
+            <span class="text-[10px] font-black text-emerald-300 uppercase tracking-wider block">3. WHO is Responsible?</span>
+            <p class="font-bold text-white"><?= e($assignedDoctorName) ?></p>
+            <p class="text-[11px] text-emerald-300/90"><?= e($assignedNurseName) ?></p>
+          </div>
+          <!-- 4. CURRENT Status? -->
+          <div class="p-3.5 rounded-2xl bg-white/5 border border-white/10 space-y-1">
+            <span class="text-[10px] font-black text-cyan-300 uppercase tracking-wider block">4. CURRENT Status?</span>
+            <div class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-200 font-extrabold text-[11px] border border-cyan-400/30">
+              <span class="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping"></span>
+              <?= empty($existingDiagnoses) ? 'In Consultation' : 'Diagnosed • In Plan' ?>
+            </div>
+            <p class="text-[10px] text-slate-300 mt-1 truncate" title="<?= e($currentTaskSummary) ?>"><?= e($currentTaskSummary) ?></p>
+          </div>
+          <!-- 5. NEXT Action? -->
+          <div class="p-3.5 rounded-2xl bg-blue-600/30 border border-blue-400/40 space-y-1.5 flex flex-col justify-between">
+            <div>
+              <span class="text-[10px] font-black text-blue-200 uppercase tracking-wider block">5. NEXT Action?</span>
+              <p class="font-bold text-white text-[11px]">
+                <?= empty($existingNotes) ? 'Document SOAP Clinical Notes' : (empty($existingDiagnoses) ? 'Formulate Diagnostic Assessment' : 'Prescribe Regimen or Refer Patient') ?>
+              </p>
+            </div>
+            <a href="#soapNoteSection" class="px-2.5 py-1 bg-blue-500 hover:bg-blue-400 text-white font-extrabold text-[10px] rounded-lg text-center transition flex items-center justify-center gap-1">
+              <span>Proceed to Action</span>
+              <i data-lucide="arrow-right" class="w-3 h-3"></i>
+            </a>
+          </div>
         </div>
       </div>
 
@@ -589,6 +734,34 @@ require_once __DIR__ . '/../includes/sidebar.php';
                 <?php endforeach; ?>
               <?php endif; ?>
             </div>
+          <!-- Patient Longitudinal Care Timeline Card -->
+          <div class="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-card space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 class="text-xs font-extrabold uppercase tracking-wider text-slate-900 flex items-center gap-2">
+                <i data-lucide="clock" class="w-4 h-4 text-indigo-600"></i>
+                <span>Patient Care Timeline</span>
+              </h3>
+              <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600"><?= count($patientTimeline) ?> Events</span>
+            </div>
+            <div class="relative pl-5 space-y-4 before:absolute before:left-2 before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-100">
+              <?php if (empty($patientTimeline)): ?>
+                <p class="text-xs text-slate-400 italic">No care milestones recorded yet.</p>
+              <?php else: ?>
+                <?php foreach (array_slice($patientTimeline, 0, 7) as $tl): ?>
+                  <div class="relative">
+                    <div class="absolute -left-5 top-1 w-2.5 h-2.5 rounded-full bg-blue-600 border-2 border-white ring-2 ring-blue-100"></div>
+                    <div>
+                      <div class="flex items-center justify-between">
+                        <span class="text-xs font-extrabold text-slate-800"><?= e($tl['title']) ?></span>
+                        <span class="text-[10px] font-mono text-slate-400"><?= date('H:i', strtotime($tl['timestamp'])) ?></span>
+                      </div>
+                      <p class="text-[11px] text-slate-500 mt-0.5"><?= e($tl['description']) ?></p>
+                      <span class="text-[9px] font-semibold text-slate-400"><?= e($tl['actor']) ?> • <?= date('M d, Y', strtotime($tl['timestamp'])) ?></span>
+                    </div>
+                  </div>
+                <?php endforeach; ?>
+              <?php endif; ?>
+            </div>
           </div>
 
         </div>
@@ -597,7 +770,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
         <div class="lg:col-span-8 space-y-6" data-aos="fade-left">
           
           <!-- SOAP Consultation Note Form -->
-          <div class="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-card space-y-5">
+          <div id="soapNoteSection" class="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-card space-y-5">
             <div class="flex items-center justify-between border-b border-slate-100 pb-3">
               <div>
                 <h3 class="text-sm font-extrabold text-slate-900 uppercase tracking-wide flex items-center gap-2 font-display">
@@ -851,6 +1024,62 @@ function handleCompleteConsultationSubmit(form) {
     }
     return true;
 }
+
+// Dynamic Search for Patients
+document.addEventListener('DOMContentLoaded', function() {
+    const docSearchInput = document.getElementById('doctor-patient-search');
+    const docResultsBox = document.getElementById('doctor-search-results');
+    let docSearchTimer = null;
+
+    if (docSearchInput && docResultsBox) {
+        docSearchInput.addEventListener('input', function() {
+            clearTimeout(docSearchTimer);
+            const q = this.value.trim();
+            if (q.length < 1) {
+                docResultsBox.classList.add('hidden');
+                docResultsBox.innerHTML = '';
+                return;
+            }
+            docSearchTimer = setTimeout(() => {
+                fetch('/api/search/patients?q=' + encodeURIComponent(q))
+                    .then(res => res.json())
+                    .then(data => {
+                        docResultsBox.innerHTML = '';
+                        if (!data || !data.data || data.data.length === 0) {
+                            docResultsBox.innerHTML = '<div class="p-3 text-xs text-slate-400 text-center font-medium">No patients found.</div>';
+                            docResultsBox.classList.remove('hidden');
+                            return;
+                        }
+                        data.data.forEach(p => {
+                            const item = document.createElement('div');
+                            item.className = 'p-3 hover:bg-blue-50 cursor-pointer transition flex items-center justify-between text-xs';
+                            item.innerHTML = `
+                                <div>
+                                    <p class="font-bold text-slate-900">${p.name}</p>
+                                    <p class="text-[10px] text-slate-500 font-mono">ID: ${p.code} ${p.student_id ? '• Student: ' + p.student_id : ''}</p>
+                                </div>
+                                <span class="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 font-semibold text-slate-600">${p.gender || ''}, ${p.age ? p.age + 'y' : ''}</span>
+                            `;
+                            item.addEventListener('click', () => {
+                                window.location.href = '?patient_id=' + p.id;
+                            });
+                            docResultsBox.appendChild(item);
+                        });
+                        docResultsBox.classList.remove('hidden');
+                    })
+                    .catch(() => {
+                        docResultsBox.classList.add('hidden');
+                    });
+            }, 250);
+        });
+
+        document.addEventListener('click', function(e) {
+            if (!docSearchInput.contains(e.target) && !docResultsBox.contains(e.target)) {
+                docResultsBox.classList.add('hidden');
+            }
+        });
+    }
+});
 </script>
 
 <?php require_once __DIR__ . '/../includes/footer.php'; ?>
