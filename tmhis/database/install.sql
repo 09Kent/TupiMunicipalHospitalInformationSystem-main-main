@@ -602,7 +602,7 @@ CREATE TABLE IF NOT EXISTS `referrals` (
   `ReferralCode` VARCHAR(50) NOT NULL UNIQUE,
   `PatientID` INT NOT NULL,
   `ReferringDoctorID` INT NOT NULL,
-  `TargetSpecialtyID` INT NOT NULL,
+  `TargetSpecialtyID` INT NULL,
   `TargetDoctorID` INT NULL,
   `Reason` TEXT NOT NULL,
   `ClinicalSummary` TEXT NULL,

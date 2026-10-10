@@ -60,44 +60,78 @@ class Referral
 
     public function updateStatus(int $referralId, string $status, ?string $responseNotes = null): bool
     {
-        $stmt = $this->db->prepare("
-            UPDATE referrals 
-            SET Status = :status, 
-                TrackingStatus = CASE 
-                    WHEN :status = 'Accepted' THEN 'Accepted'
-                    WHEN :status = 'Completed' THEN 'Transferred'
-                    WHEN :status = 'Rejected' THEN 'Rejected'
-                    ELSE TrackingStatus 
-                END,
-                ResponseNotes = COALESCE(:notes, ResponseNotes), 
-                UpdatedAt = NOW() 
-            WHERE ReferralID = :id
-        ");
-        return $stmt->execute([
-            ':status' => $status,
-            ':notes'  => $responseNotes,
-            ':id'     => $referralId
-        ]);
+        $newTracking = match ($status) {
+            'Accepted' => 'Accepted',
+            'Completed' => 'Transferred',
+            'Rejected' => 'Rejected',
+            default => null,
+        };
+
+        if ($newTracking !== null) {
+            $stmt = $this->db->prepare("
+                UPDATE referrals 
+                SET Status = :status, 
+                    TrackingStatus = :tracking,
+                    ResponseNotes = COALESCE(:notes, ResponseNotes), 
+                    UpdatedAt = NOW() 
+                WHERE ReferralID = :id
+            ");
+            return $stmt->execute([
+                ':status'   => $status,
+                ':tracking' => $newTracking,
+                ':notes'    => $responseNotes,
+                ':id'       => $referralId
+            ]);
+        } else {
+            $stmt = $this->db->prepare("
+                UPDATE referrals 
+                SET Status = :status, 
+                    ResponseNotes = COALESCE(:notes, ResponseNotes), 
+                    UpdatedAt = NOW() 
+                WHERE ReferralID = :id
+            ");
+            return $stmt->execute([
+                ':status' => $status,
+                ':notes'  => $responseNotes,
+                ':id'     => $referralId
+            ]);
+        }
     }
 
     public function updateTracking(int $referralId, string $trackingStatus): bool
     {
-        $stmt = $this->db->prepare("
-            UPDATE referrals 
-            SET TrackingStatus = :tracking,
-                Status = CASE
-                    WHEN :tracking IN ('Accepted', 'Received') THEN 'Accepted'
-                    WHEN :tracking = 'Transferred' THEN 'Completed'
-                    WHEN :tracking = 'Rejected' THEN 'Rejected'
-                    ELSE Status
-                END,
-                UpdatedAt = NOW()
-            WHERE ReferralID = :id
-        ");
-        return $stmt->execute([
-            ':tracking' => $trackingStatus,
-            ':id'       => $referralId
-        ]);
+        $newStatus = match ($trackingStatus) {
+            'Accepted', 'Received' => 'Accepted',
+            'Transferred' => 'Completed',
+            'Rejected' => 'Rejected',
+            default => null,
+        };
+
+        if ($newStatus !== null) {
+            $stmt = $this->db->prepare("
+                UPDATE referrals 
+                SET TrackingStatus = :tracking,
+                    Status = :status,
+                    UpdatedAt = NOW() 
+                WHERE ReferralID = :id
+            ");
+            return $stmt->execute([
+                ':tracking' => $trackingStatus,
+                ':status'   => $newStatus,
+                ':id'       => $referralId
+            ]);
+        } else {
+            $stmt = $this->db->prepare("
+                UPDATE referrals 
+                SET TrackingStatus = :tracking,
+                    UpdatedAt = NOW() 
+                WHERE ReferralID = :id
+            ");
+            return $stmt->execute([
+                ':tracking' => $trackingStatus,
+                ':id'       => $referralId
+            ]);
+        }
     }
 
     public function findById(int $referralId): ?array

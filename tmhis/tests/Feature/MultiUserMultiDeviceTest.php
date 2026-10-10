@@ -232,6 +232,7 @@ class MultiUserMultiDeviceTest extends TestCase
         $this->assertGreaterThan(0, $rxId);
 
         // 5. Pharmacy dispenses Prescription
+        DB::table('pharmacy_inventory')->where('GenericName', 'like', '%Amoxicillin%')->update(['CurrentStock' => 500, 'Status' => 'In Stock']);
         $pharmacyManager = new \PharmacyManager();
         $dispenseId = $pharmacyManager->dispense([
             'PrescriptionID'    => $rxId,
@@ -243,6 +244,9 @@ class MultiUserMultiDeviceTest extends TestCase
         $this->assertGreaterThan(0, $dispenseId);
 
         // Clean up test records
+        if (!empty($dispenseId)) {
+            DB::table('dispensing_records')->where('DispenseID', $dispenseId)->delete();
+        }
         DB::table('prescriptions')->where('PrescriptionID', $rxId)->delete();
         DB::table('laboratory_results')->where('ResultID', $resultId)->delete();
         DB::table('laboratory_requests')->where('RequestID', $requestId)->delete();

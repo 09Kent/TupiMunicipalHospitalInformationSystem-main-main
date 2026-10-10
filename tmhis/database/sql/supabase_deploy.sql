@@ -375,7 +375,7 @@ CREATE TABLE IF NOT EXISTS "referrals" (
     "ReferralCode" VARCHAR(50) NOT NULL,
     "PatientID" INTEGER NOT NULL,
     "ReferringDoctorID" INTEGER NOT NULL,
-    "TargetSpecialtyID" INTEGER NOT NULL,
+    "TargetSpecialtyID" INTEGER NULL,
     "TargetDoctorID" INTEGER NULL,
     "Reason" TEXT NOT NULL,
     "ClinicalSummary" TEXT NULL,
