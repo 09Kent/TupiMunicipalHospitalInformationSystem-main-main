@@ -248,6 +248,9 @@ class SearchApiController extends Controller
         $results = $query->limit($limit)->get();
 
         $formatted = $results->map(function ($d) {
+            $days = (int)($d->DefaultFollowUpDays ?: 14);
+            $targetDate = date('Y-m-d', strtotime("+{$days} days"));
+
             return [
                 'id'               => (int)$d->CatalogID,
                 'name'             => $d->DiseaseName,
@@ -258,6 +261,14 @@ class SearchApiController extends Controller
                 'description'      => $d->Description ?: '',
                 'default_severity' => $d->DefaultSeverity ?: 'Moderate',
                 'display_label'    => "{$d->DiseaseName} (ICD-10: {$d->ICD10Code})",
+                'treatment_plan'   => [
+                    'goal'               => $d->DefaultGoal ?: "Symptom stabilization, control of {$d->DiseaseName}, and clinical recovery.",
+                    'lifestyle'          => $d->DefaultLifestyle ?: "Adequate rest, balanced nutrition, stay hydrated, avoid smoking and alcohol.",
+                    'medication_plan'    => $d->DefaultMedication ?: "Prescribed pharmacological therapy and supportive clinical care as indicated.",
+                    'follow_up_schedule' => $d->DefaultFollowUp ?: "2 Weeks",
+                    'follow_up_days'     => $days,
+                    'follow_up_date'     => $targetDate,
+                ]
             ];
         });
 

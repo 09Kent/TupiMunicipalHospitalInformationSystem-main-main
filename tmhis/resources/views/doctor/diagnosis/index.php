@@ -738,17 +738,24 @@ require_once __DIR__ . '/../includes/sidebar.php';
                 <p class="text-xs text-slate-400 italic">No formal diagnoses recorded yet.</p>
               <?php else: ?>
                 <?php foreach ($existingDiagnoses as $diag): ?>
-                  <div class="p-3 bg-slate-50 rounded-2xl border border-slate-100 text-xs space-y-1">
+                  <div class="p-3 bg-slate-50 rounded-2xl border border-slate-100 text-xs space-y-2">
                     <div class="flex items-center justify-between">
                       <strong class="text-slate-900"><?= e($diag['DiagnosisName']) ?></strong>
                       <span class="px-2 py-0.5 text-[9px] font-bold rounded-full bg-blue-100 text-blue-800 font-mono"><?= e($diag['ICD10Code'] ?: 'ICD-10') ?></span>
                     </div>
-                    <div class="flex items-center gap-2 text-[10px] text-slate-400">
-                      <span>Type: <?= e($diag['Type']) ?></span>
-                      <span>•</span>
-                      <span>Severity: <?= e($diag['Severity']) ?></span>
-                      <span>•</span>
-                      <span><?= format_date($diag['DiagnosedDate']) ?></span>
+                    <div class="flex items-center justify-between flex-wrap gap-1">
+                      <div class="flex items-center gap-1.5 text-[10px] text-slate-400">
+                        <span><?= e($diag['Type']) ?></span>
+                        <span>•</span>
+                        <span><?= e($diag['Severity']) ?></span>
+                        <span>•</span>
+                        <span><?= format_date($diag['DiagnosedDate']) ?></span>
+                      </div>
+                      <button type="button" onclick="loadDiagnosisProtocol('<?= addslashes($diag['DiagnosisName']) ?>', '<?= addslashes($diag['ICD10Code'] ?? '') ?>')" 
+                              class="text-[10px] px-2 py-0.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold rounded-lg border border-emerald-200 transition flex items-center gap-1">
+                        <i data-lucide="zap" class="w-3 h-3 text-emerald-600"></i>
+                        <span>Generate Plan</span>
+                      </button>
                     </div>
                   </div>
                 <?php endforeach; ?>
@@ -1024,43 +1031,80 @@ require_once __DIR__ . '/../includes/sidebar.php';
 
             <!-- Card B: Add Treatment Plan Form -->
             <div id="treatmentPlanSection" class="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-card space-y-4 scroll-mt-24">
-              <h3 class="text-xs font-extrabold uppercase tracking-wider text-slate-900 flex items-center gap-2 border-b border-slate-100 pb-3 font-display">
-                <i data-lucide="calendar" class="w-4 h-4 text-emerald-600"></i>
-                <span>Add Treatment Plan</span>
-              </h3>
+              <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <h3 class="text-xs font-extrabold uppercase tracking-wider text-slate-900 flex items-center gap-2 font-display">
+                  <i data-lucide="calendar" class="w-4 h-4 text-emerald-600"></i>
+                  <span>Add Treatment Plan</span>
+                </h3>
+                <span class="text-[9px] text-emerald-600 font-bold flex items-center gap-1">
+                  <i data-lucide="sparkles" class="w-3 h-3"></i>
+                  <span>Auto-Protocol Synced</span>
+                </span>
+              </div>
+
+              <!-- Auto-Protocol Notification Banner -->
+              <div id="treatment-protocol-banner" class="hidden p-3 rounded-2xl bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 text-emerald-950 transition space-y-1.5 animate-in fade-in duration-200">
+                <div class="flex items-center justify-between flex-wrap gap-1.5">
+                  <div class="flex items-center gap-2 min-w-0">
+                    <span class="w-5 h-5 rounded-lg bg-emerald-600 text-white flex items-center justify-center text-[10px] font-bold shadow-xs shrink-0">⚡</span>
+                    <div class="min-w-0 truncate">
+                      <span class="text-[11px] font-black uppercase tracking-tight text-emerald-900 mr-1">Auto-Protocol:</span>
+                      <span id="treatment-protocol-title" class="text-xs font-extrabold text-emerald-700 truncate"></span>
+                    </div>
+                  </div>
+                  <div class="flex items-center gap-1 shrink-0">
+                    <button type="button" onclick="resetToAutoProtocol()" title="Reapply clinical guideline" class="text-[10px] px-2 py-0.5 rounded-lg bg-white border border-emerald-200 hover:bg-emerald-100 text-emerald-800 font-bold transition">Reapply</button>
+                    <button type="button" onclick="clearTreatmentPlanInputs()" title="Clear to write custom method" class="text-[10px] px-2 py-0.5 rounded-lg bg-white border border-slate-200 hover:bg-slate-100 text-slate-600 font-bold transition">Clear</button>
+                  </div>
+                </div>
+                <p class="text-[10px] text-emerald-700 font-medium">Pre-filled with clinical guidelines • You can freely adjust dosages, lifestyle goals, or change methods below.</p>
+              </div>
 
               <form method="POST" action="" class="space-y-3">
                 <input type="hidden" name="csrf_token" value="<?= csrf_token() ?>" />
                 <input type="hidden" name="action" value="save_treatment_plan" />
 
                 <div>
-                  <label class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">Treatment Goal</label>
-                  <input type="text" name="goal" required placeholder="e.g. Alleviate symptoms, stabilize resting BP..." 
-                         class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  <div class="flex items-center justify-between mb-1">
+                    <label class="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">Treatment Goal *</label>
+                    <span class="text-[9px] text-slate-400">Target outcome</span>
+                  </div>
+                  <input type="text" id="plan-goal-input" name="goal" required 
+                         placeholder="e.g. Alleviate symptoms, stabilize resting BP..." 
+                         class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white transition" />
                 </div>
 
                 <div>
-                  <label class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">Lifestyle & Diet Recommendations</label>
-                  <input type="text" name="lifestyle" placeholder="e.g. Low sodium diet, 30 min daily walking..." 
-                         class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800" />
+                  <div class="flex items-center justify-between mb-1">
+                    <label class="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">Lifestyle & Diet Recommendations</label>
+                    <span class="text-[9px] text-slate-400">Diet, activity & non-pharmacologic</span>
+                  </div>
+                  <input type="text" id="plan-lifestyle-input" name="lifestyle" 
+                         placeholder="e.g. Low sodium diet, 30 min daily walking..." 
+                         class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white transition" />
                 </div>
 
                 <div>
-                  <label class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">Medication Regimen Overview</label>
-                  <input type="text" name="medication_plan" placeholder="e.g. Daily oral antihypertensives with morning meals..." 
-                         class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800" />
+                  <div class="flex items-center justify-between mb-1">
+                    <label class="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">Medication Regimen Overview</label>
+                    <span class="text-[9px] text-slate-400">Prescribed drugs & administration</span>
+                  </div>
+                  <input type="text" id="plan-medication-input" name="medication_plan" 
+                         placeholder="e.g. Daily oral antihypertensives with morning meals..." 
+                         class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white transition" />
                 </div>
 
                 <div class="grid grid-cols-2 gap-2">
                   <div>
-                    <label class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">Follow-up Interval</label>
-                    <input type="text" name="follow_up_sched" placeholder="e.g. 2 Weeks" 
-                           class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800" />
+                    <label class="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">Follow-up Interval</label>
+                    <input type="text" id="plan-followup-sched-input" name="follow_up_sched" 
+                           placeholder="e.g. 2 Weeks" 
+                           class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white transition" />
                   </div>
                   <div>
-                    <label class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">Target Date</label>
-                    <input type="date" name="follow_up_date" value="<?= date('Y-m-d', strtotime('+14 days')) ?>" 
-                           class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800" />
+                    <label class="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">Target Date</label>
+                    <input type="date" id="plan-followup-date-input" name="follow_up_date" value="<?= date('Y-m-d', strtotime('+14 days')) ?>" 
+                           class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white transition" />
                   </div>
                 </div>
 
@@ -1117,6 +1161,217 @@ function appendSoapDiagnosis(text) {
 
 // Quick Select for Formal Diagnosis Form
 function selectQuickDiagnosis(name, icd, severity) {
+// Clinical Protocol Dictionary for Instant Client-Side Population
+const CLINICAL_PROTOCOLS = {
+    'J02.9': {
+        goal: 'Symptom resolution, eradicate pharyngeal pathogen, and prevent suppurative complications.',
+        lifestyle: 'Warm saline gargle 3-4x daily; Oral fluid intake >2.5L/day; Soft non-acidic diet; Rest.',
+        medication_plan: 'Paracetamol 500mg PO q6h PRN for throat pain/fever; Amoxicillin 500mg PO TID x 7 days (if bacterial); Throat lozenges.',
+        follow_up_schedule: '5-7 Days',
+        follow_up_days: 7
+    },
+    'J03.9': {
+        goal: 'Reduce tonsillar edema, eliminate exudate, and restore comfortable oral swallowing.',
+        lifestyle: 'Warm salt water gargles; Soft, cool foods; Avoid spicy and acidic foods; Adequate rest.',
+        medication_plan: 'Co-amoxiclav 625mg PO BID x 7 days OR Amoxicillin 500mg PO TID x 7 days; Paracetamol 500mg PO q6h PRN.',
+        follow_up_schedule: '5-7 Days',
+        follow_up_days: 7
+    },
+    'J00': {
+        goal: 'Relieve nasal congestion and rhinorrhea, prevent secondary sinus infection.',
+        lifestyle: 'Steam inhalation twice daily; Increase oral fluids; Vitamin C rich fruits; Proper rest.',
+        medication_plan: 'Paracetamol 500mg PO q6h PRN; Phenylephrine + Chlorphenamine PO TID; Normal saline nasal spray PRN.',
+        follow_up_schedule: '5-7 Days',
+        follow_up_days: 7
+    },
+    'J06.9': {
+        goal: 'Alleviate upper airway mucosal inflammation, clear congestion, and ensure swift clinical recovery.',
+        lifestyle: 'Adequate oral hydration (>2L/day); Rest; Avoid cold drinks and dusty environments.',
+        medication_plan: 'Paracetamol 500mg PO q6h PRN for fever/body aches; Cetirizine 10mg PO OD at bedtime; Saline nasal drops.',
+        follow_up_schedule: '5-7 Days',
+        follow_up_days: 7
+    },
+    'J20.9': {
+        goal: 'Reduce bronchial tree inflammation, facilitate sputum expectoration, and relieve paroxysmal cough.',
+        lifestyle: 'Adequate oral hydration to thin secretions; Humidified room air; Avoid tobacco smoke exposure.',
+        medication_plan: 'Ambroxol 30mg PO TID x 7 days; Salbutamol 2mg PO TID if bronchospasm present; Paracetamol 500mg PRN.',
+        follow_up_schedule: '1-2 Weeks',
+        follow_up_days: 10
+    },
+    'J18.9': {
+        goal: 'Eradicate pulmonary infection, clear alveolar consolidation, and maintain SpO2 > 95%.',
+        lifestyle: 'Chest physiotherapy / deep breathing exercises; High-calorie, high-protein diet; Bed rest.',
+        medication_plan: 'Amoxicillin-Clavulanic Acid 625mg PO TID x 7 days + Azithromycin 500mg PO OD x 3 days; Salbutamol nebulization PRN.',
+        follow_up_schedule: '3-5 Days',
+        follow_up_days: 5
+    },
+    'J45.9': {
+        goal: 'Reverse bronchospasm, prevent nocturnal wheezing, and maintain normal daily physical activity.',
+        lifestyle: 'Identify and eliminate environmental allergen triggers (dust, fur, smoke); Follow personal Asthma Action Plan.',
+        medication_plan: 'Salbutamol MDI 2 puffs q4-6h PRN wheezing; Budesonide/Formoterol maintenance inhaler 1 puff BID.',
+        follow_up_schedule: '1-2 Weeks',
+        follow_up_days: 14
+    },
+    'A90': {
+        goal: 'Maintain normovolemic fluid status, monitor hematocrit/platelet progression, and prevent complications.',
+        lifestyle: 'Strict oral fluid replacement with ORS, fruit juice, coconut water; Mosquito netting; Absolute bed rest.',
+        medication_plan: 'Paracetamol 500mg PO q6h PRN (Strictly AVOID NSAIDs/Aspirin/Mefenamic); Oral Rehydration Salts (ORS) ad libitum.',
+        follow_up_schedule: 'Daily CBC & Platelet Audit',
+        follow_up_days: 1
+    },
+    'A91': {
+        goal: 'Immediate hospital stabilization, monitor plasma leakage, and maintain stable pulse pressure.',
+        lifestyle: 'Inpatient observation; Strict fluid balance input/output recording; Bed rest.',
+        medication_plan: 'Intravenous fluid therapy (Plain LRS / D5LRS); Paracetamol IV/PO PRN; Daily serial CBC/platelet monitoring.',
+        follow_up_schedule: 'Daily Inpatient Rounds',
+        follow_up_days: 1
+    },
+    'A09': {
+        goal: 'Restore intestinal electrolyte balance, halt dehydration, and normalize stool consistency.',
+        lifestyle: 'BRAT diet (Banana, Rice, Applesauce, Toast); Avoid fatty, dairy, and caffeine products; Frequent sips of ORS.',
+        medication_plan: 'Oral Rehydration Salts (ORS) 1 sachet per 1L boiled water; Zinc Sulfate 20mg PO OD x 14 days; Paracetamol 500mg PRN.',
+        follow_up_schedule: '3-5 Days',
+        follow_up_days: 3
+    },
+    'A09.0': {
+        goal: 'Manage mild fluid loss, control nausea, and maintain adequate oral hydration.',
+        lifestyle: 'Oral fluid intake with ORS after every loose bowel movement; Normal bland feeding.',
+        medication_plan: 'Oral Rehydration Salts (ORS); Zinc Sulfate 20mg OD x 14 days; Probiotics 1 cap PO BID.',
+        follow_up_schedule: '3 Days',
+        follow_up_days: 3
+    },
+    'I10': {
+        goal: 'Achieve target blood pressure < 130/80 mmHg and reduce long-term cardiovascular risk.',
+        lifestyle: 'DASH diet: restrict sodium < 2g/day; 30 minutes daily aerobic physical activity; Weight control; Avoid smoking.',
+        medication_plan: 'Amlodipine 5mg PO OD morning OR Losartan 50mg PO OD morning; Record daily morning blood pressure log.',
+        follow_up_schedule: '2-4 Weeks',
+        follow_up_days: 14
+    },
+    'E11.9': {
+        goal: 'Maintain glycemic control: Fasting Blood Sugar 80-130 mg/dL and HbA1c < 7.0%.',
+        lifestyle: 'Low glycemic index meals; Restrict refined sugars; 150 min/week structured physical exercise; Daily foot inspection.',
+        medication_plan: 'Metformin 500mg PO BID with meals; Monitor self-monitoring blood glucose (SMBG) log twice weekly.',
+        follow_up_schedule: '1 Month',
+        follow_up_days: 30
+    },
+    'K29.7': {
+        goal: 'Suppress gastric acid secretion, heal eroded mucosal lining, and relieve epigastric discomfort.',
+        lifestyle: 'Avoid skipping meals; Small, frequent meals; Avoid spicy, acidic, oily foods, alcohol, and caffeine.',
+        medication_plan: 'Omeprazole 20-40mg PO OD 30 minutes before breakfast x 14 days; Antacid suspension 10ml PO PRN after meals.',
+        follow_up_schedule: '2 Weeks',
+        follow_up_days: 14
+    },
+    'K21.9': {
+        goal: 'Eliminate acid regurgitation and substernal pyrosis, prevent esophageal mucosal erosion.',
+        lifestyle: 'Do not lie down within 3 hours after meals; Elevate head of bed 15cm; Avoid tight clothing; Weight reduction.',
+        medication_plan: 'Esomeprazole 40mg PO OD 30 mins before breakfast x 14-28 days; Aluminum/Magnesium Antacid 10ml PRN.',
+        follow_up_schedule: '2-4 Weeks',
+        follow_up_days: 21
+    },
+    'N39.0': {
+        goal: 'Eradicate urinary bacterial proliferation, relieve dysuria and frequency, normalize urinalysis.',
+        lifestyle: 'Increase oral fluid intake > 3 liters/day; Do not delay urination; Good perineal hygiene; Urinate after intercourse.',
+        medication_plan: 'Ciprofloxacin 500mg PO BID x 7 days OR Co-amoxiclav 625mg PO BID x 7 days; Phenazopyridine 100mg TID x 2 days PRN.',
+        follow_up_schedule: '1 Week',
+        follow_up_days: 7
+    },
+    'G44.2': {
+        goal: 'Relieve pericranial myofascial tension and eliminate band-like headache pressure.',
+        lifestyle: 'Stress management; Ergonomic desk posture; Regular sleep schedule 7-8 hours; Neck/shoulder stretching.',
+        medication_plan: 'Paracetamol 500mg + Ibuprofen 200mg PO with meals PRN; Eperisone 50mg PO TID if neck spasm present.',
+        follow_up_schedule: '2 Weeks',
+        follow_up_days: 14
+    },
+    'M54.5': {
+        goal: 'Relieve lumbar muscle spasm, reduce lower back pain score, and restore spinal mobility.',
+        lifestyle: 'Apply warm compress to lumbar area 20 min TID; Avoid heavy lifting; Sleep on firm mattress with pillow under knees.',
+        medication_plan: 'Mefenamic Acid 500mg PO TID with meals x 5 days; Eperisone 50mg PO TID x 5 days; Topical Diclofenac gel BID.',
+        follow_up_schedule: '1-2 Weeks',
+        follow_up_days: 10
+    },
+    'Z20.3': {
+        goal: 'Prevent rabies virus invasion following animal exposure and prevent secondary bacterial wound infection.',
+        lifestyle: 'Wound cleaning with soap and running water for 15 minutes; Observe biting animal for 14 days if domestic.',
+        medication_plan: 'Anti-Rabies Vaccine (PCECV) on Day 0, 3, 7, 28; Tetanus Toxoid 0.5ml IM; Co-amoxiclav 625mg PO BID x 5 days.',
+        follow_up_schedule: 'Day 3 Rabies Dose',
+        follow_up_days: 3
+    }
+};
+
+let currentActiveProtocol = null;
+
+// Apply treatment plan protocol to the form inputs
+function applyDiagnosisTreatmentPlan(proto, diagName, icdCode) {
+    if (!proto) return;
+    currentActiveProtocol = { ...proto, diseaseName: diagName, icdCode: icdCode };
+
+    const goalInput = document.getElementById('plan-goal-input');
+    const lifestyleInput = document.getElementById('plan-lifestyle-input');
+    const medInput = document.getElementById('plan-medication-input');
+    const schedInput = document.getElementById('plan-followup-sched-input');
+    const dateInput = document.getElementById('plan-followup-date-input');
+    const banner = document.getElementById('treatment-protocol-banner');
+    const bannerTitle = document.getElementById('treatment-protocol-title');
+
+    if (goalInput && proto.goal) goalInput.value = proto.goal;
+    if (lifestyleInput && proto.lifestyle) lifestyleInput.value = proto.lifestyle;
+    if (medInput && (proto.medication_plan || proto.meds)) medInput.value = proto.medication_plan || proto.meds;
+    if (schedInput && (proto.follow_up_schedule || proto.follow_up)) schedInput.value = proto.follow_up_schedule || proto.follow_up;
+    
+    if (dateInput) {
+        if (proto.follow_up_date) {
+            dateInput.value = proto.follow_up_date;
+        } else {
+            const days = proto.follow_up_days || proto.days || 14;
+            const d = new Date();
+            d.setDate(d.getDate() + days);
+            dateInput.value = d.toISOString().split('T')[0];
+        }
+    }
+
+    if (banner && bannerTitle) {
+        bannerTitle.textContent = `${diagName} [${icdCode}]`;
+        banner.classList.remove('hidden');
+    }
+    if (window.lucide) lucide.createIcons();
+}
+
+function resetToAutoProtocol() {
+    if (currentActiveProtocol) {
+        applyDiagnosisTreatmentPlan(currentActiveProtocol, currentActiveProtocol.diseaseName, currentActiveProtocol.icdCode);
+    }
+}
+
+function clearTreatmentPlanInputs() {
+    const goalInput = document.getElementById('plan-goal-input');
+    const lifestyleInput = document.getElementById('plan-lifestyle-input');
+    const medInput = document.getElementById('plan-medication-input');
+    const schedInput = document.getElementById('plan-followup-sched-input');
+    const banner = document.getElementById('treatment-protocol-banner');
+
+    if (goalInput) goalInput.value = '';
+    if (lifestyleInput) lifestyleInput.value = '';
+    if (medInput) medInput.value = '';
+    if (schedInput) schedInput.value = '';
+    if (banner) banner.classList.add('hidden');
+    if (goalInput) goalInput.focus();
+}
+
+function loadDiagnosisProtocol(name, icd) {
+    const proto = CLINICAL_PROTOCOLS[icd] || {
+        goal: `Symptom stabilization, control of ${name}, and clinical recovery.`,
+        lifestyle: 'Adequate rest, balanced nutrition, stay hydrated, avoid smoking and alcohol.',
+        medication_plan: 'Prescribed pharmacological therapy and supportive clinical care as indicated.',
+        follow_up_schedule: '2 Weeks',
+        follow_up_days: 14
+    };
+    applyDiagnosisTreatmentPlan(proto, name, icd);
+    const planSec = document.getElementById('treatmentPlanSection');
+    if (planSec) planSec.scrollIntoView({ behavior: 'smooth' });
+}
+
+// Quick Select for Formal Diagnosis Form
+function selectQuickDiagnosis(name, icd, severity) {
     const nameInput = document.getElementById('diagnosis-name-input');
     const icdInput = document.getElementById('diagnosis-icd-input');
     const sevSelect = document.getElementById('diagnosis-severity-select');
@@ -1132,6 +1387,17 @@ function selectQuickDiagnosis(name, icd, severity) {
         badge.classList.remove('hidden');
     }
     if (resultsBox) resultsBox.classList.add('hidden');
+
+    // Auto-populate related treatment plan
+    const proto = CLINICAL_PROTOCOLS[icd] || {
+        goal: `Symptom stabilization, control of ${name}, and clinical recovery.`,
+        lifestyle: 'Adequate rest, balanced nutrition, stay hydrated, avoid smoking and alcohol.',
+        medication_plan: 'Prescribed pharmacological therapy and supportive clinical care as indicated.',
+        follow_up_schedule: '2 Weeks',
+        follow_up_days: 14
+    };
+    applyDiagnosisTreatmentPlan(proto, name, icd);
+
     if (window.lucide) lucide.createIcons();
 }
 
@@ -1260,6 +1526,17 @@ document.addEventListener('DOMContentLoaded', function() {
                     diagBadge.classList.remove('hidden');
                 }
                 diagResultsBox.classList.add('hidden');
+
+                // Auto-populate related treatment plan
+                const proto = item.treatment_plan || CLINICAL_PROTOCOLS[item.icd_code] || {
+                    goal: `Symptom stabilization, control of ${item.name}, and clinical recovery.`,
+                    lifestyle: 'Adequate rest, balanced nutrition, stay hydrated, avoid smoking and alcohol.',
+                    medication_plan: 'Prescribed pharmacological therapy and supportive clinical care as indicated.',
+                    follow_up_schedule: '2 Weeks',
+                    follow_up_days: 14
+                };
+                applyDiagnosisTreatmentPlan(proto, item.name, item.icd_code);
+
                 if (window.lucide) lucide.createIcons();
             });
 
@@ -1316,6 +1593,11 @@ document.addEventListener('DOMContentLoaded', function() {
     if (icdInput) {
         icdInput.addEventListener('input', function() {
             searchDiseases(this.value);
+            const val = this.value.trim().toUpperCase();
+            if (CLINICAL_PROTOCOLS[val]) {
+                const name = diagInput ? diagInput.value : val;
+                applyDiagnosisTreatmentPlan(CLINICAL_PROTOCOLS[val], name, val);
+            }
         });
     }
 
