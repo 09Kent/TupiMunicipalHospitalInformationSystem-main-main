@@ -32,12 +32,10 @@ Route::post('/logout', [LoginController::class, 'logout'])->name('logout.post');
 // ROLE 4: REGISTRATION & APPOINTMENTS (Public Intake & Staff Management)
 // =========================================================================
 Route::prefix('register')->name('register.')->group(function () {
-    // Patient Intake & Appointment Booking (Open to Public and all Hospital Staff)
-    Route::get('/intake', [RegisterController::class, 'registration'])->name('registration.index');
-    Route::get('/registration', [RegisterController::class, 'registration'])->name('registration.alt');
-
-    // Clinical Appointments Schedule (Accessible to all authenticated hospital staff)
+    // Clinical Intake & Scheduling (Accessible to authenticated hospital staff)
     Route::middleware(['auth'])->group(function () {
+        Route::get('/intake', [RegisterController::class, 'registration'])->name('registration.index');
+        Route::get('/registration', [RegisterController::class, 'registration'])->name('registration.alt');
         Route::get('/appointments', [RegisterController::class, 'appointments'])->name('appointments.index');
         Route::match(['get', 'post'], '/appointments/{id}/reschedule', [RegisterController::class, 'rescheduleAppointment'])->name('appointments.reschedule');
         Route::match(['get', 'post'], '/appointments/{id}/cancel', [RegisterController::class, 'cancelAppointment'])->name('appointments.cancel');
@@ -68,9 +66,13 @@ Route::prefix('api/register')->name('api.register.')->group(function () {
     Route::post('/submit', [RegisterApiController::class, 'submitRegistration'])->name('submit');
     Route::get('/symptoms', [RegisterApiController::class, 'getSymptoms'])->name('symptoms');
     Route::get('/doctors', [RegisterApiController::class, 'getDoctors'])->name('doctors');
-    Route::get('/patients', [RegisterApiController::class, 'getPatients'])->name('patients');
-    Route::get('/queue', [RegisterApiController::class, 'getQueue'])->name('queue');
-    Route::post('/queue/call', [RegisterApiController::class, 'callQueueNext'])->name('queue.call');
+
+    // Sensitive Patient Data & Queue Control Protected by Auth
+    Route::middleware(['auth'])->group(function () {
+        Route::get('/patients', [RegisterApiController::class, 'getPatients'])->name('patients');
+        Route::get('/queue', [RegisterApiController::class, 'getQueue'])->name('queue');
+        Route::post('/queue/call', [RegisterApiController::class, 'callQueueNext'])->name('queue.call');
+    });
 });
 
 // Fallback aliases for serverless environments (handling stripped /api prefixes)
@@ -170,6 +172,9 @@ Route::middleware(['auth', 'role:Pharmacist,Pharmacy,Admin'])->prefix('pharmacy/
     Route::post('/catalog/add', [PharmacyController::class, 'addCatalog'])->name('catalog.add');
     Route::post('/catalog/update', [PharmacyController::class, 'updateCatalog'])->name('catalog.update');
     Route::post('/catalog/toggle', [PharmacyController::class, 'toggleCatalogStatus'])->name('catalog.toggle');
+    Route::post('/dispense', [PharmacyController::class, 'dispense'])->name('dispense');
+    Route::post('/stock-in', [PharmacyController::class, 'stockIn'])->name('stock-in');
+    Route::post('/dispose', [PharmacyController::class, 'dispose'])->name('dispose');
 });
 
 // Billing API Routes

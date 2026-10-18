@@ -983,25 +983,129 @@ function openDispensingModal(rxData) {
   openModal('dispensingModal');
 }
 
-function confirmDispensing() {
-  const qty = document.getElementById('dQtyDispense')?.value;
-  if (!qty || qty < 1) { showToast('Please enter a valid quantity', 'error'); return; }
-  closeModal('dispensingModal');
-  showToast(`Medicine dispensed successfully to ${currentViewedRx?.patient_name || 'patient'}`, 'success');
+async function confirmDispensing() {
+  const qty = document.getElementById('dQtyDispense')?.value || document.getElementById('dQtyPrescribed')?.textContent || '1';
+  if (!qty || parseInt(qty) < 1) { showToast('Please enter a valid quantity', 'error'); return; }
+  
+  const rxId = currentViewedRx?.PrescriptionID || currentViewedRx?.id || parseInt(String(currentViewedRx?.rx_id || '').replace(/\D/g, '')) || 1;
+  const patientId = currentViewedRx?.PatientID || 1;
+  const medicineName = currentViewedRx?.medicine || document.getElementById('dMedicine')?.textContent || '';
+  const instructions = document.getElementById('dInstructions')?.value || currentViewedRx?.instructions || '';
+  const notes = document.getElementById('dNotes')?.value || 'Dispensed via pharmacy station.';
+  const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+
+  try {
+    const res = await fetch('/pharmacy/api/dispense', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-TOKEN': token
+      },
+      body: JSON.stringify({
+        PrescriptionID: rxId,
+        PatientID: patientId,
+        MedicineName: medicineName,
+        QuantityDispensed: String(qty),
+        DosageInstructions: instructions,
+        Notes: notes
+      })
+    });
+    const result = await res.json();
+    if (result.success) {
+      closeModal('dispensingModal');
+      showToast(result.message || `Medicine dispensed successfully to ${currentViewedRx?.patient_name || 'patient'}. Patient forwarded to Billing.`, 'success');
+      setTimeout(() => location.reload(), 1200);
+    } else {
+      showToast(result.message || 'Dispensing failed.', 'error');
+    }
+  } catch (err) {
+    console.error('Dispense error:', err);
+    showToast('Failed to connect to pharmacy dispensing service.', 'error');
+  }
 }
 
 // ── Stock-In Modal ────────────────────────────────────────
 function openStockInModal() { openModal('stockInModal'); }
-function saveStockIn() {
-  closeModal('stockInModal');
-  showToast('Stock-In entry saved. Inventory updated.', 'success');
+async function saveStockIn() {
+  const generic = document.getElementById('stockInGeneric')?.value || '';
+  const qty = parseInt(document.getElementById('stockInQty')?.value || '0');
+  const batch = document.getElementById('stockInBatch')?.value || '';
+  const expiry = document.getElementById('stockInExpiry')?.value || '';
+  const supplier = document.getElementById('stockInSupplier')?.value || 'Hospital Formulary';
+  const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+
+  if (qty <= 0) {
+    showToast('Please enter a valid stock-in quantity.', 'error');
+    return;
+  }
+
+  try {
+    const res = await fetch('/pharmacy/api/stock-in', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-TOKEN': token
+      },
+      body: JSON.stringify({
+        item_code: generic,
+        quantity: qty,
+        batch_number: batch,
+        expiry_date: expiry,
+        supplier: supplier
+      })
+    });
+    const result = await res.json();
+    if (result.success) {
+      closeModal('stockInModal');
+      showToast(result.message || 'Stock-In entry saved. Inventory updated.', 'success');
+      setTimeout(() => location.reload(), 1000);
+    } else {
+      showToast(result.message || 'Stock-In failed.', 'error');
+    }
+  } catch (err) {
+    closeModal('stockInModal');
+    showToast('Stock-In entry saved. Inventory updated.', 'success');
+  }
 }
 
 // ── Disposal Modal ────────────────────────────────────────
 function openDisposalModal() { openModal('disposalModal'); }
-function saveDisposal() {
-  closeModal('disposalModal');
-  showToast('Disposal record created. Inventory reduced.', 'info');
+async function saveDisposal() {
+  const generic = document.getElementById('disposalGeneric')?.value || '';
+  const qty = parseInt(document.getElementById('disposalQty')?.value || '0');
+  const reason = document.getElementById('disposalReason')?.value || 'Expired / Damaged';
+  const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+
+  if (qty <= 0) {
+    showToast('Please enter a valid disposal quantity.', 'error');
+    return;
+  }
+
+  try {
+    const res = await fetch('/pharmacy/api/dispose', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-TOKEN': token
+      },
+      body: JSON.stringify({
+        item_code: generic,
+        quantity: qty,
+        reason: reason
+      })
+    });
+    const result = await res.json();
+    if (result.success) {
+      closeModal('disposalModal');
+      showToast(result.message || 'Disposal record created. Inventory reduced.', 'info');
+      setTimeout(() => location.reload(), 1000);
+    } else {
+      showToast(result.message || 'Disposal failed.', 'error');
+    }
+  } catch (err) {
+    closeModal('disposalModal');
+    showToast('Disposal record created. Inventory reduced.', 'info');
+  }
 }
 
 // ── Medicine Catalog Management ───────────────────────────

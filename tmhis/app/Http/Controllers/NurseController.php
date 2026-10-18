@@ -113,56 +113,136 @@ class NurseController extends Controller
             ], 422);
         }
 
-        $bp = $request->input('BloodPressure') ?? $request->input('bp') ?? '120/80';
+        $bp = trim((string)($request->input('BloodPressure') ?? $request->input('bp') ?? '120/80'));
         $hr = (int)($request->input('HeartRate') ?? $request->input('hr') ?? 75);
         $rr = (int)($request->input('RespiratoryRate') ?? $request->input('rr') ?? 18);
         $temp = (float)($request->input('Temperature') ?? $request->input('temp') ?? 36.5);
         $spo2 = (int)($request->input('OxygenSaturation') ?? $request->input('spo2') ?? 98);
         $pain = (int)($request->input('PainScale') ?? $request->input('pain') ?? 0);
-        $weight = $request->input('WeightKg') ?? $request->input('weight') ?? 65.0;
-        $height = $request->input('HeightCm') ?? $request->input('height') ?? 165.0;
+        $weight = (float)($request->input('WeightKg') ?? $request->input('weight') ?? 65.0);
+        $height = (float)($request->input('HeightCm') ?? $request->input('height') ?? 165.0);
         $notes = $request->input('ClinicalNotes') ?? $request->input('notes') ?? 'Routine vital signs taken.';
+
+        // 1. Calculate BMI: weight (kg) / [height (m)]^2
+        $bmi = null;
+        if ($weight > 0 && $height > 0) {
+            $heightM = $height / 100.0;
+            $bmi = round($weight / ($heightM * $heightM), 2);
+        }
+
+        // 2. Calculate Mean Arterial Pressure (MAP): DBP + 1/3(SBP - DBP) = (SBP + 2*DBP)/3
+        $map = null;
+        if (preg_match('/(\d+)\s*\/\s*(\d+)/', $bp, $bpMatches)) {
+            $sbp = (int)$bpMatches[1];
+            $dbp = (int)$bpMatches[2];
+            if ($sbp > 0 && $dbp > 0) {
+                $map = round(($sbp + (2 * $dbp)) / 3.0, 2);
+            }
+        }
+
+        // 3. Clinical threshold flagging
+        $alerts = [];
+        if ($temp >= 38.0) $alerts[] = 'Pyrexia (Fever >= 38.0°C)';
+        elseif ($temp < 35.5) $alerts[] = 'Hypothermia (< 35.5°C)';
+
+        if ($hr > 100) $alerts[] = 'Tachycardia (> 100 bpm)';
+        elseif ($hr < 60) $alerts[] = 'Bradycardia (< 60 bpm)';
+
+        if ($rr > 20) $alerts[] = 'Tachypnea (> 20 cpm)';
+        elseif ($rr < 12) $alerts[] = 'Bradypnea (< 12 cpm)';
+
+        if ($spo2 < 95) $alerts[] = 'Hypoxemia Alert (< 95% SpO2)';
+
+        if (!empty($bpMatches)) {
+            if ($sbp >= 140 || $dbp >= 90) $alerts[] = 'Hypertensive Range (>= 140/90 mmHg)';
+            elseif ($sbp < 90 || $dbp < 60) $alerts[] = 'Hypotensive Range (< 90/60 mmHg)';
+        }
 
         $user = auth()->user();
         $nurseName = ($user && !empty($user->FullName)) ? $user->FullName : 'Nurse on Duty';
 
         $vital = \App\Models\PatientVital::create([
-            'PatientID'        => $patientId,
-            'BloodPressure'    => $bp,
-            'HeartRate'        => $hr,
-            'RespiratoryRate'  => $rr,
-            'Temperature'      => $temp,
-            'OxygenSaturation' => $spo2,
-            'PainScale'        => $pain,
-            'WeightKg'         => (float)$weight,
-            'HeightCm'         => (float)$height,
-            'ClinicalNotes'    => $notes,
-            'RecordedBy'       => $user ? $user->UserID : 1,
-            'RecordedByName'   => $nurseName,
-            'CreatedAt'        => now(),
+            'PatientID'            => $patientId,
+            'BloodPressure'        => $bp,
+            'HeartRate'            => $hr,
+            'RespiratoryRate'      => $rr,
+            'Temperature'          => $temp,
+            'OxygenSaturation'     => $spo2,
+            'PainScale'            => $pain,
+            'WeightKg'             => $weight,
+            'HeightCm'             => $height,
+            'BMI'                  => $bmi,
+            'MeanArterialPressure' => $map,
+            'ClinicalNotes'        => $notes . (!empty($alerts) ? " [Alerts: " . implode(', ', $alerts) . "]" : ""),
+            'RecordedBy'           => $user ? $user->UserID : 1,
+            'RecordedByName'       => $nurseName,
+            'CreatedAt'            => now(),
+        ]);
+
+        // 4. Update queue status from Triage -> Waiting for Consultation
+        $queueRecord = \App\Models\PatientQueue::where('PatientID', $patientId)
+            ->whereIn('QueueStatus', ['Waiting', 'For Triage', 'Waiting for Triage'])
+            ->orderBy('QueueID', 'desc')
+            ->first();
+        if ($queueRecord) {
+            $queueRecord->update([
+                'QueueStatus' => 'Waiting for Consultation'
+            ]);
+        }
+
+        // 5. System Audit Trail
+        \App\Models\SystemAuditLog::create([
+            'UserID'    => $user ? $user->UserID : 1,
+            'Action'    => 'RECORD_TRIAGE_VITALS',
+            'Details'   => "Triage vitals recorded for Patient #{$patientId} (BP: {$bp}, HR: {$hr}, Temp: {$temp}°C, SpO2: {$spo2}%, BMI: {$bmi}, MAP: {$map}). Queue moved to Waiting for Consultation.",
+            'IPAddress' => $request->ip(),
+            'UserAgent' => $request->userAgent(),
+            'CreatedAt' => now()
         ]);
 
         return response()->json([
-            'success' => true,
-            'message' => 'Vital signs record successfully recorded and stored in database.',
-            'vital_id' => $vital->VitalID,
-            'data' => $vital
+            'success'   => true,
+            'message'   => 'Triage vital signs recorded with BMI & MAP calculated. Patient queued for consultation.',
+            'vital_id'  => $vital->VitalID,
+            'bmi'       => $bmi,
+            'map'       => $map,
+            'alerts'    => $alerts,
+            'data'      => $vital
         ], 201);
     }
 
     public function updateVital(Request $request, $id)
     {
         $vital = \App\Models\PatientVital::where('VitalID', $id)->firstOrFail();
-        $vital->update($request->only([
+        
+        $data = $request->only([
             'BloodPressure', 'HeartRate', 'RespiratoryRate',
             'Temperature', 'OxygenSaturation', 'PainScale',
             'WeightKg', 'HeightCm', 'ClinicalNotes'
-        ]));
+        ]);
+
+        $weight = isset($data['WeightKg']) ? (float)$data['WeightKg'] : (float)$vital->WeightKg;
+        $height = isset($data['HeightCm']) ? (float)$data['HeightCm'] : (float)$vital->HeightCm;
+        if ($weight > 0 && $height > 0) {
+            $heightM = $height / 100.0;
+            $data['BMI'] = round($weight / ($heightM * $heightM), 2);
+        }
+
+        $bp = $data['BloodPressure'] ?? $vital->BloodPressure;
+        if (preg_match('/(\d+)\s*\/\s*(\d+)/', (string)$bp, $bpMatches)) {
+            $sbp = (int)$bpMatches[1];
+            $dbp = (int)$bpMatches[2];
+            if ($sbp > 0 && $dbp > 0) {
+                $data['MeanArterialPressure'] = round(($sbp + (2 * $dbp)) / 3.0, 2);
+            }
+        }
+
+        $vital->update($data);
 
         return response()->json([
             'success' => true,
             'message' => 'Vital signs record updated successfully.',
-            'data' => $vital
+            'data'    => $vital
         ]);
     }
 

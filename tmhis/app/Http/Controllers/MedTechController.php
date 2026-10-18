@@ -69,7 +69,8 @@ class MedTechController extends Controller
         $patientId = $validated['patient_id'] ?? ($labReq ? $labReq->PatientID : 1);
         $reqId = $labReq ? $labReq->RequestID : (is_numeric($validated['request_id']) ? $validated['request_id'] : 1);
 
-        $barcode = 'SMP-2026-' . str_pad((string)(LaboratorySample::max('SampleID') + 1), 5, '0', STR_PAD_LEFT);
+        $nextSampleId = (int)(LaboratorySample::max('SampleID') ?: 0) + 1;
+        $barcode = 'SMP-' . date('Y') . '-' . str_pad((string)$nextSampleId, 4, '0', STR_PAD_LEFT);
 
         $sample = LaboratorySample::create([
             'SampleBarcode' => $barcode,
@@ -163,18 +164,39 @@ class MedTechController extends Controller
         $patientId = $labReq ? $labReq->PatientID : 1;
         $doctorId = $labReq ? $labReq->DoctorID : 1;
 
+        $resVal = trim((string)$validated['result_value']);
+        $normRange = trim((string)$validated['normal_range']);
+        $interpretation = trim((string)$validated['interpretation']);
+
+        // Auto-compare reference ranges if numeric (LOW / NORMAL / HIGH)
+        if (preg_match('/^([0-9.]+)\s*-\s*([0-9.]+)$/', $normRange, $rangeM) && is_numeric($resVal)) {
+            $low = (float)$rangeM[1];
+            $high = (float)$rangeM[2];
+            $numericVal = (float)$resVal;
+            if ($numericVal < $low) {
+                $interpretation = 'LOW (Abnormal)';
+            } elseif ($numericVal > $high) {
+                $interpretation = 'HIGH (Abnormal)';
+            } elseif ($interpretation === 'Normal' || $interpretation === 'Pending') {
+                $interpretation = 'NORMAL';
+            }
+        }
+
         $result = LaboratoryResult::create([
-            'RequestID' => $reqId,
-            'PatientID' => $patientId,
-            'DoctorID' => $doctorId,
-            'TestName' => $validated['test_name'],
-            'ResultValue' => $validated['result_value'],
-            'NormalRange' => $validated['normal_range'],
-            'Units' => $validated['units'] ?? '',
-            'Interpretation' => $validated['interpretation'],
-            'Notes' => $validated['notes'] ?? 'Diagnostic evaluation verified by laboratory.',
-            'ResultDate' => now()->toDateString(),
-            'CreatedAt' => now(),
+            'RequestID'      => $reqId,
+            'PatientID'      => $patientId,
+            'DoctorID'       => $doctorId,
+            'TestName'       => $validated['test_name'],
+            'ResultValue'    => $resVal,
+            'NormalRange'    => $normRange,
+            'Units'          => $validated['units'] ?? '',
+            'Interpretation' => $interpretation,
+            'IsVerified'     => 1,
+            'VerifiedBy'     => Auth::id() ?? 1,
+            'VerifiedAt'     => now(),
+            'Notes'          => $validated['notes'] ?? 'Diagnostic evaluation verified by laboratory.',
+            'ResultDate'     => now()->toDateString(),
+            'CreatedAt'      => now(),
         ]);
 
         if ($labReq) {
@@ -182,10 +204,23 @@ class MedTechController extends Controller
             $labReq->save();
         }
 
+        // Advance patient queue from Laboratory -> Pharmacy or For Billing
+        $queueRecord = \App\Models\PatientQueue::where('PatientID', $patientId)
+            ->where('QueueStatus', 'Laboratory')
+            ->orderBy('QueueID', 'desc')
+            ->first();
+        if ($queueRecord) {
+            $hasRx = \App\Models\Prescription::where('PatientID', $patientId)->where('Status', 'Active')->exists();
+            $nextStatus = $hasRx ? 'Pharmacy' : 'For Billing';
+            $queueRecord->update([
+                'QueueStatus' => $nextStatus
+            ]);
+        }
+
         SystemAuditLog::create([
-            'UserID' => Auth::id() ?? 1,
-            'Action' => 'CREATE_LAB_RESULT',
-            'Details' => "Recorded laboratory result for {$validated['test_name']} on request #{$reqId}",
+            'UserID'    => Auth::id() ?? 1,
+            'Action'    => 'CREATE_LAB_RESULT',
+            'Details'   => "Recorded and verified laboratory result for {$validated['test_name']} ({$resVal} {$validated['units']}, {$interpretation}) on request #{$reqId}",
             'IPAddress' => $request->ip(),
             'UserAgent' => $request->userAgent(),
             'CreatedAt' => now(),

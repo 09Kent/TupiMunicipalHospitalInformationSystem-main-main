@@ -60,36 +60,41 @@ class Patient
             $age = $today->diff($dob)->y;
         }
 
+        $philhealth = !empty($data['PhilHealthNumber']) 
+            ? trim($data['PhilHealthNumber']) 
+            : (!empty($data['philhealth_number']) ? trim($data['philhealth_number']) : null);
+
         $stmt = $this->db->prepare("
             INSERT INTO patients (
                 PatientCode, FirstName, MiddleName, LastName, 
                 DateOfBirth, Age, Gender, CivilStatus, 
                 ContactNumber, Email, Address, BloodType, 
-                PatientCategory, Status, RegisteredBy, CreatedAt
+                PhilHealthNumber, PatientCategory, Status, RegisteredBy, CreatedAt
             ) VALUES (
                 :code, :first, :middle, :last, 
                 :dob, :age, :gender, :civil, 
                 :phone, :email, :address, :blood, 
-                :category, :status, :reg_by, NOW()
+                :philhealth, :category, :status, :reg_by, NOW()
             )
         ");
 
         $stmt->execute([
-            'code'     => $patientCode,
-            'first'    => trim($data['FirstName']),
-            'middle'   => !empty($data['MiddleName']) ? trim($data['MiddleName']) : null,
-            'last'     => trim($data['LastName']),
-            'dob'      => $data['DateOfBirth'],
-            'age'      => $age,
-            'gender'   => $data['Gender'],
-            'civil'    => $data['CivilStatus'] ?? 'Single',
-            'phone'    => trim($data['ContactNumber']),
-            'email'    => trim($data['Email']),
-            'address'  => trim($data['Address']),
-            'blood'    => $data['BloodType'] ?? 'Unknown',
-            'category' => $data['PatientCategory'] ?? 'Outpatient',
-            'status'   => $data['Status'] ?? 'Active',
-            'reg_by'   => $data['RegisteredBy'] ?? 1
+            'code'       => $patientCode,
+            'first'      => trim($data['FirstName']),
+            'middle'     => !empty($data['MiddleName']) ? trim($data['MiddleName']) : null,
+            'last'       => trim($data['LastName']),
+            'dob'        => $data['DateOfBirth'],
+            'age'        => $age,
+            'gender'     => $data['Gender'],
+            'civil'      => $data['CivilStatus'] ?? 'Single',
+            'phone'      => trim($data['ContactNumber']),
+            'email'      => trim($data['Email']),
+            'address'    => trim($data['Address']),
+            'blood'      => $data['BloodType'] ?? 'Unknown',
+            'philhealth' => $philhealth,
+            'category'   => $data['PatientCategory'] ?? 'Outpatient',
+            'status'     => $data['Status'] ?? 'Active',
+            'reg_by'     => $data['RegisteredBy'] ?? 1
         ]);
 
         return (int)$this->db->lastInsertId();
@@ -147,38 +152,44 @@ class Patient
 
         $stmt = $this->db->prepare("
             UPDATE patients SET
-                FirstName       = :first,
-                MiddleName      = :middle,
-                LastName        = :last,
-                DateOfBirth     = :dob,
-                Age             = :age,
-                Gender          = :gender,
-                CivilStatus     = :civil,
-                ContactNumber   = :phone,
-                Email           = :email,
-                Address         = :address,
-                BloodType       = :blood,
-                PatientCategory = :category,
-                Status          = :status,
-                UpdatedAt       = NOW()
+                FirstName        = :first,
+                MiddleName       = :middle,
+                LastName         = :last,
+                DateOfBirth      = :dob,
+                Age              = :age,
+                Gender           = :gender,
+                CivilStatus      = :civil,
+                ContactNumber    = :phone,
+                Email            = :email,
+                Address          = :address,
+                BloodType        = :blood,
+                PhilHealthNumber = :philhealth,
+                PatientCategory  = :category,
+                Status           = :status,
+                UpdatedAt        = NOW()
             WHERE PatientID = :id
         ");
 
+        $philhealth = !empty($merged['PhilHealthNumber']) 
+            ? trim($merged['PhilHealthNumber']) 
+            : (!empty($merged['philhealth_number']) ? trim($merged['philhealth_number']) : null);
+
         return $stmt->execute([
-            'id'       => $id,
-            'first'    => trim((string)($merged['FirstName'] ?? '')),
-            'middle'   => !empty($merged['MiddleName']) ? trim((string)$merged['MiddleName']) : null,
-            'last'     => trim((string)($merged['LastName'] ?? '')),
-            'dob'      => $merged['DateOfBirth'] ?? date('Y-m-d'),
-            'age'      => $age,
-            'gender'   => $merged['Gender'] ?? 'Other',
-            'civil'    => $merged['CivilStatus'] ?? 'Single',
-            'phone'    => trim((string)($merged['ContactNumber'] ?? '')),
-            'email'    => trim((string)($merged['Email'] ?? '')),
-            'address'  => trim((string)($merged['Address'] ?? '')),
-            'blood'    => $merged['BloodType'] ?? 'Unknown',
-            'category' => $merged['PatientCategory'] ?? 'Outpatient',
-            'status'   => $merged['Status'] ?? 'Active'
+            'id'         => $id,
+            'first'      => trim((string)($merged['FirstName'] ?? '')),
+            'middle'     => !empty($merged['MiddleName']) ? trim((string)$merged['MiddleName']) : null,
+            'last'       => trim((string)($merged['LastName'] ?? '')),
+            'dob'        => $merged['DateOfBirth'] ?? date('Y-m-d'),
+            'age'        => $age,
+            'gender'     => $merged['Gender'] ?? 'Other',
+            'civil'      => $merged['CivilStatus'] ?? 'Single',
+            'phone'      => trim((string)($merged['ContactNumber'] ?? '')),
+            'email'      => trim((string)($merged['Email'] ?? '')),
+            'address'    => trim((string)($merged['Address'] ?? '')),
+            'blood'      => $merged['BloodType'] ?? 'Unknown',
+            'philhealth' => $philhealth,
+            'category'   => $merged['PatientCategory'] ?? 'Outpatient',
+            'status'     => $merged['Status'] ?? 'Active'
         ]);
     }
 

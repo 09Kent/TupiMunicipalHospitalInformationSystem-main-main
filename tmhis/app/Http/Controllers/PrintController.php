@@ -305,6 +305,63 @@ class PrintController extends Controller
                 $data['departments'] = DB::table('departments')->get();
                 break;
 
+            case 'digital-id':
+            case 'digital-id-slip':
+            case 'id-slip':
+                $patient = Patient::where('PatientID', $id)->orWhere('PatientCode', $id)->first();
+                if (!$patient) {
+                    if ($isSpecificId) {
+                        abort(404, 'Patient record not found for Digital ID slip.');
+                    }
+                    $patient = Patient::orderBy('PatientID', 'desc')->first();
+                }
+                $docTitle = 'OFFICIAL PATIENT DIGITAL IDENTIFICATION SLIP';
+                $docTracking = 'ID-' . ($patient ? $patient->PatientCode : '000000');
+                $data['patient'] = $patient;
+                $data['emergency'] = DB::table('emergency_contacts')->where('PatientID', $patient?->PatientID)->first();
+                $data['queue'] = DB::table('patient_queue')->where('PatientID', $patient?->PatientID)->orderBy('QueueID', 'desc')->first();
+                break;
+
+            case 'medication-label':
+            case 'pharmacy-label':
+            case 'label':
+                $dispense = DB::table('dispensing_records')->where('DispenseID', $id)->first();
+                if (!$dispense && $id) {
+                    $dispense = DB::table('dispensing_records')->where('PatientID', $id)->orderBy('DispenseID', 'desc')->first();
+                }
+                if (!$dispense) {
+                    $dispense = DB::table('dispensing_records')->orderBy('DispenseID', 'desc')->first();
+                }
+                $patient = $dispense ? Patient::find($dispense->PatientID) : null;
+                $rx = $dispense ? Prescription::find($dispense->PrescriptionID) : null;
+                $docTitle = 'OFFICIAL PHARMACY MEDICATION LABEL';
+                $docTracking = $dispense ? $dispense->DispenseCode : ('DISP-' . date('Ymd') . '-0001');
+                $data['dispense'] = $dispense;
+                $data['patient'] = $patient;
+                $data['rx'] = $rx;
+                break;
+
+            case 'certificate':
+            case 'medical-certificate':
+            case 'med-cert':
+                $patient = Patient::where('PatientID', $id)->orWhere('PatientCode', $id)->first();
+                if (!$patient) {
+                    if ($isSpecificId) {
+                        abort(404, 'Patient record not found for Medical Certificate.');
+                    }
+                    $patient = Patient::orderBy('PatientID', 'desc')->first();
+                }
+                $diag = Diagnosis::where('PatientID', $patient?->PatientID)->orderBy('DiagnosisID', 'desc')->first();
+                $note = ConsultationNote::where('PatientID', $patient?->PatientID)->orderBy('NoteID', 'desc')->first();
+                $doctor = $note ? Doctor::find($note->DoctorID) : Doctor::first();
+                $docTitle = 'OFFICIAL MEDICAL CERTIFICATE';
+                $docTracking = 'MC-' . date('Y') . '-' . str_pad((string)($patient?->PatientID ?: 1), 5, '0', STR_PAD_LEFT);
+                $data['patient'] = $patient;
+                $data['diagnosis'] = $diag;
+                $data['note'] = $note;
+                $data['doctor'] = $doctor;
+                break;
+
             case 'logs':
             case 'print-log':
             case 'print-logs':

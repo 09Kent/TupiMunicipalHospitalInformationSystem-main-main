@@ -112,10 +112,11 @@ class BillingManager
     public function computeDiscounts(float $grossAmount, array $qualifications = [], float $philHealthDeduction = 0.0, float $otherDeductions = 0.0): array
     {
         $grossAmount = max(0, round($grossAmount, 2));
-        $hasSenior = in_array('Senior Citizen', $qualifications, true) || in_array('senior', $qualifications, true);
-        $hasPWD    = in_array('PWD', $qualifications, true) || in_array('pwd', $qualifications, true);
-        $hasIndigent = in_array('Indigent', $qualifications, true) || in_array('indigent', $qualifications, true);
-        $hasEmployee = in_array('Hospital Employee', $qualifications, true) || in_array('employee', $qualifications, true);
+        $qualStr = strtolower(implode(' ', array_map('strval', $qualifications)));
+        $hasSenior = str_contains($qualStr, 'senior') || in_array('Senior Citizen', $qualifications, true) || in_array('senior', $qualifications, true);
+        $hasPWD    = str_contains($qualStr, 'pwd') || in_array('PWD', $qualifications, true) || in_array('pwd', $qualifications, true);
+        $hasIndigent = str_contains($qualStr, 'indigent') || in_array('Indigent', $qualifications, true) || in_array('indigent', $qualifications, true);
+        $hasEmployee = str_contains($qualStr, 'employee') || in_array('Hospital Employee', $qualifications, true) || in_array('employee', $qualifications, true);
 
         $discountType = 'None';
         $statutoryDiscount = 0.0;
@@ -155,6 +156,7 @@ class BillingManager
             'amount_covered'            => $totalCovered,
             'remaining_balance'         => $remainingBalance,
             'total_payable'             => $remainingBalance,
+            'net_payable'               => $remainingBalance,
             'balance_due'               => $remainingBalance
         ];
     }
@@ -263,6 +265,16 @@ class BillingManager
                 ':status' => $invoicePaymentStatus,
                 ':invId'  => $invoiceId
             ]);
+
+            // When bill is paid in full, complete the patient's hospital encounter lifecycle in the queue
+            if ($invoicePaymentStatus === 'Paid In Full') {
+                $upQueue = $this->db->prepare("
+                    UPDATE patient_queue 
+                    SET QueueStatus = 'Completed', CompletedAt = NOW() 
+                    WHERE PatientID = :pid AND QueueStatus <> 'Completed' AND QueueStatus <> 'Cancelled'
+                ");
+                $upQueue->execute([':pid' => $patientId]);
+            }
 
             $this->db->commit();
 

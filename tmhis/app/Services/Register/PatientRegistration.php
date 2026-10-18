@@ -82,10 +82,11 @@ class PatientRegistration
                     'ContactNumber'   => $data['personal']['phone'] ?? $data['phone'] ?? '',
                     'Email'           => $data['personal']['email'] ?? $data['email'] ?? '',
                     'Address'         => $data['personal']['address'] ?? $data['address'] ?? '',
-                    'BloodType'       => $data['medical']['bloodType'] ?? $data['bloodType'] ?? 'Unknown',
-                    'PatientCategory' => $data['patientCategory'] ?? 'Outpatient',
-                    'Status'          => 'Active',
-                    'RegisteredBy'    => $userId
+                    'BloodType'        => $data['medical']['bloodType'] ?? $data['bloodType'] ?? 'Unknown',
+                    'PhilHealthNumber' => $data['personal']['philhealth'] ?? $data['personal']['philhealthNumber'] ?? $data['philhealthNumber'] ?? $data['philhealth'] ?? $data['philhealth_number'] ?? null,
+                    'PatientCategory'  => $data['patientCategory'] ?? $data['category'] ?? 'Outpatient',
+                    'Status'           => 'Active',
+                    'RegisteredBy'     => $userId
                 ]);
 
                 // Demographic and emergency information belongs to the patient identity,

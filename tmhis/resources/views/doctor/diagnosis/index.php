@@ -364,56 +364,70 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $appId = (int)$stmtFindApp->fetchColumn();
         }
 
-        // 1. Persist or update SOAP Consultation Note
-        $existingNoteForApp = ($appId > 0) ? $noteModel->findByAppointment($appId) : null;
-        if (!$existingNoteForApp && !empty($existingNotes)) {
-            $existingNoteForApp = $existingNotes[0];
-        }
-
-        $finalSub = $subjective ?: ($existingNoteForApp['Subjective'] ?? ($patient['Complaint']['ComplaintDescription'] ?? 'Routine consultation'));
-        $finalObj = $objective ?: ($existingNoteForApp['Objective'] ?? 'Clinical evaluation performed');
-        $finalAss = $assessment ?: ($existingNoteForApp['Assessment'] ?? (!empty($existingDiagnoses) ? $existingDiagnoses[0]['DiagnosisName'] : 'Consultation completed'));
-        $finalPlan = $plan ?: ($existingNoteForApp['Plan'] ?? ($summary ?: 'Outpatient care and follow up'));
-        $finalNotes = $clinicalNotes ?: ($summary ?: "$finalSub | $finalAss | $finalPlan");
-
-        if ($existingNoteForApp && !empty($existingNoteForApp['NoteID'])) {
-            $noteModel->update((int)$existingNoteForApp['NoteID'], [
-                'subjective'     => $finalSub,
-                'objective'      => $finalObj,
-                'assessment'     => $finalAss,
-                'plan'           => $finalPlan,
-                'clinical_notes' => $finalNotes,
-                'vitals'         => $vitals
-            ]);
-        } else {
-            $noteModel->create([
-                'patient_id'     => $patientId,
-                'doctor_id'      => $doctorId,
-                'appointment_id' => $appId ?: null,
-                'subjective'     => $finalSub,
-                'objective'      => $finalObj,
-                'assessment'     => $finalAss,
-                'plan'           => $finalPlan,
-                'clinical_notes' => $finalNotes,
-                'vitals'         => $vitals
-            ]);
-        }
-
-        // 2. Persist Vitals to patient_vitals table
+        $db = Database::getConnection();
+        $db->beginTransaction();
         try {
+            // 1. Persist or update SOAP Consultation Note
+            $existingNoteForApp = ($appId > 0) ? $noteModel->findByAppointment($appId) : null;
+            if (!$existingNoteForApp && !empty($existingNotes)) {
+                $existingNoteForApp = $existingNotes[0];
+            }
+
+            $finalSub = $subjective ?: ($existingNoteForApp['Subjective'] ?? ($patient['Complaint']['ComplaintDescription'] ?? 'Routine consultation'));
+            $finalObj = $objective ?: ($existingNoteForApp['Objective'] ?? 'Clinical evaluation performed');
+            $finalAss = $assessment ?: ($existingNoteForApp['Assessment'] ?? (!empty($existingDiagnoses) ? $existingDiagnoses[0]['DiagnosisName'] : 'Consultation completed'));
+            $finalPlan = $plan ?: ($existingNoteForApp['Plan'] ?? ($summary ?: 'Outpatient care and follow up'));
+            $finalNotes = $clinicalNotes ?: ($summary ?: "$finalSub | $finalAss | $finalPlan");
+
+            if ($existingNoteForApp && !empty($existingNoteForApp['NoteID'])) {
+                $noteModel->update((int)$existingNoteForApp['NoteID'], [
+                    'subjective'     => $finalSub,
+                    'objective'      => $finalObj,
+                    'assessment'     => $finalAss,
+                    'plan'           => $finalPlan,
+                    'clinical_notes' => $finalNotes,
+                    'vitals'         => $vitals
+                ]);
+            } else {
+                $noteModel->create([
+                    'patient_id'     => $patientId,
+                    'doctor_id'      => $doctorId,
+                    'appointment_id' => $appId ?: null,
+                    'subjective'     => $finalSub,
+                    'objective'      => $finalObj,
+                    'assessment'     => $finalAss,
+                    'plan'           => $finalPlan,
+                    'clinical_notes' => $finalNotes,
+                    'vitals'         => $vitals
+                ]);
+            }
+
+            // 2. Persist Vitals to patient_vitals table (with BMI and MAP)
             $bp = $vitals['bp'] ?? '120/80';
             $hr = (int)preg_replace('/[^0-9]/', '', $vitals['hr'] ?? '74');
             $temp = (float)preg_replace('/[^0-9.]/', '', $vitals['temp'] ?? '36.7');
             $spo2 = (int)preg_replace('/[^0-9]/', '', $vitals['spo2'] ?? '98');
             $wt = (float)preg_replace('/[^0-9.]/', '', $vitals['weight'] ?? '70');
-            $stmtV = Database::getConnection()->prepare("
+            $ht = (float)preg_replace('/[^0-9.]/', '', $vitals['height'] ?? '165');
+
+            $bmi = ($wt > 0 && $ht > 0) ? round($wt / (($ht / 100) ** 2), 2) : null;
+            $map = null;
+            if (preg_match('/(\d+)\s*\/\s*(\d+)/', $bp, $bpM)) {
+                $sbp = (int)$bpM[1];
+                $dbp = (int)$bpM[2];
+                if ($sbp > 0 && $dbp > 0) {
+                    $map = round(($sbp + 2 * $dbp) / 3, 2);
+                }
+            }
+
+            $stmtV = $db->prepare("
                 INSERT INTO patient_vitals (
                     PatientID, AppointmentID, BloodPressure, HeartRate, RespiratoryRate,
-                    Temperature, OxygenSaturation, PainScale, WeightKg, ClinicalNotes,
-                    RecordedBy, RecordedByName, CreatedAt
+                    Temperature, OxygenSaturation, PainScale, WeightKg, HeightCm, BMI, MeanArterialPressure,
+                    ClinicalNotes, RecordedBy, RecordedByName, CreatedAt
                 ) VALUES (
-                    :pid, :aid, :bp, :hr, 18, :temp, :spo2, 0, :wt, 'Captured during clinical consultation',
-                    :uid, :uname, NOW()
+                    :pid, :aid, :bp, :hr, 18, :temp, :spo2, 0, :wt, :ht, :bmi, :map,
+                    'Captured during clinical consultation', :uid, :uname, NOW()
                 )
             ");
             $stmtV->execute([
@@ -424,15 +438,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ':temp'  => $temp ?: 36.7,
                 ':spo2'  => $spo2 ?: 98,
                 ':wt'    => $wt ?: 70.0,
+                ':ht'    => $ht ?: 165.0,
+                ':bmi'   => $bmi,
+                ':map'   => $map,
                 ':uid'   => auth()->id() ?? 1,
                 ':uname' => $currentUser['name'] ?? 'Attending Physician'
             ]);
-        } catch (\Throwable $ve) {}
 
-        // 3. Persist Active Diagnosis if assessment provided
-        if (!empty($finalAss) && $finalAss !== 'Consultation completed') {
-            try {
-                $diagCheck = Database::getConnection()->prepare("SELECT DiagnosisID FROM diagnoses WHERE PatientID = :pid AND DiagnosisName = :dname LIMIT 1");
+            // 3. Persist Active Diagnosis if assessment provided
+            if (!empty($finalAss) && $finalAss !== 'Consultation completed') {
+                $diagCheck = $db->prepare("SELECT DiagnosisID FROM diagnoses WHERE PatientID = :pid AND DiagnosisName = :dname LIMIT 1");
                 $diagCheck->execute([':pid' => $patientId, ':dname' => $finalAss]);
                 if (!$diagCheck->fetchColumn()) {
                     $diagnosisModel->create([
@@ -447,13 +462,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         'notes'          => 'Formulated during clinical consultation'
                     ]);
                 }
-            } catch (\Throwable $de) {}
-        }
+            }
 
-        // 4. Persist Treatment Plan if plan provided
-        if (!empty($finalPlan)) {
-            try {
-                $planCheck = Database::getConnection()->prepare("SELECT PlanID FROM treatment_plans WHERE PatientID = :pid AND Goal = :goal LIMIT 1");
+            // 4. Persist Treatment Plan if plan provided
+            if (!empty($finalPlan)) {
+                $planCheck = $db->prepare("SELECT PlanID FROM treatment_plans WHERE PatientID = :pid AND Goal = :goal LIMIT 1");
                 $planCheck->execute([':pid' => $patientId, ':goal' => $finalPlan]);
                 if (!$planCheck->fetchColumn()) {
                     $treatmentModel->create([
@@ -468,18 +481,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         'notes'                     => 'Formulated during clinical consultation'
                     ]);
                 }
-            } catch (\Throwable $te) {}
-        }
+            }
 
-        // 5. Complete consultation in appointment and queue
-        if ($appId > 0) {
-            $consultationModel->completeConsultation($appId, $doctorId, $summary ?: $finalNotes);
-        }
+            // 5. Complete consultation in appointment and queue
+            if ($appId > 0) {
+                $consultationModel->completeConsultation($appId, $doctorId, $summary ?: $finalNotes);
+            }
 
-        Session::setFlash('success', 'Consultation marked as Completed. Clinical records archived and available in Medical Records.');
-        header("Location: " . doctor_url("views/patients/view.php?id=$patientId"));
-        if (function_exists('app') && app()->environment('testing')) { return; }
-        exit;
+            $db->commit();
+
+            Session::setFlash('success', 'Consultation marked as Completed. Clinical records archived and available in Medical Records.');
+            header("Location: " . doctor_url("views/patients/view.php?id=$patientId"));
+            if (function_exists('app') && app()->environment('testing')) { return; }
+            exit;
+        } catch (\Throwable $e) {
+            $db->rollBack();
+            $errorMessage = safe_error_message($e, 'Failed to finalize clinical encounter.');
+        }
     }
 }
 

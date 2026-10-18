@@ -766,6 +766,181 @@
       </div>
       <?php endif; ?>
 
+      <!-- TYPE 12: DIGITAL ID SLIP -->
+      <?php if (in_array($type, ['digital-id', 'digital-id-slip', 'id-slip'])): ?>
+      <div class="space-y-6">
+        <div class="border-2 border-slate-900 rounded-2xl p-6 bg-slate-50/50">
+          <div class="flex items-center justify-between pb-4 border-b border-slate-200">
+            <div>
+              <span class="text-[10px] font-black uppercase tracking-widest text-blue-600 block">TMHIS Central Patient Identifier</span>
+              <h2 class="text-2xl font-black text-slate-900 font-mono tracking-tight"><?= e($patient ? $patient->PatientCode : 'PAT-2026-0000') ?></h2>
+            </div>
+            <div class="text-right">
+              <span class="text-[10px] font-bold text-slate-400 uppercase block">Category</span>
+              <span class="inline-block px-3 py-1 bg-blue-100 text-blue-800 text-xs font-bold rounded-lg mt-0.5"><?= e($patient->PatientCategory ?? 'Outpatient') ?></span>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-4 text-xs">
+            <div>
+              <span class="text-slate-400 font-medium block">Full Name</span>
+              <strong class="text-sm font-bold text-slate-900"><?= e(trim(($patient->FirstName ?? '') . ' ' . ($patient->MiddleName ?? '') . ' ' . ($patient->LastName ?? ''))) ?></strong>
+            </div>
+            <div>
+              <span class="text-slate-400 font-medium block">Date of Birth / Age</span>
+              <span class="text-slate-800 font-semibold"><?= e($patient->DateOfBirth ?? '—') ?> (<?= e($patient->Age ?? '—') ?> y/o)</span>
+            </div>
+            <div>
+              <span class="text-slate-400 font-medium block">Gender / Blood Type</span>
+              <span class="text-slate-800 font-semibold"><?= e($patient->Gender ?? '—') ?> • Blood: <?= e($patient->BloodType ?? 'Unknown') ?></span>
+            </div>
+            <div>
+              <span class="text-slate-400 font-medium block">PhilHealth Identification</span>
+              <span class="text-slate-900 font-mono font-bold"><?= e($patient->PhilHealthNumber ?: 'None Presented') ?></span>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-4 mt-4 pt-3 border-t border-slate-200 text-xs">
+            <div>
+              <span class="text-slate-400 font-medium block">Permanent Address</span>
+              <span class="text-slate-800 font-medium"><?= e($patient->Address ?? 'Tupi, South Cotabato') ?></span>
+            </div>
+            <div>
+              <span class="text-slate-400 font-medium block">Contact Number</span>
+              <span class="text-slate-800 font-mono font-semibold"><?= e($patient->ContactNumber ?? '—') ?></span>
+            </div>
+          </div>
+
+          <?php if (!empty($data['emergency'])): ?>
+          <div class="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs">
+            <span class="font-bold text-amber-900 block mb-1 uppercase text-[10px] tracking-wider">Emergency Contact</span>
+            <div class="text-amber-800">
+              <?= e($data['emergency']->ContactName ?? '—') ?> (<?= e($data['emergency']->Relationship ?? 'Relative') ?>) — Tel: <?= e($data['emergency']->ContactNumber ?? '—') ?>
+            </div>
+          </div>
+          <?php endif; ?>
+
+          <?php if (!empty($data['queue'])): ?>
+          <div class="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-xl text-xs flex items-center justify-between">
+            <div>
+              <span class="text-[10px] font-bold text-blue-700 uppercase block">Daily Queue Ticket</span>
+              <strong class="text-xl font-black text-blue-900 font-mono"><?= e($data['queue']->QueueNumber ?? '—') ?></strong>
+            </div>
+            <div class="text-right">
+              <span class="text-[10px] text-blue-600 block">Status: <strong><?= e($data['queue']->QueueStatus ?? 'Waiting') ?></strong></span>
+              <span class="text-[10px] text-slate-500 font-mono">Date: <?= e($data['queue']->QueueDate ?? date('Y-m-d')) ?></span>
+            </div>
+          </div>
+          <?php endif; ?>
+        </div>
+        <p class="text-[10px] text-slate-500 text-center italic">Present this Digital ID slip at any Tupi Municipal Hospital counter for priority triage, consultation, laboratory, and pharmacy dispensing.</p>
+      </div>
+      <?php endif; ?>
+
+      <!-- TYPE 13: MEDICATION DISPENSING LABEL -->
+      <?php if (in_array($type, ['medication-label', 'pharmacy-label', 'label'])): ?>
+      <div class="space-y-4">
+        <div class="border-2 border-dashed border-slate-800 rounded-2xl p-5 bg-sky-50/40">
+          <div class="flex items-center justify-between pb-3 border-b border-slate-200">
+            <div>
+              <span class="text-[10px] font-black uppercase tracking-wider text-sky-700">Tupi Municipal Hospital • Pharmacy Department</span>
+              <h3 class="text-base font-black text-slate-900">PRESCRIPTION MEDICATION LABEL</h3>
+            </div>
+            <span class="font-mono text-xs font-bold px-2.5 py-1 bg-white border border-slate-300 rounded-lg text-slate-800"><?= e($docTracking) ?></span>
+          </div>
+
+          <div class="grid grid-cols-2 gap-4 mt-3 text-xs">
+            <div>
+              <span class="text-slate-400 font-medium block">Patient Name</span>
+              <strong class="text-sm font-bold text-slate-900"><?= e($patient ? trim($patient->FirstName . ' ' . $patient->LastName) : 'Outpatient') ?></strong>
+              <span class="text-[11px] font-mono text-slate-500 block">ID: <?= e($patient ? $patient->PatientCode : '—') ?></span>
+            </div>
+            <div>
+              <span class="text-slate-400 font-medium block">Dispense Date & Batch</span>
+              <span class="font-semibold text-slate-800"><?= e($data['dispense']->DispenseDate ?? date('Y-m-d')) ?></span>
+              <span class="text-[11px] font-mono text-slate-500 block">Batch: <?= e($data['dispense']->BatchNumber ?? 'B-2026-001') ?></span>
+            </div>
+          </div>
+
+          <div class="mt-4 p-3.5 bg-white border border-sky-200 rounded-xl">
+            <span class="text-[10px] font-black uppercase text-sky-800 block mb-1">Medication & Quantity</span>
+            <div class="text-base font-black text-slate-900">
+              <?= e($data['rx']->MedicineName ?? ($data['dispense']->Notes ?? 'Prescribed Drug Formulation')) ?>
+            </div>
+            <div class="text-xs font-bold text-emerald-700 mt-0.5">
+              Quantity Dispensed: <?= e($data['dispense']->QuantityDispensed ?? 'As Directed') ?>
+            </div>
+          </div>
+
+          <div class="mt-3 p-3 bg-amber-50/80 border border-amber-200 rounded-xl text-xs">
+            <span class="text-[10px] font-black uppercase text-amber-900 block mb-1">Dosage & Administration Instructions</span>
+            <p class="text-xs font-semibold text-slate-800 leading-relaxed">
+              <?= e($data['dispense']->DosageInstructions ?? ($data['rx']->Instructions ?? 'Take as instructed by your attending physician.')) ?>
+            </p>
+          </div>
+
+          <div class="mt-3 flex items-center justify-between text-[11px] text-slate-600 pt-2 border-t border-slate-200">
+            <span>Dispensed by: <strong><?= e($data['dispense']->DispenserName ?? 'Licensed Pharmacist, RPh') ?></strong></span>
+            <span class="text-[10px] text-rose-600 font-bold">KEEP OUT OF REACH OF CHILDREN</span>
+          </div>
+        </div>
+      </div>
+      <?php endif; ?>
+
+      <!-- TYPE 14: MEDICAL CERTIFICATE -->
+      <?php if (in_array($type, ['certificate', 'medical-certificate', 'med-cert'])): ?>
+      <div class="space-y-6 text-xs text-slate-800 leading-relaxed px-4 py-2">
+        <div class="text-center space-y-1 mb-6">
+          <h2 class="text-xl font-black uppercase tracking-wider text-slate-900 underline underline-offset-4">MEDICAL CERTIFICATE</h2>
+          <span class="text-[11px] font-mono text-slate-500">Certificate No: <?= e($docTracking) ?></span>
+        </div>
+
+        <p class="text-justify indent-8 text-sm">
+          <strong>TO WHOM IT MAY CONCERN:</strong>
+        </p>
+
+        <p class="text-justify indent-8 text-sm">
+          This is to certify that <strong><?= e(strtoupper(trim(($patient->FirstName ?? '') . ' ' . ($patient->LastName ?? '')))) ?></strong>, 
+          <strong><?= e($patient->Age ?? '—') ?></strong> years of age, <strong><?= e($patient->Gender ?? '—') ?></strong>, 
+          residing at <strong><?= e($patient->Address ?? 'Tupi, South Cotabato') ?></strong>, 
+          was clinically examined and treated at the Outpatient Department of <strong>Tupi Municipal Hospital</strong> 
+          on <strong><?= date('F j, Y', strtotime($data['note']->CreatedAt ?? date('Y-m-d'))) ?></strong>.
+        </p>
+
+        <div class="my-5 p-4 border border-slate-300 rounded-xl bg-slate-50">
+          <div class="mb-2">
+            <span class="text-[11px] font-bold text-slate-500 uppercase block">Clinical Diagnosis:</span>
+            <strong class="text-sm font-black text-slate-900"><?= e($data['diagnosis']->DiagnosisName ?? ($data['note']->Assessment ?? 'Clinical Consultation Evaluated')) ?></strong>
+            <?php if (!empty($data['diagnosis']->ICD10Code)): ?>
+            <span class="text-xs font-mono text-blue-700 ml-2">(ICD-10: <?= e($data['diagnosis']->ICD10Code) ?>)</span>
+            <?php endif; ?>
+          </div>
+          <div>
+            <span class="text-[11px] font-bold text-slate-500 uppercase block">Physician's Remarks & Recommendations:</span>
+            <p class="text-xs font-medium text-slate-800 mt-1">
+              <?= e($data['note']->Plan ?? 'Patient advised rest, hydration, and adherence to prescribed treatment regimen. Fit for resumption of normal duties after complete recovery.') ?>
+            </p>
+          </div>
+        </div>
+
+        <p class="text-justify indent-8 text-xs text-slate-600">
+          This certification is issued upon the request of the above-named patient for whatever legal or administrative purpose it may serve, excluding medico-legal proceedings.
+        </p>
+
+        <div class="mt-8 pt-4 flex justify-end">
+          <div class="text-center w-64 space-y-1">
+            <div class="border-b border-slate-900 pb-1">
+              <strong class="block text-sm font-bold text-slate-900 uppercase">
+                <?= e($data['doctor'] ? ('Dr. ' . $data['doctor']->FirstName . ' ' . $data['doctor']->LastName . ', MD') : 'Dr. Roberto Mendoza, MD') ?>
+              </strong>
+            </div>
+            <span class="block text-[11px] text-slate-600">Attending Licensed Physician</span>
+            <span class="block text-[10px] font-mono text-slate-400">PRC License No: <?= e($data['doctor']->LicenseNumber ?? '0089421') ?></span>
+          </div>
+        </div>
+      </div>
+      <?php endif; ?>
+
     </div>
 
     <!-- ====================================================

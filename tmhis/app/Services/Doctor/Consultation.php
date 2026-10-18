@@ -59,13 +59,49 @@ class Consultation
                 ':appId' => $appointmentId
             ]);
 
-            // Update queue status to Completed
+            // Fetch PatientID for clinical routing
+            $stmtPat = $this->db->prepare("SELECT PatientID FROM appointments WHERE AppointmentID = :appId LIMIT 1");
+            $stmtPat->execute([':appId' => $appointmentId]);
+            $patientId = (int)$stmtPat->fetchColumn();
+
+            // Determine next workflow stage based on clinical orders
+            $nextQueueStatus = 'For Billing';
+            if ($patientId > 0) {
+                // Check pending laboratory requests
+                $stmtLab = $this->db->prepare("
+                    SELECT COUNT(*) FROM laboratory_requests 
+                    WHERE PatientID = :pid AND Status IN ('Pending', 'Ordered', 'Received')
+                ");
+                $stmtLab->execute([':pid' => $patientId]);
+                $hasLab = (int)$stmtLab->fetchColumn() > 0;
+
+                // Check pending prescriptions
+                $stmtRx = $this->db->prepare("
+                    SELECT COUNT(*) FROM prescriptions 
+                    WHERE PatientID = :pid AND Status = 'Active'
+                ");
+                $stmtRx->execute([':pid' => $patientId]);
+                $hasRx = (int)$stmtRx->fetchColumn() > 0;
+
+                if ($hasLab) {
+                    $nextQueueStatus = 'Laboratory';
+                } elseif ($hasRx) {
+                    $nextQueueStatus = 'Pharmacy';
+                } else {
+                    $nextQueueStatus = 'For Billing';
+                }
+            }
+
+            // Update queue status according to clinical routing
             $stmtQueue = $this->db->prepare("
                 UPDATE patient_queue 
-                SET QueueStatus = 'Completed', CompletedAt = NOW()
+                SET QueueStatus = :nextStatus
                 WHERE AppointmentID = :appId
             ");
-            $stmtQueue->execute([':appId' => $appointmentId]);
+            $stmtQueue->execute([
+                ':nextStatus' => $nextQueueStatus,
+                ':appId'      => $appointmentId
+            ]);
 
             // Set doctor back to Available
             $stmtDoc = $this->db->prepare("UPDATE doctors SET Status = 'Available' WHERE DoctorID = :docId");
