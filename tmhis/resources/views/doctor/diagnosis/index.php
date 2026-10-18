@@ -487,14 +487,14 @@ require_once __DIR__ . '/../includes/header.php';
 require_once __DIR__ . '/../includes/sidebar.php';
 ?>
 
-<div class="flex-1 flex flex-col min-w-0 overflow-y-auto h-screen">
+<div class="flex-1 flex flex-col min-w-0 overflow-y-auto h-screen scroll-smooth">
   
   <?php require_once __DIR__ . '/../includes/topbar.php'; ?>
 
   <main class="p-6 sm:p-8 space-y-8 flex-1">
 
     <!-- Header & Patient Selector Bar -->
-    <div class="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-card flex flex-col lg:flex-row lg:items-center justify-between gap-4" data-aos="fade-down">
+    <div class="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-card flex flex-col lg:flex-row lg:items-center justify-between gap-4">
       <div>
         <div class="flex items-center gap-2">
           <span class="p-2 rounded-xl bg-blue-50 text-blue-600">
@@ -547,7 +547,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
     <?php else: ?>
 
       <!-- Patient Overview Banner -->
-      <div class="bg-gradient-to-r from-slate-900 to-slate-800 text-white rounded-3xl p-6 shadow-xl border border-slate-700 flex flex-col md:flex-row md:items-center justify-between gap-4" data-aos="fade-up">
+      <div class="bg-gradient-to-r from-slate-900 to-slate-800 text-white rounded-3xl p-6 shadow-xl border border-slate-700 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div class="flex items-center gap-4">
           <div class="w-12 h-12 rounded-2xl bg-blue-600 font-black text-white text-base flex items-center justify-center shadow-lg shrink-0 font-display">
             <?= strtoupper(substr($patient['FirstName'], 0, 1) . substr($patient['LastName'], 0, 1)) ?>
@@ -596,7 +596,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
       </div>
 
       <!-- Clinical Care Pathway Stage Tracker -->
-      <div class="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-card" data-aos="fade-up">
+      <div class="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-card">
         <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
           <span class="text-[11px] font-black uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
             <i data-lucide="git-commit" class="w-4 h-4 text-blue-600"></i>
@@ -607,19 +607,39 @@ require_once __DIR__ . '/../includes/sidebar.php';
           </span>
         </div>
         <div class="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-9 gap-2">
-          <?php foreach ($stages as $idx => $st): ?>
-            <div class="flex flex-col items-center text-center p-2 rounded-2xl transition <?= $st['done'] ? 'bg-emerald-50/80 border border-emerald-200 text-emerald-800' : (!empty($st['active']) ? 'bg-blue-50 border-2 border-blue-500 text-blue-900 shadow-sm' : 'bg-slate-50 border border-slate-200/60 text-slate-400') ?>">
-              <div class="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold mb-1 <?= $st['done'] ? 'bg-emerald-600 text-white' : (!empty($st['active']) ? 'bg-blue-600 text-white animate-pulse' : 'bg-slate-200 text-slate-500') ?>">
-                <?= $st['done'] ? '✓' : ($idx + 1) ?>
+          <?php foreach ($stages as $idx => $st): 
+            $stageTarget = '';
+            if ($st['key'] === 'consultation') {
+                $stageTarget = '#soapNoteSection';
+            } elseif ($st['key'] === 'diagnosis') {
+                $stageTarget = '#diagnosisSection';
+            } elseif ($st['key'] === 'treatment') {
+                $stageTarget = '#treatmentPlanSection';
+            } elseif ($st['key'] === 'prescription') {
+                $stageTarget = doctor_url('views/prescriptions/index.php?patient_id=' . $patientId);
+            }
+          ?>
+            <?php if ($stageTarget): ?>
+              <a href="<?= $stageTarget ?>" class="flex flex-col items-center text-center p-2 rounded-2xl transition hover:scale-105 cursor-pointer <?= $st['done'] ? 'bg-emerald-50/80 border border-emerald-200 text-emerald-800 hover:bg-emerald-100/80' : (!empty($st['active']) ? 'bg-blue-50 border-2 border-blue-500 text-blue-900 shadow-sm hover:bg-blue-100' : 'bg-slate-50 border border-slate-200/60 text-slate-500 hover:bg-slate-100') ?>">
+                <div class="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold mb-1 <?= $st['done'] ? 'bg-emerald-600 text-white' : (!empty($st['active']) ? 'bg-blue-600 text-white animate-pulse' : 'bg-slate-200 text-slate-500') ?>">
+                  <?= $st['done'] ? '✓' : ($idx + 1) ?>
+                </div>
+                <span class="text-[10px] font-extrabold uppercase tracking-tight leading-tight"><?= e($st['label']) ?></span>
+              </a>
+            <?php else: ?>
+              <div class="flex flex-col items-center text-center p-2 rounded-2xl transition <?= $st['done'] ? 'bg-emerald-50/80 border border-emerald-200 text-emerald-800' : (!empty($st['active']) ? 'bg-blue-50 border-2 border-blue-500 text-blue-900 shadow-sm' : 'bg-slate-50 border border-slate-200/60 text-slate-400') ?>">
+                <div class="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold mb-1 <?= $st['done'] ? 'bg-emerald-600 text-white' : (!empty($st['active']) ? 'bg-blue-600 text-white animate-pulse' : 'bg-slate-200 text-slate-500') ?>">
+                  <?= $st['done'] ? '✓' : ($idx + 1) ?>
+                </div>
+                <span class="text-[10px] font-extrabold uppercase tracking-tight leading-tight"><?= e($st['label']) ?></span>
               </div>
-              <span class="text-[10px] font-extrabold uppercase tracking-tight leading-tight"><?= e($st['label']) ?></span>
-            </div>
+            <?php endif; ?>
           <?php endforeach; ?>
         </div>
       </div>
 
       <!-- 5 Golden Questions Clinical Orientation Card -->
-      <div class="bg-gradient-to-br from-blue-950 via-slate-900 to-indigo-950 text-white rounded-3xl p-6 shadow-xl border border-blue-800/40" data-aos="fade-up">
+      <div class="bg-gradient-to-br from-blue-950 via-slate-900 to-indigo-950 text-white rounded-3xl p-6 shadow-xl border border-blue-800/40">
         <div class="flex items-center gap-2 mb-4 border-b border-white/10 pb-3">
           <span class="p-1.5 rounded-lg bg-blue-500/20 text-blue-300">
             <i data-lucide="compass" class="w-4 h-4"></i>
@@ -673,7 +693,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
       <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
         
         <!-- Column 1: Medical History Review (3 Cols) -->
-        <div class="lg:col-span-4 space-y-6" data-aos="fade-right">
+        <div class="lg:col-span-4 space-y-6">
           
           <div class="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-card space-y-4">
             <div class="flex items-center justify-between border-b border-slate-100 pb-3">
@@ -734,6 +754,8 @@ require_once __DIR__ . '/../includes/sidebar.php';
                 <?php endforeach; ?>
               <?php endif; ?>
             </div>
+          </div>
+
           <!-- Patient Longitudinal Care Timeline Card -->
           <div class="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-card space-y-4">
             <div class="flex items-center justify-between border-b border-slate-100 pb-3">
@@ -767,10 +789,10 @@ require_once __DIR__ . '/../includes/sidebar.php';
         </div>
 
         <!-- Column 2 & 3: Interactive Note Management & Diagnosis / Treatment Plan Builder (8 Cols) -->
-        <div class="lg:col-span-8 space-y-6" data-aos="fade-left">
+        <div class="lg:col-span-8 space-y-6">
           
           <!-- SOAP Consultation Note Form -->
-          <div id="soapNoteSection" class="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-card space-y-5">
+          <div id="soapNoteSection" class="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-card space-y-5 scroll-mt-24">
             <div class="flex items-center justify-between border-b border-slate-100 pb-3">
               <div>
                 <h3 class="text-sm font-extrabold text-slate-900 uppercase tracking-wide flex items-center gap-2 font-display">
@@ -856,11 +878,20 @@ require_once __DIR__ . '/../includes/sidebar.php';
 
               <!-- A: Assessment -->
               <div>
-                <label class="block text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
-                  <span>Assessment (Clinical Differential & Impression)</span>
-                  <span class="text-[10px] text-slate-400">Working diagnosis</span>
-                </label>
-                <textarea name="assessment" rows="2" 
+                <div class="flex items-center justify-between mb-1">
+                  <label class="text-xs font-bold text-slate-700 flex items-center justify-between w-full">
+                    <span>Assessment (Clinical Differential & Impression)</span>
+                    <span class="text-[10px] text-slate-400">Working diagnosis</span>
+                  </label>
+                </div>
+                <div class="flex items-center gap-1.5 flex-wrap mb-1.5">
+                  <span class="text-[9px] uppercase font-extrabold text-slate-400">Insert:</span>
+                  <button type="button" onclick="appendSoapDiagnosis('Dengue Fever without Warning Signs (ICD-10: A90)')" class="text-[10px] px-1.5 py-0.5 rounded bg-blue-50 hover:bg-blue-100 text-blue-700 font-semibold transition">+ Dengue</button>
+                  <button type="button" onclick="appendSoapDiagnosis('Acute Gastroenteritis (ICD-10: A09)')" class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-semibold transition">+ AGE/Diarrhea</button>
+                  <button type="button" onclick="appendSoapDiagnosis('Essential Hypertension (ICD-10: I10)')" class="text-[10px] px-1.5 py-0.5 rounded bg-purple-50 hover:bg-purple-100 text-purple-700 font-semibold transition">+ Hypertension</button>
+                  <button type="button" onclick="appendSoapDiagnosis('Acute Upper Respiratory Tract Infection (ICD-10: J06.9)')" class="text-[10px] px-1.5 py-0.5 rounded bg-cyan-50 hover:bg-cyan-100 text-cyan-700 font-semibold transition">+ URTI</button>
+                </div>
+                <textarea id="soap-assessment-textarea" name="assessment" rows="2" 
                           placeholder="e.g. Gastritis secondary to mucosal hyperacidity vs Functional Dyspepsia..." 
                           class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition"><?= e($assVal) ?></textarea>
               </div>
@@ -889,7 +920,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
             
             <!-- Card A: Add Diagnosis Form -->
-            <div class="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-card space-y-4">
+            <div id="diagnosisSection" class="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-card space-y-4 scroll-mt-24">
               <h3 class="text-xs font-extrabold uppercase tracking-wider text-slate-900 flex items-center gap-2 border-b border-slate-100 pb-3 font-display">
                 <i data-lucide="plus-circle" class="w-4 h-4 text-blue-600"></i>
                 <span>Add Formal Diagnosis</span>
@@ -900,20 +931,67 @@ require_once __DIR__ . '/../includes/sidebar.php';
                 <input type="hidden" name="action" value="save_diagnosis" />
 
                 <div>
-                  <label class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">Diagnosis Name</label>
-                  <input type="text" name="diagnosis_name" required placeholder="e.g. Stable Angina, Migraine..." 
-                         class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  <div class="flex items-center justify-between mb-1">
+                    <label class="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">Diagnosis Name *</label>
+                    <span class="text-[9px] text-blue-600 font-bold flex items-center gap-1">
+                      <i data-lucide="sparkles" class="w-3 h-3"></i>
+                      <span>ICD-10 Dynamic Search Active</span>
+                    </span>
+                  </div>
+                  <div class="relative">
+                    <input type="text" id="diagnosis-name-input" name="diagnosis_name" required 
+                           placeholder="Search disease or code (e.g. Dengue, Diarrhea, I10)..." 
+                           autocomplete="off"
+                           class="w-full pl-8 pr-8 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition" />
+                    <i data-lucide="search" class="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5 pointer-events-none"></i>
+                    <span id="diagnosis-search-spinner" class="hidden absolute right-2.5 top-2.5 text-blue-600">
+                      <i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i>
+                    </span>
+                    
+                    <!-- Disease Search Results Dropdown -->
+                    <div id="diagnosis-search-results" class="hidden absolute left-0 right-0 mt-1.5 bg-white border border-slate-200 rounded-2xl shadow-2xl z-50 max-h-64 overflow-y-auto divide-y divide-slate-100 p-1.5 space-y-1">
+                    </div>
+                  </div>
+
+                  <!-- Quick Select Chips for Common Diagnoses -->
+                  <div class="flex items-center gap-1.5 flex-wrap pt-1.5">
+                    <span class="text-[9px] font-extrabold uppercase tracking-tight text-slate-400">Common:</span>
+                    <button type="button" onclick="selectQuickDiagnosis('Dengue Fever without Warning Signs', 'A90', 'Moderate')" class="text-[10px] px-2 py-0.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold transition flex items-center gap-1">
+                      <span>Dengue</span><span class="font-mono text-[9px] opacity-70">A90</span>
+                    </button>
+                    <button type="button" onclick="selectQuickDiagnosis('Diarrhea and Gastroenteritis (Presumed Infectious Origin)', 'A09', 'Moderate')" class="text-[10px] px-2 py-0.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold transition flex items-center gap-1">
+                      <span>Diarrhea</span><span class="font-mono text-[9px] opacity-70">A09</span>
+                    </button>
+                    <button type="button" onclick="selectQuickDiagnosis('Essential (Primary) Hypertension', 'I10', 'Moderate')" class="text-[10px] px-2 py-0.5 rounded-lg bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold transition flex items-center gap-1">
+                      <span>Hypertension</span><span class="font-mono text-[9px] opacity-70">I10</span>
+                    </button>
+                    <button type="button" onclick="selectQuickDiagnosis('Type 2 Diabetes Mellitus without Complications', 'E11.9', 'Moderate')" class="text-[10px] px-2 py-0.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-700 font-bold transition flex items-center gap-1">
+                      <span>Diabetes</span><span class="font-mono text-[9px] opacity-70">E11.9</span>
+                    </button>
+                    <button type="button" onclick="selectQuickDiagnosis('Acute Upper Respiratory Tract Infection (URTI)', 'J06.9', 'Mild')" class="text-[10px] px-2 py-0.5 rounded-lg bg-cyan-50 hover:bg-cyan-100 text-cyan-700 font-bold transition flex items-center gap-1">
+                      <span>URTI</span><span class="font-mono text-[9px] opacity-70">J06.9</span>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Verified Selection Pill -->
+                <div id="diagnosis-selected-badge" class="hidden p-2 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] font-bold flex items-center justify-between transition">
+                  <div class="flex items-center gap-1.5 truncate">
+                    <i data-lucide="check-circle" class="w-3.5 h-3.5 text-emerald-600 shrink-0"></i>
+                    <span id="diagnosis-selected-text" class="truncate"></span>
+                  </div>
+                  <span class="text-[9px] font-mono px-2 py-0.5 bg-emerald-200/60 rounded-md text-emerald-900 shrink-0">ICD-10 Verified</span>
                 </div>
 
                 <div class="grid grid-cols-2 gap-2">
                   <div>
                     <label class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">ICD-10 Code</label>
-                    <input type="text" name="icd_code" placeholder="e.g. I20.9" 
-                           class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-bold text-slate-800" />
+                    <input type="text" id="diagnosis-icd-input" name="icd_code" placeholder="e.g. I20.9" autocomplete="off"
+                           class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500" />
                   </div>
                   <div>
                     <label class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">Type</label>
-                    <select name="diag_type" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800">
+                    <select id="diagnosis-type-select" name="diag_type" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800">
                       <option value="Primary">Primary</option>
                       <option value="Secondary">Secondary</option>
                       <option value="Differential">Differential</option>
@@ -923,7 +1001,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
 
                 <div>
                   <label class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">Severity</label>
-                  <select name="severity" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800">
+                  <select id="diagnosis-severity-select" name="severity" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800">
                     <option value="Mild">Mild</option>
                     <option value="Moderate" selected>Moderate</option>
                     <option value="Severe">Severe</option>
@@ -945,7 +1023,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
             </div>
 
             <!-- Card B: Add Treatment Plan Form -->
-            <div class="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-card space-y-4">
+            <div id="treatmentPlanSection" class="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-card space-y-4 scroll-mt-24">
               <h3 class="text-xs font-extrabold uppercase tracking-wider text-slate-900 flex items-center gap-2 border-b border-slate-100 pb-3 font-display">
                 <i data-lucide="calendar" class="w-4 h-4 text-emerald-600"></i>
                 <span>Add Treatment Plan</span>
@@ -1025,8 +1103,41 @@ function handleCompleteConsultationSubmit(form) {
     return true;
 }
 
-// Dynamic Search for Patients
+// Helper: Append disease to SOAP Assessment
+function appendSoapDiagnosis(text) {
+    const area = document.getElementById('soap-assessment-textarea');
+    if (!area) return;
+    if (area.value.trim().length > 0) {
+        area.value = area.value.trim() + "; " + text;
+    } else {
+        area.value = text;
+    }
+    area.focus();
+}
+
+// Quick Select for Formal Diagnosis Form
+function selectQuickDiagnosis(name, icd, severity) {
+    const nameInput = document.getElementById('diagnosis-name-input');
+    const icdInput = document.getElementById('diagnosis-icd-input');
+    const sevSelect = document.getElementById('diagnosis-severity-select');
+    const badge = document.getElementById('diagnosis-selected-badge');
+    const badgeText = document.getElementById('diagnosis-selected-text');
+    const resultsBox = document.getElementById('diagnosis-search-results');
+
+    if (nameInput) nameInput.value = name;
+    if (icdInput) icdInput.value = icd;
+    if (sevSelect && severity) sevSelect.value = severity;
+    if (badge && badgeText) {
+        badgeText.textContent = `${name} [${icd}]`;
+        badge.classList.remove('hidden');
+    }
+    if (resultsBox) resultsBox.classList.add('hidden');
+    if (window.lucide) lucide.createIcons();
+}
+
+// Dynamic Search for Patients & Diseases
 document.addEventListener('DOMContentLoaded', function() {
+    // 1. Patient Search
     const docSearchInput = document.getElementById('doctor-patient-search');
     const docResultsBox = document.getElementById('doctor-search-results');
     let docSearchTimer = null;
@@ -1079,6 +1190,142 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
+
+    // 2. Disease & ICD-10 AJAX Search Autocomplete
+    const diagInput = document.getElementById('diagnosis-name-input');
+    const icdInput = document.getElementById('diagnosis-icd-input');
+    const diagResultsBox = document.getElementById('diagnosis-search-results');
+    const diagSpinner = document.getElementById('diagnosis-search-spinner');
+    const diagBadge = document.getElementById('diagnosis-selected-badge');
+    const diagBadgeText = document.getElementById('diagnosis-selected-text');
+    const diagSevSelect = document.getElementById('diagnosis-severity-select');
+    let diagTimer = null;
+    let diagAbortCtrl = null;
+
+    function renderDiseaseResults(items) {
+        if (!diagResultsBox) return;
+        diagResultsBox.innerHTML = '';
+        if (!items || items.length === 0) {
+            diagResultsBox.innerHTML = '<div class="p-3 text-xs text-slate-400 text-center font-medium">No matching diseases or ICD-10 codes found in hospital catalog.</div>';
+            diagResultsBox.classList.remove('hidden');
+            return;
+        }
+
+        items.forEach(item => {
+            const row = document.createElement('div');
+            row.className = 'p-2.5 hover:bg-blue-50/90 rounded-xl cursor-pointer transition flex items-start justify-between gap-3 text-xs border-b border-slate-50 last:border-b-0';
+            
+            const leftCol = document.createElement('div');
+            leftCol.className = 'space-y-0.5 min-w-0';
+            
+            const titleRow = document.createElement('div');
+            titleRow.className = 'flex items-center gap-1.5 flex-wrap';
+            
+            const nameEl = document.createElement('span');
+            nameEl.className = 'font-bold text-slate-900 leading-tight';
+            nameEl.textContent = item.name;
+            titleRow.appendChild(nameEl);
+
+            if (item.category) {
+                const catEl = document.createElement('span');
+                catEl.className = 'text-[9px] px-1.5 py-0.2 rounded bg-slate-100 text-slate-500 font-semibold';
+                catEl.textContent = item.category;
+                titleRow.appendChild(catEl);
+            }
+
+            leftCol.appendChild(titleRow);
+
+            if (item.description) {
+                const descEl = document.createElement('p');
+                descEl.className = 'text-[10px] text-slate-500 line-clamp-1';
+                descEl.textContent = item.description;
+                leftCol.appendChild(descEl);
+            }
+
+            const rightCol = document.createElement('div');
+            rightCol.className = 'shrink-0 text-right';
+            rightCol.innerHTML = `
+                <span class="px-2 py-0.5 text-[10px] font-mono font-bold rounded-full bg-blue-100 text-blue-800">${item.icd_code || 'ICD-10'}</span>
+            `;
+
+            row.appendChild(leftCol);
+            row.appendChild(rightCol);
+
+            row.addEventListener('click', () => {
+                if (diagInput) diagInput.value = item.name;
+                if (icdInput) icdInput.value = item.icd_code || '';
+                if (diagSevSelect && item.default_severity) diagSevSelect.value = item.default_severity;
+                if (diagBadge && diagBadgeText) {
+                    diagBadgeText.textContent = `${item.name} [${item.icd_code}]`;
+                    diagBadge.classList.remove('hidden');
+                }
+                diagResultsBox.classList.add('hidden');
+                if (window.lucide) lucide.createIcons();
+            });
+
+            diagResultsBox.appendChild(row);
+        });
+
+        diagResultsBox.classList.remove('hidden');
+        if (window.lucide) lucide.createIcons();
+    }
+
+    function searchDiseases(query) {
+        clearTimeout(diagTimer);
+        const q = (query || '').trim();
+        if (q.length < 1) {
+            if (diagResultsBox) {
+                diagResultsBox.classList.add('hidden');
+                diagResultsBox.innerHTML = '';
+            }
+            return;
+        }
+
+        if (diagSpinner) diagSpinner.classList.remove('hidden');
+        diagTimer = setTimeout(async () => {
+            if (diagAbortCtrl) diagAbortCtrl.abort();
+            diagAbortCtrl = new AbortController();
+
+            try {
+                const res = await fetch('/api/search/diseases?q=' + encodeURIComponent(q), {
+                    signal: diagAbortCtrl.signal,
+                    headers: { 'Accept': 'application/json' }
+                });
+                const payload = await res.json();
+                if (diagSpinner) diagSpinner.classList.add('hidden');
+                renderDiseaseResults(payload.data || []);
+            } catch (err) {
+                if (err.name !== 'AbortError') {
+                    if (diagSpinner) diagSpinner.classList.add('hidden');
+                }
+            }
+        }, 150);
+    }
+
+    if (diagInput) {
+        diagInput.addEventListener('input', function() {
+            searchDiseases(this.value);
+        });
+        diagInput.addEventListener('focus', function() {
+            if (this.value.trim().length >= 1) {
+                searchDiseases(this.value);
+            }
+        });
+    }
+
+    if (icdInput) {
+        icdInput.addEventListener('input', function() {
+            searchDiseases(this.value);
+        });
+    }
+
+    document.addEventListener('click', function(e) {
+        if (diagResultsBox && diagInput && icdInput) {
+            if (!diagInput.contains(e.target) && !icdInput.contains(e.target) && !diagResultsBox.contains(e.target)) {
+                diagResultsBox.classList.add('hidden');
+            }
+        }
+    });
 });
 </script>
 

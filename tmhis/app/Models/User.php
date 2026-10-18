@@ -45,4 +45,46 @@ class User extends Authenticatable
         $name = trim(($this->FirstName ?? '') . ' ' . ($this->LastName ?? ''));
         return $name ?: ($this->Username ?? 'User #' . $this->UserID);
     }
+
+    public function hasRole(...$roles): bool
+    {
+        $userRole = strtolower(trim($this->Role ?? ''));
+        if (empty($userRole)) {
+            return false;
+        }
+
+        $flattened = [];
+        foreach ($roles as $role) {
+            if (is_array($role)) {
+                foreach ($role as $r) {
+                    $flattened[] = strtolower(trim((string)$r));
+                }
+            } else {
+                $flattened[] = strtolower(trim((string)$role));
+            }
+        }
+
+        foreach ($flattened as $req) {
+            if ($userRole === $req) {
+                return true;
+            }
+            $aliases = match ($req) {
+                'admin' => ['admin'],
+                'chief', 'director', 'cmo' => ['chief', 'director', 'cmo'],
+                'records', 'records_officer', 'mro' => ['records', 'records_officer', 'mro'],
+                'register', 'registrator', 'admitting' => ['register', 'registrator', 'admitting'],
+                'doctor', 'physician' => ['doctor', 'physician'],
+                'nurse' => ['nurse'],
+                'medtech', 'laboratory' => ['medtech', 'medical_technologist', 'laboratory'],
+                'pharmacy', 'pharmacist' => ['pharmacy', 'pharmacist'],
+                'billing', 'cashier', 'accountant' => ['billing', 'cashier', 'accountant'],
+                default => [$req]
+            };
+            if (in_array($userRole, $aliases, true)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
 }

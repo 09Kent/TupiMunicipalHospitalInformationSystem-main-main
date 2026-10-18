@@ -245,13 +245,13 @@ class PatientRegistration
                 'message'        => 'Patient successfully registered and queued for consultation.'
             ];
 
-        } catch (Exception $e) {
+        } catch (\Throwable $e) {
             if ($ownsTransaction && $this->db->inTransaction()) {
                 $this->db->rollBack();
             }
             return [
                 'success' => false,
-                'message' => 'Registration failed: ' . $e->getMessage()
+                'message' => safe_error_message($e, 'Registration failed due to an unexpected system error.')
             ];
         }
     }

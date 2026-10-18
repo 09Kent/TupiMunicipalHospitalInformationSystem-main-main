@@ -45,7 +45,10 @@ class ReferralApiController extends Controller
             $doctorId = $doc ? $doc->DoctorID : null;
         }
         if (!$doctorId) {
-            $doctorId = (int)(Doctor::value('DoctorID') ?: 1);
+            return response()->json([
+                'success' => false,
+                'message' => 'An active attending physician profile is required to issue clinical referrals.'
+            ], 422);
         }
 
         // Prevent accidental duplicate referral submission (same patient, same doctor, within last 60 seconds)
@@ -125,7 +128,7 @@ class ReferralApiController extends Controller
             DB::rollBack();
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to create referral: ' . $e->getMessage()
+                'message' => safe_error_message($e, 'Failed to create clinical referral.')
             ], 500);
         }
     }

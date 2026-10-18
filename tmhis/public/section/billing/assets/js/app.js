@@ -1807,7 +1807,11 @@ function printCurrentInvoice() {
     </div>
   `;
 
+  printArea.classList.remove('hidden');
   window.print();
+  setTimeout(() => {
+    printArea.classList.add('hidden');
+  }, 500);
 }
 
 function openOfficialTMHISPrintInvoice() {
@@ -1903,7 +1907,11 @@ function printCurrentReceipt() {
     </div>
   `;
 
+  printArea.classList.remove('hidden');
   window.print();
+  setTimeout(() => {
+    printArea.classList.add('hidden');
+  }, 500);
 }
 
 // 10. User Profile Dropdown & Modal

@@ -85,7 +85,7 @@ class AdminController extends Controller
             }
             return response()->json(['success' => false, 'message' => 'Invalid action.'], 400);
         } catch (\Throwable $e) {
-            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+            return response()->json(['success' => false, 'message' => safe_error_message($e, 'Failed to process user account action.')], 500);
         }
     }
 
@@ -105,7 +105,7 @@ class AdminController extends Controller
             }
             return response()->json(['success' => false, 'message' => 'Invalid action.'], 400);
         } catch (\Throwable $e) {
-            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+            return response()->json(['success' => false, 'message' => safe_error_message($e, 'Failed to process hospital configuration.')], 500);
         }
     }
 
@@ -134,7 +134,7 @@ class AdminController extends Controller
             }
             return response()->json(['success' => false, 'message' => 'Invalid action.'], 400);
         } catch (\Throwable $e) {
-            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+            return response()->json(['success' => false, 'message' => safe_error_message($e, 'Failed to process department action.')], 500);
         }
     }
 
@@ -163,7 +163,7 @@ class AdminController extends Controller
             }
             return response()->json(['success' => false, 'message' => 'Invalid action.'], 400);
         } catch (\Throwable $e) {
-            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+            return response()->json(['success' => false, 'message' => safe_error_message($e, 'Failed to process service fee action.')], 500);
         }
     }
 
@@ -188,7 +188,7 @@ class AdminController extends Controller
             }
             return response()->json(['success' => false, 'message' => 'Invalid action.'], 400);
         } catch (\Throwable $e) {
-            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+            return response()->json(['success' => false, 'message' => safe_error_message($e, 'Failed to process database backup.')], 500);
         }
     }
 

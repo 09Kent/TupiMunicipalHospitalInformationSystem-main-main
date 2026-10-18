@@ -82,9 +82,39 @@ class LoginController extends Controller
             ]);
 
             // If doctor, load doctor-specific session variables
-            $doctor = Doctor::where('UserID', $user->UserID)->first();
-            if (!$doctor && (strtolower($user->Role ?? '') === 'doctor' || strtolower($user->Username ?? '') === 'cardio')) {
-                $doctor = Doctor::where('Status', 'Active')->first() ?? Doctor::first();
+            $doctor = null;
+            if ($user->hasRole('doctor')) {
+                $doctor = Doctor::where('UserID', $user->UserID)->first();
+                if (!$doctor && !empty($user->Email)) {
+                    $doctor = Doctor::where('Email', $user->Email)->first();
+                    if ($doctor) {
+                        $doctor->update(['UserID' => $user->UserID]);
+                    }
+                }
+                // If not found, safely auto-provision dedicated doctor profile for this doctor user
+                if (!$doctor) {
+                    $doctor = Doctor::create([
+                        'UserID'          => $user->UserID,
+                        'FirstName'       => $user->FirstName,
+                        'LastName'        => $user->LastName,
+                        'SpecialtyID'     => 1,
+                        'DepartmentID'    => 16,
+                        'Title'           => 'MD',
+                        'Specialty'       => 'General Practitioner',
+                        'LicenseNumber'   => 'LIC-MED-' . $user->UserID,
+                        'ContactNumber'   => '+63 917 000 ' . str_pad((string)$user->UserID, 4, '0', STR_PAD_LEFT),
+                        'Email'           => $user->Email,
+                        'ExperienceYears' => 5,
+                        'Clinic'          => 'Tupi Municipal Hospital',
+                        'ClinicRoom'      => 'Room 101, Outpatient Clinic',
+                        'ProfileImage'    => '/assets/doctors/default-doctor.png',
+                        'Rating'          => 5.00,
+                        'ReviewsCount'    => 10,
+                        'ConsultationFee' => '500.00',
+                        'Languages'       => 'English, Tagalog, Hiligaynon',
+                        'Status'          => 'Available',
+                    ]);
+                }
             }
             if ($doctor) {
                 $specialty = Specialty::find($doctor->SpecialtyID);
@@ -122,56 +152,35 @@ class LoginController extends Controller
 
     public function redirectUser(User $user)
     {
-        $username = strtolower(trim($user->Username ?? ''));
-        $role = strtolower(trim($user->Role ?? ''));
-
-        $legacyDoctorAliases = ['cardio', 'doctor', 'dr.chen', 'dr.flores', 'dr.lewis', 'dr.villanueva', 'dr.wilson', 'dr.miller'];
-        $legacyChiefAliases = ['chief', 'director', 'cmo', 'chief.medical'];
-        $legacyRecordsAliases = ['records', 'records2', 'records_officer', 'records.officer'];
-        $legacyRegisterAliases = ['register', 'registrator', 'registrar.main', 'registrar', 'register1'];
-        $legacyNurseAliases = ['nurse', 'staff.reyes', 'staff.bautista', 'duty.nurse'];
-        $legacyMedtechAliases = ['medtech', 'medtech2', 'medtech.supervisor'];
-        $legacyPharmacyAliases = ['pharmacist', 'pharmacy', 'pharmacy.supervisor'];
-        $legacyBillingAliases = ['billing', 'cashier', 'accountant', 'cashier2', 'cashier.supervisor'];
-
-        $isDoctorAccount = $role === 'doctor' || in_array($username, $legacyDoctorAliases, true) || Doctor::where('UserID', $user->UserID)->exists();
-        $isChiefAccount = in_array($role, ['chief', 'director', 'cmo']) || in_array($username, $legacyChiefAliases, true);
-        $isRecordsAccount = in_array($role, ['records', 'mro']) || in_array($username, $legacyRecordsAliases, true);
-        $isRegisterAccount = in_array($role, ['register', 'registrator']) || in_array($username, $legacyRegisterAliases, true);
-        $isNurseAccount = in_array($role, ['nurse']) || in_array($username, $legacyNurseAliases, true);
-        $isMedtechAccount = in_array($role, ['medtech']) || in_array($username, $legacyMedtechAliases, true);
-        $isPharmacyAccount = in_array($role, ['pharmacist', 'pharmacy']) || in_array($username, $legacyPharmacyAliases, true);
-        $isBillingAccount = in_array($role, ['billing', 'cashier', 'accountant']) || in_array($username, $legacyBillingAliases, true);
-
         // 1. Hospital Chief / Medical Director / Chief Medical Officer
-        if ($isChiefAccount) {
+        if ($user->hasRole('chief')) {
             return redirect()->route('director.dashboard');
         }
 
         // 2. Nurse on Duty
-        if ($isNurseAccount || str_contains($username, 'nurse')) {
+        if ($user->hasRole('nurse')) {
             return redirect()->route('nurse.dashboard');
         }
 
         // 3. System Administrator
-        if ($role === 'admin' || $username === 'admin' || $username === 'admin.official') {
+        if ($user->hasRole('admin')) {
             return redirect()->route('admin.dashboard');
         }
 
         // 4. Medical Records Officer
-        if ($isRecordsAccount) {
+        if ($user->hasRole('records')) {
             return redirect()->route('records.dashboard');
         }
 
         // 5. Admitting / Registration Staff
-        if ($isRegisterAccount || str_contains($username, 'registrator') || str_contains($username, 'register')) {
+        if ($user->hasRole('register')) {
             return redirect()->route('register.dashboard');
         }
 
         // 6. Attending Physician / Doctor
-        if ($isDoctorAccount) {
+        if ($user->hasRole('doctor')) {
             if (!session('doctor_id')) {
-                $doc = Doctor::where('UserID', $user->UserID)->first() ?? Doctor::where('Status', 'Active')->first() ?? Doctor::first();
+                $doc = Doctor::where('UserID', $user->UserID)->first();
                 if ($doc) {
                     session(['doctor_id' => (int)$doc->DoctorID]);
                 }
@@ -180,17 +189,17 @@ class LoginController extends Controller
         }
 
         // 7. Medical Technologist
-        if ($isMedtechAccount || str_contains($username, 'medtech')) {
+        if ($user->hasRole('medtech')) {
             return redirect()->route('medtech.dashboard');
         }
 
         // 8. Pharmacist
-        if ($isPharmacyAccount || str_contains($username, 'pharmacist')) {
+        if ($user->hasRole('pharmacy')) {
             return redirect()->route('pharmacy.dashboard');
         }
 
         // 9. Billing / Cashier
-        if ($isBillingAccount || str_contains($username, 'cashier') || str_contains($username, 'billing')) {
+        if ($user->hasRole('billing')) {
             return redirect()->route('billing.dashboard');
         }
 

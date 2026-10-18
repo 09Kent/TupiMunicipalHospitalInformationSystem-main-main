@@ -199,15 +199,35 @@ namespace {
                         if (!$doc && !empty($u->Email)) {
                             $doc = \App\Models\Doctor::where('Email', $u->Email)->first();
                         }
-                        if (!$doc && (strtolower($role) === 'doctor' || strtolower($u->Username ?? '') === 'cardio')) {
-                            $doc = \App\Models\Doctor::where('Status', 'Active')->first() ?? \App\Models\Doctor::first();
+                        if (!$doc && ($u instanceof \App\Models\User && $u->hasRole('doctor'))) {
+                            $doc = \App\Models\Doctor::create([
+                                'UserID'          => $u->UserID,
+                                'FirstName'       => $u->FirstName,
+                                'LastName'        => $u->LastName,
+                                'SpecialtyID'     => 1,
+                                'DepartmentID'    => 16,
+                                'Title'           => 'MD',
+                                'Specialty'       => 'General Practitioner',
+                                'LicenseNumber'   => 'LIC-MED-' . $u->UserID,
+                                'ContactNumber'   => '+63 917 000 ' . str_pad((string)$u->UserID, 4, '0', STR_PAD_LEFT),
+                                'Email'           => $u->Email,
+                                'ExperienceYears' => 5,
+                                'Clinic'          => 'Tupi Municipal Hospital',
+                                'ClinicRoom'      => 'Room 101, Outpatient Clinic',
+                                'ProfileImage'    => '/assets/doctors/default-doctor.png',
+                                'Rating'          => 5.00,
+                                'ReviewsCount'    => 10,
+                                'ConsultationFee' => '500.00',
+                                'Languages'       => 'English, Tagalog, Hiligaynon',
+                                'Status'          => 'Available',
+                            ]);
                         }
                         if ($doc) {
                             $doctorId = (int)$doc->DoctorID;
                             session([
                                 'doctor_id' => $doctorId,
-                                'specialty' => $doc->Specialty ?? session('specialty', 'Cardiologist'),
-                                'specialty_id' => (int)($doc->SpecialtyID ?? session('specialty_id', 2)),
+                                'specialty' => $doc->Specialty ?? session('specialty', 'General Practitioner'),
+                                'specialty_id' => (int)($doc->SpecialtyID ?? session('specialty_id', 1)),
                                 'license_number' => $doc->LicenseNumber ?? session('license_number', ''),
                             ]);
                         }
@@ -254,6 +274,29 @@ namespace {
                 $sub = ($sub === '/' || $sub === '\\') ? '' : str_replace('\\', '/', $sub);
             }
             return $sub . '/' . ltrim($path, '/');
+        }
+    }
+
+    if (!function_exists('safe_error_message')) {
+        function safe_error_message(\Throwable $e, string $fallback = 'A server error occurred. Please contact system support.'): string {
+            if (class_exists('\Illuminate\Support\Facades\Log')) {
+                \Illuminate\Support\Facades\Log::error($e->getMessage(), [
+                    'exception' => get_class($e),
+                    'file'      => $e->getFile(),
+                    'line'      => $e->getLine(),
+                ]);
+            } else {
+                error_log($e->getMessage());
+            }
+
+            if ($e instanceof \Illuminate\Validation\ValidationException ||
+                $e instanceof \InvalidArgumentException ||
+                $e instanceof \Symfony\Component\HttpKernel\Exception\HttpExceptionInterface) {
+                return $e->getMessage();
+            }
+
+            $debug = function_exists('config') ? config('app.debug', false) : (getenv('APP_DEBUG') === 'true');
+            return $debug ? $e->getMessage() : $fallback;
         }
     }
 }

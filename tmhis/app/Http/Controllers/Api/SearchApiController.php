@@ -208,4 +208,64 @@ class SearchApiController extends Controller
             'data'    => $formatted,
         ]);
     }
+
+    /**
+     * Search Diseases & ICD-10 Coding Catalog
+     * Allows AJAX lookup by Disease Name, ICD-10 Code, Category, or Clinical Description
+     */
+    public function searchDiseases(Request $request): JsonResponse
+    {
+        $term = trim((string)$request->query('q', ''));
+        $limit = min(50, max(5, (int)$request->query('limit', 20)));
+
+        $query = DB::table('icd10_catalog')
+            ->where('Status', 'Active');
+
+        if (mb_strlen($term) > 0) {
+            $like = "%{$term}%";
+            $prefix = "{$term}%";
+
+            $query->where(function ($q) use ($like) {
+                $q->where('DiseaseName', 'like', $like)
+                    ->orWhere('ICD10Code', 'like', $like)
+                    ->orWhere('Category', 'like', $like)
+                    ->orWhere('Description', 'like', $like);
+            })
+            ->orderByRaw("
+                CASE 
+                    WHEN ICD10Code LIKE ? THEN 0
+                    WHEN DiseaseName LIKE ? THEN 1
+                    WHEN DiseaseName LIKE ? THEN 2
+                    ELSE 3 
+                END
+            ", [$prefix, $prefix, $like])
+            ->orderBy('DiseaseName');
+        } else {
+            // Default top clinical diagnoses
+            $query->orderBy('CatalogID', 'asc');
+        }
+
+        $results = $query->limit($limit)->get();
+
+        $formatted = $results->map(function ($d) {
+            return [
+                'id'               => (int)$d->CatalogID,
+                'name'             => $d->DiseaseName,
+                'disease_name'     => $d->DiseaseName,
+                'icd_code'         => $d->ICD10Code,
+                'icd10_code'       => $d->ICD10Code,
+                'category'         => $d->Category ?: 'General Clinical',
+                'description'      => $d->Description ?: '',
+                'default_severity' => $d->DefaultSeverity ?: 'Moderate',
+                'display_label'    => "{$d->DiseaseName} (ICD-10: {$d->ICD10Code})",
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'count'   => count($formatted),
+            'data'    => $formatted,
+        ]);
+    }
 }
+

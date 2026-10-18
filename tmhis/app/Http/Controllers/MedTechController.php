@@ -372,11 +372,23 @@ class MedTechController extends Controller
         $result = LaboratoryResult::with(['patient'])->find($cleanId);
 
         if (!$result) {
+            $result = LaboratoryResult::with(['patient'])->where('RequestID', $cleanId)->first();
+        }
+
+        if (!$result && ($id === 'latest' || $id === 'preview')) {
             $result = LaboratoryResult::with(['patient'])->first();
         }
 
-        $patient = $result ? $result->patient : Patient::first();
-        $request = $result ? LaboratoryRequest::find($result->RequestID) : null;
+        if (!$result) {
+            abort(404, 'Diagnostic laboratory result not found.');
+        }
+
+        $patient = $result->patient;
+        if (!$patient) {
+            abort(404, 'Associated patient record not found for this laboratory result.');
+        }
+
+        $request = LaboratoryRequest::find($result->RequestID);
 
         return view('medtech.report_print', compact('result', 'patient', 'request'));
     }

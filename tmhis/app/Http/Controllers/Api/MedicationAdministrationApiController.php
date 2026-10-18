@@ -91,7 +91,7 @@ class MedicationAdministrationApiController extends Controller
             DB::rollBack();
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to record administration: ' . $e->getMessage()
+                'message' => safe_error_message($e, 'Failed to record medication administration.')
             ], 500);
         }
     }
@@ -139,7 +139,7 @@ class MedicationAdministrationApiController extends Controller
             $scheduledTs = !empty($item->ScheduledTime) ? strtotime($item->ScheduledTime) : strtotime($item->CreatedAt);
             $status = $item->Status;
 
-            $docFull = !empty($item->DocLastName) ? "Dr. {$item->DocFirstName} {$item->DocLastName}" : "Dr. Daniel Lewis, MD";
+            $docFull = !empty($item->DocLastName) ? "Dr. {$item->DocFirstName} {$item->DocLastName}" : "Attending Physician";
             $room = ($item->PatientCategory === 'Inpatient') ? ('Room ' . (200 + ($item->PatientID % 20))) : 'OPD Triage';
 
             $formattedItem = [

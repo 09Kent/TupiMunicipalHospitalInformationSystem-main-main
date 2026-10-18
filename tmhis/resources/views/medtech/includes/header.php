@@ -65,6 +65,13 @@ $currentUser = Session::getCurrentUser();
   <script src="<?= asset('vendor/aos/aos.js') ?>"></script>
 
   <style>
+    /* Prevent AOS from hiding content in internal scrollable dashboard layouts */
+    [data-aos] {
+      opacity: 1 !important;
+      transform: none !important;
+      visibility: visible !important;
+    }
+
     body {
       font-family: 'Inter', sans-serif;
       background-color: #f8fafc;

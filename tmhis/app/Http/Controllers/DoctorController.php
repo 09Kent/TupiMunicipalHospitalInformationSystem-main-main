@@ -23,18 +23,40 @@ class DoctorController extends Controller
             $doctorRecord = \App\Models\Doctor::where('UserID', $user->UserID)->first();
             if (!$doctorRecord && !empty($user->Email)) {
                 $doctorRecord = \App\Models\Doctor::where('Email', $user->Email)->first();
+                if ($doctorRecord) {
+                    $doctorRecord->update(['UserID' => $user->UserID]);
+                }
             }
-            if (!$doctorRecord) {
-                // For Admin or unlinked physician accounts, fallback to primary active doctor
-                $doctorRecord = \App\Models\Doctor::where('Status', 'Active')->first() ?? \App\Models\Doctor::first();
+            if (!$doctorRecord && ($user instanceof \App\Models\User && $user->hasRole('doctor'))) {
+                $doctorRecord = \App\Models\Doctor::create([
+                    'UserID'          => $user->UserID,
+                    'FirstName'       => $user->FirstName,
+                    'LastName'        => $user->LastName,
+                    'SpecialtyID'     => 1,
+                    'DepartmentID'    => 16,
+                    'Title'           => 'MD',
+                    'Specialty'       => 'General Practitioner',
+                    'LicenseNumber'   => 'LIC-MED-' . $user->UserID,
+                    'ContactNumber'   => '+63 917 000 ' . str_pad((string)$user->UserID, 4, '0', STR_PAD_LEFT),
+                    'Email'           => $user->Email,
+                    'ExperienceYears' => 5,
+                    'Clinic'          => 'Tupi Municipal Hospital',
+                    'ClinicRoom'      => 'Room 101, Outpatient Clinic',
+                    'ProfileImage'    => '/assets/doctors/default-doctor.png',
+                    'Rating'          => 5.00,
+                    'ReviewsCount'    => 10,
+                    'ConsultationFee' => '500.00',
+                    'Languages'       => 'English, Tagalog, Hiligaynon',
+                    'Status'          => 'Available',
+                ]);
             }
             if ($doctorRecord) {
                 $doctorId = (int)$doctorRecord->DoctorID;
-                $specialtyName = $doctorRecord->Specialty ?? 'Cardiologist';
+                $specialtyName = $doctorRecord->Specialty ?? 'General Practitioner';
                 session([
                     'doctor_id' => $doctorId,
                     'specialty' => $specialtyName,
-                    'specialty_id' => (int)($doctorRecord->SpecialtyID ?? 2),
+                    'specialty_id' => (int)($doctorRecord->SpecialtyID ?? 1),
                 ]);
             }
         }
@@ -139,6 +161,12 @@ class DoctorController extends Controller
             ->get();
 
         return response()->json(['success' => true, 'data' => $medicines]);
+    }
+
+    public function diagnosisDiseases(Request $request)
+    {
+        $searchApi = new \App\Http\Controllers\Api\SearchApiController();
+        return $searchApi->searchDiseases($request);
     }
 
     public function handleLegacyView(Request $request, $path = '')

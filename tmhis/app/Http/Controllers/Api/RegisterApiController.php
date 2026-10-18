@@ -34,10 +34,10 @@ class RegisterApiController extends Controller
             $classifier = new SymptomClassifier();
             $result = $classifier->classifyComplaint($complaint, (array)$symptoms, $locationCode);
             return response()->json($result);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Classification error: ' . $e->getMessage()
+                'message' => safe_error_message($e, 'Symptom triage classification failed.')
             ], 500);
         }
     }
@@ -79,10 +79,10 @@ class RegisterApiController extends Controller
             $result = $regService->registerCompletePatient($data, (int)$userId);
             $status = $result['success'] ? 201 : (!empty($result['duplicate_warning']) ? 409 : 400);
             return response()->json($result, $status);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Server registration error: ' . $e->getMessage()
+                'message' => safe_error_message($e, 'Server encountered an error while processing patient registration.')
             ], 500);
         }
     }
@@ -105,10 +105,10 @@ class RegisterApiController extends Controller
                 'locations' => $locations,
                 'data'      => $symptoms
             ]);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Error retrieving symptoms metadata: ' . $e->getMessage()
+                'message' => safe_error_message($e, 'Error retrieving symptoms metadata.')
             ], 500);
         }
     }

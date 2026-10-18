@@ -27,56 +27,11 @@ class RoleMiddleware
         }
 
         $user = Auth::user();
-        $userRole = strtolower(trim($user->Role ?? ''));
-        $username = strtolower(trim($user->Username ?? ''));
 
-        // Normalize requested roles
-        $allowed = array_map(fn($r) => strtolower(trim($r)), $roles);
-
-        // Check direct role match
-        $hasAccess = in_array($userRole, $allowed, true);
-
-        // Check role aliases
-        if (!$hasAccess) {
-            foreach ($allowed as $role) {
-                if ($role === 'admin' && ($userRole === 'admin' || $username === 'admin')) {
-                    $hasAccess = true;
-                    break;
-                }
-                if (in_array($role, ['chief', 'director']) && ($userRole === 'chief' || $userRole === 'director' || $username === 'director' || $username === 'chief.medical')) {
-                    $hasAccess = true;
-                    break;
-                }
-                if ($role === 'records' && ($userRole === 'records' || $username === 'records' || $username === 'records_officer' || $username === 'records.officer')) {
-                    $hasAccess = true;
-                    break;
-                }
-                if (in_array($role, ['register', 'registrator']) && ($userRole === 'register' || $userRole === 'registrator' || str_contains($username, 'registrator') || str_contains($username, 'register') || $username === 'registrar.main')) {
-                    $hasAccess = true;
-                    break;
-                }
-                if ($role === 'doctor' && ($userRole === 'doctor' || !empty($user->doctor) || in_array($username, ['cardio', 'dr.chen', 'dr.flores', 'dr.lewis', 'dr.villanueva', 'dr.wilson', 'dr.miller'], true))) {
-                    $hasAccess = true;
-                    break;
-                }
-                if ($role === 'nurse' && ($userRole === 'nurse' || str_contains($username, 'nurse') || $username === 'staff.reyes' || $username === 'duty.nurse')) {
-                    $hasAccess = true;
-                    break;
-                }
-                if ($role === 'medtech' && ($userRole === 'medtech' || str_contains($username, 'medtech') || $username === 'medtech.supervisor')) {
-                    $hasAccess = true;
-                    break;
-                }
-                if (in_array($role, ['pharmacist', 'pharmacy']) && ($userRole === 'pharmacist' || str_contains($username, 'pharmacist') || $username === 'pharmacy.supervisor')) {
-                    $hasAccess = true;
-                    break;
-                }
-                if (in_array($role, ['billing', 'cashier', 'accountant']) && ($userRole === 'billing' || in_array($username, ['cashier', 'billing', 'accountant', 'cashier.supervisor'], true))) {
-                    $hasAccess = true;
-                    break;
-                }
-            }
-        }
+        // Standardized Role-Based Access Control
+        $hasAccess = $user instanceof \App\Models\User 
+            ? $user->hasRole(...$roles) 
+            : in_array(strtolower((string)($user->Role ?? '')), array_map('strtolower', $roles), true);
 
         if (!$hasAccess) {
             if ($request->expectsJson() || $request->is('api/*') || $request->is('*/api/*') || $request->ajax()) {
@@ -87,17 +42,17 @@ class RoleMiddleware
             }
 
             // Redirect logged-in user to their authorized portal instead of kicking them out to login
-            $redirectUrl = match ($userRole) {
-                'chief', 'director' => url('/director'),
-                'admin'             => url('/admin'),
-                'records'           => url('/records'),
-                'doctor'            => url('/doctor'),
-                'nurse'             => url('/nurse'),
-                'medtech'           => url('/medtech'),
-                'pharmacist', 'pharmacy' => url('/pharmacy'),
-                'billing', 'cashier', 'accountant' => url('/billing'),
-                'register', 'registrator' => url('/register'),
-                default             => url('/')
+            $redirectUrl = match (true) {
+                $user instanceof \App\Models\User && $user->hasRole('chief')    => url('/director'),
+                $user instanceof \App\Models\User && $user->hasRole('admin')    => url('/admin'),
+                $user instanceof \App\Models\User && $user->hasRole('records')  => url('/records'),
+                $user instanceof \App\Models\User && $user->hasRole('doctor')   => url('/doctor'),
+                $user instanceof \App\Models\User && $user->hasRole('nurse')    => url('/nurse'),
+                $user instanceof \App\Models\User && $user->hasRole('medtech')  => url('/medtech'),
+                $user instanceof \App\Models\User && $user->hasRole('pharmacy') => url('/pharmacy'),
+                $user instanceof \App\Models\User && $user->hasRole('billing')  => url('/billing'),
+                $user instanceof \App\Models\User && $user->hasRole('register') => url('/register'),
+                default                                                         => url('/')
             };
 
             return redirect($redirectUrl)->with('error', 'Access Denied: You do not have permission to access that section.');

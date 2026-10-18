@@ -81,17 +81,22 @@ class PharmacyController extends Controller
             ->orWhere('GenericName', $validated['generic_name'])
             ->first();
 
-        if ($med) {
-            $med->update([
-                'GenericName' => $validated['generic_name'],
-                'BrandName'   => $validated['brand_name'] ?? $med->BrandName,
-                'Category'    => $validated['category'] ?? $med->Category,
-                'DosageForm'  => $validated['dosage_form'] ?? $med->DosageForm,
-                'Strength'    => $validated['strength'] ?? $med->Strength,
-                'Status'      => $validated['status'] ?? $med->Status,
-                'UpdatedAt'   => now(),
-            ]);
+        if (!$med) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Medicine formulary entry not found.'
+            ], 404);
         }
+
+        $med->update([
+            'GenericName' => $validated['generic_name'],
+            'BrandName'   => $validated['brand_name'] ?? $med->BrandName,
+            'Category'    => $validated['category'] ?? $med->Category,
+            'DosageForm'  => $validated['dosage_form'] ?? $med->DosageForm,
+            'Strength'    => $validated['strength'] ?? $med->Strength,
+            'Status'      => $validated['status'] ?? $med->Status,
+            'UpdatedAt'   => now(),
+        ]);
 
         return response()->json([
             'success' => true,
@@ -108,13 +113,17 @@ class PharmacyController extends Controller
             ->orWhere('GenericName', $name)
             ->first();
 
-        $newStatus = 'Inactive';
-        if ($med) {
-            $newStatus = ($med->Status === 'Active' || $med->Status === 'In Stock') ? 'Inactive' : 'Active';
-            $med->Status = $newStatus;
-            $med->UpdatedAt = now();
-            $med->save();
+        if (!$med) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Medicine not found in pharmacy formulary.'
+            ], 404);
         }
+
+        $newStatus = ($med->Status === 'Active' || $med->Status === 'In Stock') ? 'Inactive' : 'Active';
+        $med->Status = $newStatus;
+        $med->UpdatedAt = now();
+        $med->save();
 
         return response()->json([
             'success' => true,

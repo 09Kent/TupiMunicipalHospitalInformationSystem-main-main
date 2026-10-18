@@ -73,6 +73,13 @@ $currentUser = Session::getCurrentUser();
   <script src="<?= asset('vendor/chartjs/chart.min.js') ?>"></script>
 
   <style>
+    /* Prevent AOS from hiding content with opacity: 0 in internal scrollable dashboard layouts */
+    [data-aos] {
+      opacity: 1 !important;
+      transform: none !important;
+      visibility: visible !important;
+    }
+
     /* Custom Scrollbar */
     ::-webkit-scrollbar {
       width: 6px;

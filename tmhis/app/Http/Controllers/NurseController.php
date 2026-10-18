@@ -106,9 +106,11 @@ class NurseController extends Controller
     public function createVital(Request $request)
     {
         $patientId = (int)($request->input('PatientID') ?? $request->input('patient_id') ?? $request->input('patient') ?? 0);
-        if ($patientId <= 0) {
-            $patient = \App\Models\Patient::first();
-            $patientId = $patient ? (int)$patient->PatientID : 1;
+        if ($patientId <= 0 || !\App\Models\Patient::where('PatientID', $patientId)->exists()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'A valid Patient must be selected to record vital signs.'
+            ], 422);
         }
 
         $bp = $request->input('BloodPressure') ?? $request->input('bp') ?? '120/80';
@@ -122,7 +124,7 @@ class NurseController extends Controller
         $notes = $request->input('ClinicalNotes') ?? $request->input('notes') ?? 'Routine vital signs taken.';
 
         $user = auth()->user();
-        $nurseName = ($user && !empty($user->FullName)) ? $user->FullName : 'Nurse Elena Gomez, RN';
+        $nurseName = ($user && !empty($user->FullName)) ? $user->FullName : 'Nurse on Duty';
 
         $vital = \App\Models\PatientVital::create([
             'PatientID'        => $patientId,
@@ -166,7 +168,13 @@ class NurseController extends Controller
 
     public function createTask(Request $request)
     {
-        $patientId = (int)($request->input('PatientID') ?? $request->input('patient_id') ?? 1);
+        $patientId = (int)($request->input('PatientID') ?? $request->input('patient_id') ?? 0);
+        if ($patientId <= 0 || !\App\Models\Patient::where('PatientID', $patientId)->exists()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'A valid Patient must be selected to create a nursing care task.'
+            ], 422);
+        }
         $title = $request->input('TaskTitle') ?? $request->input('task') ?? 'Clinical Status Update';
         $category = $request->input('Category') ?? 'Vital Check';
         $priority = $request->input('Priority') ?? 'Normal';
@@ -196,21 +204,21 @@ class NurseController extends Controller
     public function updateTaskStatus(Request $request, $id)
     {
         $task = \App\Models\NurseTask::where('TaskID', $id)->first();
-        if ($task) {
-            $status = $request->input('status', 'Completed');
-            $task->update([
-                'Status' => $status,
-                'CompletedAt' => ($status === 'Completed') ? now() : null
-            ]);
+        if (!$task) {
             return response()->json([
-                'success' => true,
-                'message' => "Task #{$id} status updated to {$status}."
-            ]);
+                'success' => false,
+                'message' => "Nursing task #{$id} not found."
+            ], 404);
         }
 
+        $status = $request->input('status', 'Completed');
+        $task->update([
+            'Status' => $status,
+            'CompletedAt' => ($status === 'Completed') ? now() : null
+        ]);
         return response()->json([
             'success' => true,
-            'message' => "Task status updated to " . ($request->input('status', 'Completed'))
+            'message' => "Task #{$id} status updated to {$status}."
         ]);
     }
 
@@ -230,12 +238,17 @@ class NurseController extends Controller
     {
         $status = $request->input('status', 'Called');
         $queue = \App\Models\PatientQueue::where('QueueID', $id)->first();
-        if ($queue) {
-            $queue->update([
-                'QueueStatus' => $status,
-                'CalledAt' => ($status === 'Called') ? now() : $queue->CalledAt
-            ]);
+        if (!$queue) {
+            return response()->json([
+                'success' => false,
+                'message' => "Queue item #{$id} not found."
+            ], 404);
         }
+
+        $queue->update([
+            'QueueStatus' => $status,
+            'CalledAt' => ($status === 'Called') ? now() : $queue->CalledAt
+        ]);
 
         return response()->json([
             'success' => true,

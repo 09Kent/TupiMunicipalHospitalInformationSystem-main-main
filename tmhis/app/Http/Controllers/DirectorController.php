@@ -47,7 +47,7 @@ class DirectorController extends Controller
                 }
             }
 
-            $docCount = $pdo->query("SELECT COUNT(*) FROM doctors WHERE Status = 'Active'")->fetchColumn();
+            $docCount = $pdo->query("SELECT COUNT(*) FROM doctors WHERE Status != 'Inactive'")->fetchColumn();
             if ($docCount !== false && (int)$docCount > 0) {
                 $metrics['doctors'] = (int)$docCount;
             }
@@ -248,7 +248,7 @@ class DirectorController extends Controller
         } catch (\Throwable $e) {
             return response()->json([
                 'status' => 'error',
-                'message' => 'Unable to load department performance data: ' . $e->getMessage()
+                'message' => safe_error_message($e, 'Unable to load department performance data.')
             ], 500);
         }
     }
@@ -379,7 +379,7 @@ class DirectorController extends Controller
         } catch (\Throwable $e) {
             return response()->json([
                 'status' => 'error',
-                'message' => 'Unable to load doctor statistics: ' . $e->getMessage()
+                'message' => safe_error_message($e, 'Unable to load doctor statistics.')
             ], 500);
         }
     }
@@ -458,7 +458,7 @@ class DirectorController extends Controller
         } catch (\Throwable $e) {
             return response()->json([
                 'status' => 'error',
-                'message' => 'Unable to load dashboard stats: ' . $e->getMessage()
+                'message' => safe_error_message($e, 'Unable to load dashboard stats.')
             ], 500);
         }
     }
@@ -614,7 +614,7 @@ class DirectorController extends Controller
         } catch (\Throwable $e) {
             return response()->json([
                 'status' => 'error',
-                'message' => 'Unable to load operational reports: ' . $e->getMessage()
+                'message' => safe_error_message($e, 'Unable to load operational reports.')
             ], 500);
         }
     }
@@ -700,7 +700,7 @@ class DirectorController extends Controller
         } catch (\Throwable $e) {
             return response()->json([
                 'status' => 'error',
-                'message' => 'Unable to load notifications: ' . $e->getMessage()
+                'message' => safe_error_message($e, 'Unable to load notifications.')
             ], 500);
         }
     }
@@ -765,7 +765,7 @@ class DirectorController extends Controller
         } catch (\Throwable $e) {
             return response()->json([
                 'status' => 'error',
-                'message' => 'Unable to load staff activity: ' . $e->getMessage()
+                'message' => safe_error_message($e, 'Unable to load staff activity.')
             ], 500);
         }
     }
@@ -810,7 +810,7 @@ class DirectorController extends Controller
         } catch (\Throwable $e) {
             return response()->json([
                 'status' => 'error',
-                'message' => 'Unable to load audit trail: ' . $e->getMessage()
+                'message' => safe_error_message($e, 'Unable to load audit trail.')
             ], 500);
         }
     }

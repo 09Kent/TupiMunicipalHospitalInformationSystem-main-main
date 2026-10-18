@@ -53,7 +53,7 @@ class BillingController extends Controller
         } catch (\Throwable $e) {
             return response()->json([
                 'success' => false,
-                'message' => $e->getMessage()
+                'message' => safe_error_message($e, 'Failed to create service charge.')
             ], 500);
         }
     }
@@ -151,7 +151,7 @@ class BillingController extends Controller
         } catch (\Throwable $e) {
             return response()->json([
                 'success' => false,
-                'message' => $e->getMessage()
+                'message' => safe_error_message($e, 'Failed to process payment transaction.')
             ], 422);
         }
     }
@@ -169,7 +169,7 @@ class BillingController extends Controller
         } catch (\Throwable $e) {
             return response()->json([
                 'success' => false,
-                'message' => $e->getMessage()
+                'message' => safe_error_message($e, 'Failed to aggregate unbilled charges.')
             ], 500);
         }
     }

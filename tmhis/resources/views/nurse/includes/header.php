@@ -151,6 +151,9 @@ $currentUser = Session::getCurrentUser();
 
     /* Card entrance stagger via CSS */
     [data-aos] {
+      opacity: 1 !important;
+      transform: none !important;
+      visibility: visible !important;
       transition-property: transform, opacity !important;
     }
 

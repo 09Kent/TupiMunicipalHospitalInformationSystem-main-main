@@ -371,9 +371,32 @@ require_once __DIR__ . '/../includes/sidebar.php';
 
       <!-- Diagnosis -->
       <div>
-        <label class="block font-bold text-slate-700 mb-1">Certified Clinical Diagnosis *</label>
-        <input type="text" name="diagnosis" required placeholder="e.g. Acute Gastroenteritis, Stable Coronary Artery Disease..." 
-               class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        <div class="flex items-center justify-between mb-1">
+          <label class="block font-bold text-slate-700">Certified Clinical Diagnosis *</label>
+          <span class="text-[10px] text-blue-600 font-bold flex items-center gap-1">
+            <i data-lucide="sparkles" class="w-3 h-3"></i>
+            <span>ICD-10 Search Active</span>
+          </span>
+        </div>
+        <div class="relative">
+          <input type="text" id="cert-diagnosis-input" name="diagnosis" required 
+                 placeholder="Search disease or code (e.g. Dengue, AGE, Bronchitis, I10)..." 
+                 autocomplete="off"
+                 class="w-full px-3.5 pl-9 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 top-3 pointer-events-none"></i>
+          
+          <div id="cert-diagnosis-results" class="hidden absolute left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-50 max-h-56 overflow-y-auto divide-y divide-slate-100 p-1">
+          </div>
+        </div>
+
+        <!-- Quick Select Chips -->
+        <div class="flex items-center gap-1.5 flex-wrap pt-1.5">
+          <span class="text-[9px] font-extrabold uppercase text-slate-400">Common:</span>
+          <button type="button" onclick="setCertDiagnosis('Acute Gastroenteritis with Mild Dehydration (ICD-10: A09.0)')" class="text-[10px] px-2 py-0.5 rounded bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold transition">Gastroenteritis (A09)</button>
+          <button type="button" onclick="setCertDiagnosis('Acute Upper Respiratory Tract Infection (ICD-10: J06.9)')" class="text-[10px] px-2 py-0.5 rounded bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold transition">URTI (J06.9)</button>
+          <button type="button" onclick="setCertDiagnosis('Dengue Fever without Warning Signs (ICD-10: A90)')" class="text-[10px] px-2 py-0.5 rounded bg-amber-50 hover:bg-amber-100 text-amber-700 font-bold transition">Dengue (A90)</button>
+          <button type="button" onclick="setCertDiagnosis('Essential (Primary) Hypertension (ICD-10: I10)')" class="text-[10px] px-2 py-0.5 rounded bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold transition">Hypertension (I10)</button>
+        </div>
       </div>
 
       <!-- Duration Start & End -->
@@ -502,5 +525,73 @@ require_once __DIR__ . '/../includes/sidebar.php';
 
   </div>
 </div>
+
+<script>
+function setCertDiagnosis(val) {
+  const input = document.getElementById('cert-diagnosis-input');
+  if (input) input.value = val;
+  const box = document.getElementById('cert-diagnosis-results');
+  if (box) box.classList.add('hidden');
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  const certDiagInput = document.getElementById('cert-diagnosis-input');
+  const certDiagBox = document.getElementById('cert-diagnosis-results');
+  let certTimer = null;
+
+  if (certDiagInput && certDiagBox) {
+    certDiagInput.addEventListener('input', function() {
+      clearTimeout(certTimer);
+      const q = this.value.trim();
+      if (q.length < 1) {
+        certDiagBox.classList.add('hidden');
+        certDiagBox.innerHTML = '';
+        return;
+      }
+
+      certTimer = setTimeout(async () => {
+        try {
+          const res = await fetch('/api/search/diseases?q=' + encodeURIComponent(q), {
+            headers: { 'Accept': 'application/json' }
+          });
+          const payload = await res.json();
+          certDiagBox.innerHTML = '';
+          if (!payload.data || payload.data.length === 0) {
+            certDiagBox.innerHTML = '<div class="p-2.5 text-xs text-slate-400 text-center font-medium">No matching diagnoses found.</div>';
+            certDiagBox.classList.remove('hidden');
+            return;
+          }
+
+          payload.data.forEach(item => {
+            const row = document.createElement('div');
+            row.className = 'p-2 hover:bg-blue-50 rounded-lg cursor-pointer flex items-center justify-between text-xs transition';
+            row.innerHTML = `
+              <div>
+                <span class="font-bold text-slate-800">${item.name}</span>
+                <span class="text-[10px] text-slate-400 block">${item.category || ''}</span>
+              </div>
+              <span class="px-2 py-0.5 text-[10px] font-mono font-bold rounded-full bg-blue-100 text-blue-800">${item.icd_code || 'ICD-10'}</span>
+            `;
+            row.addEventListener('click', () => {
+              certDiagInput.value = `${item.name} (ICD-10: ${item.icd_code})`;
+              certDiagBox.classList.add('hidden');
+            });
+            certDiagBox.appendChild(row);
+          });
+          certDiagBox.classList.remove('hidden');
+        } catch (e) {
+          certDiagBox.classList.add('hidden');
+        }
+      }, 180);
+    });
+
+    document.addEventListener('click', function(e) {
+      if (!certDiagInput.contains(e.target) && !certDiagBox.contains(e.target)) {
+        certDiagBox.classList.add('hidden');
+      }
+    });
+  }
+});
+</script>
 
 <?php require_once __DIR__ . '/../includes/footer.php'; ?>

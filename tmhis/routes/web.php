@@ -117,6 +117,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/api/laboratory-tests', [DoctorController::class, 'laboratoryTests'])->name('api.laboratory-tests');
         Route::get('/api/prescription-patients', [DoctorController::class, 'prescriptionPatients'])->name('api.prescription-patients');
         Route::get('/api/prescription-medicines', [DoctorController::class, 'prescriptionMedicines'])->name('api.prescription-medicines');
+        Route::get('/api/diagnosis-diseases', [DoctorController::class, 'diagnosisDiseases'])->name('api.diagnosis-diseases');
         Route::match(['get', 'post'], '/views/{path}', [DoctorController::class, 'handleLegacyView'])->where('path', '.*')->name('legacy');
         Route::match(['get', 'post'], '/{page}', [DoctorController::class, 'handlePage'])->name('page');
         Route::match(['get', 'post'], '/{page}/{sub}', [DoctorController::class, 'handlePage'])->name('page.sub');
@@ -244,6 +245,7 @@ Route::prefix('api/search')->name('api.search.')->group(function () {
     Route::get('/patients', [SearchApiController::class, 'searchPatients'])->name('patients');
     Route::get('/doctors', [SearchApiController::class, 'searchDoctors'])->name('doctors');
     Route::get('/nurses', [SearchApiController::class, 'searchNurses'])->name('nurses');
+    Route::get('/diseases', [SearchApiController::class, 'searchDiseases'])->name('diseases');
 });
 
 // 2. Universal Print Engine & Logs

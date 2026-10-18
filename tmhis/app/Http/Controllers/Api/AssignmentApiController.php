@@ -166,7 +166,7 @@ class AssignmentApiController extends Controller
             DB::rollBack();
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to assign doctor: ' . $e->getMessage()
+                'message' => safe_error_message($e, 'Failed to assign doctor to patient.')
             ], 500);
         }
     }
@@ -270,7 +270,7 @@ class AssignmentApiController extends Controller
             DB::rollBack();
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to assign nurse: ' . $e->getMessage()
+                'message' => safe_error_message($e, 'Failed to assign nurse to care task.')
             ], 500);
         }
     }

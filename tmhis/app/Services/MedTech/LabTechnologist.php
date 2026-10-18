@@ -33,7 +33,7 @@ class LabTechnologist
             $doctorId = (int)$reqStmt->fetchColumn();
         }
         if (!$doctorId) {
-            $docStmt = $this->db->query("SELECT DoctorID FROM doctors WHERE Status = 'Active' LIMIT 1");
+            $docStmt = $this->db->query("SELECT DoctorID FROM doctors WHERE Status != 'Inactive' LIMIT 1");
             $doctorId = (int)($docStmt ? ($docStmt->fetchColumn() ?: 1) : 1);
         }
 

@@ -48,12 +48,16 @@ class PrintController extends Controller
         $docTracking = '';
         $patient = null;
         $data = [];
+        $isSpecificId = !empty($id) && $id !== 'latest' && $id !== 'preview';
 
         switch ($type) {
             case 'patient':
             case 'patient-info':
                 $patient = Patient::where('PatientID', $id)->orWhere('PatientCode', $id)->first();
                 if (!$patient) {
+                    if ($isSpecificId) {
+                        abort(404, 'Patient record not found for printing.');
+                    }
                     $patient = Patient::orderBy('PatientID', 'desc')->first();
                 }
                 $docTitle = 'MASTER PATIENT INFORMATION RECORD';
@@ -68,6 +72,9 @@ class PrintController extends Controller
             case 'registration-form':
                 $patient = Patient::where('PatientID', $id)->orWhere('PatientCode', $id)->first();
                 if (!$patient) {
+                    if ($isSpecificId) {
+                        abort(404, 'Registration intake record not found.');
+                    }
                     $patient = Patient::orderBy('PatientID', 'desc')->first();
                 }
                 $docTitle = 'PATIENT INTAKE & REGISTRATION TRIAGE FORM';
@@ -94,6 +101,9 @@ class PrintController extends Controller
                     $note = ConsultationNote::where('PatientID', $id)->orderBy('NoteID', 'desc')->first();
                 }
                 if (!$note) {
+                    if ($isSpecificId) {
+                        abort(404, 'Clinical consultation note not found.');
+                    }
                     $note = ConsultationNote::orderBy('NoteID', 'desc')->first();
                 }
                 $patient = $note ? Patient::find($note->PatientID) : null;
@@ -112,6 +122,9 @@ class PrintController extends Controller
             case 'chart':
                 $patient = Patient::where('PatientID', $id)->orWhere('PatientCode', $id)->first();
                 if (!$patient) {
+                    if ($isSpecificId) {
+                        abort(404, 'Medical record not found.');
+                    }
                     $patient = Patient::orderBy('PatientID', 'desc')->first();
                 }
                 $docTitle = 'UNIFIED PATIENT MEDICAL RECORD & CLINICAL SUMMARY';
@@ -134,6 +147,9 @@ class PrintController extends Controller
                     $result = LaboratoryResult::where('PatientID', $id)->orderBy('ResultID', 'desc')->first();
                 }
                 if (!$result) {
+                    if ($isSpecificId) {
+                        abort(404, 'Diagnostic laboratory result not found.');
+                    }
                     $result = LaboratoryResult::orderBy('ResultID', 'desc')->first();
                 }
                 $patient = $result ? Patient::find($result->PatientID) : null;
@@ -154,6 +170,9 @@ class PrintController extends Controller
                     $rx = Prescription::where('PatientID', $id)->orderBy('PrescriptionID', 'desc')->first();
                 }
                 if (!$rx) {
+                    if ($isSpecificId) {
+                        abort(404, 'Prescription record not found.');
+                    }
                     $rx = Prescription::orderBy('PrescriptionID', 'desc')->first();
                 }
                 $patient = $rx ? Patient::find($rx->PatientID) : null;
@@ -175,6 +194,9 @@ class PrintController extends Controller
                     $invoice = BillingInvoice::where('PatientID', $id)->orderBy('InvoiceID', 'desc')->first();
                 }
                 if (!$invoice) {
+                    if ($isSpecificId) {
+                        abort(404, 'Billing invoice statement not found.');
+                    }
                     $invoice = BillingInvoice::orderBy('InvoiceID', 'desc')->first();
                 }
                 $patient = $invoice ? Patient::find($invoice->PatientID) : null;
@@ -194,6 +216,9 @@ class PrintController extends Controller
                     $payment = BillingPayment::where('PatientID', $id)->orderBy('PaymentID', 'desc')->first();
                 }
                 if (!$payment) {
+                    if ($isSpecificId) {
+                        abort(404, 'Payment receipt record not found.');
+                    }
                     $payment = BillingPayment::orderBy('PaymentID', 'desc')->first();
                 }
                 if (!$payment) {
@@ -226,6 +251,9 @@ class PrintController extends Controller
                     $referral = Referral::where('PatientID', $id)->orderBy('ReferralID', 'desc')->first();
                 }
                 if (!$referral) {
+                    if ($isSpecificId) {
+                        abort(404, 'Clinical referral record not found.');
+                    }
                     $referral = Referral::orderBy('ReferralID', 'desc')->first();
                 }
                 if (!$referral) {

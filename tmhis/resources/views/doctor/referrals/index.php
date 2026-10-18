@@ -564,6 +564,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
       ];
   }, $doctorPatients)) ?>;
 
+  let refSearchTimer = null;
   function filterRefPatients(query) {
     const box = document.getElementById('ref-patient-search-results');
     if (!box) return;
@@ -579,27 +580,56 @@ require_once __DIR__ . '/../includes/sidebar.php';
       (p.student_id && p.student_id.toLowerCase().includes(q))
     );
 
-    if (matches.length === 0) {
-      box.innerHTML = '<div class="p-3 text-slate-400 text-center">No patients found</div>';
+    if (matches.length > 0) {
+      let html = '';
+      matches.slice(0, 8).forEach(p => {
+        html += `
+          <div onclick="selectRefPatient(${p.id}, '${p.name.replace(/'/g, "\\'")}', '${p.code}')" 
+               class="p-2.5 hover:bg-blue-50 cursor-pointer flex items-center justify-between transition">
+            <div>
+              <div class="font-bold text-slate-800">${p.name}</div>
+              <div class="text-[11px] text-slate-400 font-mono">${p.code} ${p.student_id ? '• ' + p.student_id : ''}</div>
+            </div>
+            <span class="text-blue-600 font-bold text-[10px]">Select &rarr;</span>
+          </div>
+        `;
+      });
+      box.innerHTML = html;
       box.classList.remove('hidden');
       return;
     }
 
-    let html = '';
-    matches.slice(0, 8).forEach(p => {
-      html += `
-        <div onclick="selectRefPatient(${p.id}, '${p.name.replace(/'/g, "\\'")}', '${p.code}')" 
-             class="p-2.5 hover:bg-blue-50 cursor-pointer flex items-center justify-between">
-          <div>
-            <div class="font-bold text-slate-800">${p.name}</div>
-            <div class="text-[11px] text-slate-400 font-mono">${p.code} ${p.student_id ? '• ' + p.student_id : ''}</div>
-          </div>
-          <span class="text-blue-600 font-bold text-[10px]">Select &rarr;</span>
-        </div>
-      `;
-    });
-    box.innerHTML = html;
-    box.classList.remove('hidden');
+    // Fallback to Universal Search API
+    clearTimeout(refSearchTimer);
+    refSearchTimer = setTimeout(async () => {
+      try {
+        const res = await fetch('/api/search/patients?q=' + encodeURIComponent(q));
+        const data = await res.json();
+        if (!data.data || data.data.length === 0) {
+          box.innerHTML = '<div class="p-3 text-slate-400 text-center font-medium">No patients found.</div>';
+          box.classList.remove('hidden');
+          return;
+        }
+        let html = '';
+        data.data.slice(0, 8).forEach(p => {
+          html += `
+            <div onclick="selectRefPatient(${p.id}, '${p.name.replace(/'/g, "\\'")}', '${p.patient_code || p.code}')" 
+                 class="p-2.5 hover:bg-blue-50 cursor-pointer flex items-center justify-between transition">
+              <div>
+                <div class="font-bold text-slate-800">${p.name}</div>
+                <div class="text-[11px] text-slate-400 font-mono">${p.patient_code || p.code} • Hospital Registry</div>
+              </div>
+              <span class="text-blue-600 font-bold text-[10px]">Select &rarr;</span>
+            </div>
+          `;
+        });
+        box.innerHTML = html;
+        box.classList.remove('hidden');
+      } catch (e) {
+        box.innerHTML = '<div class="p-3 text-slate-400 text-center font-medium">No patients found.</div>';
+        box.classList.remove('hidden');
+      }
+    }, 200);
   }
 
   function selectRefPatient(id, name, code) {
