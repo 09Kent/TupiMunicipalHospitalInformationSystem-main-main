@@ -86,4 +86,9 @@ class Patient extends Model
     {
         return $this->hasMany(AllergyRecord::class, 'PatientID', 'PatientID');
     }
+
+    public function admissions()
+    {
+        return $this->hasMany(Admission::class, 'PatientID', 'PatientID');
+    }
 }

@@ -24,6 +24,13 @@ const regState = {
     phone: ""
   },
 
+  philhealth: {
+    hasCoverage: "Yes",
+    memberType: "Personal",
+    philhealthNumber: "",
+    memberName: ""
+  },
+
   medical: {
     bloodType: "Unknown",
     allergies: "",
@@ -94,6 +101,15 @@ function calculateAgeFromDob(dobString) {
     age--;
   }
   return age >= 0 ? age : 0;
+}
+
+function formatPhilHealthPin(val) {
+  const clean = (val || '').replace(/\D/g, '').slice(0, 12);
+  let formatted = '';
+  if (clean.length > 0) formatted += clean.substring(0, Math.min(2, clean.length));
+  if (clean.length > 2) formatted += '-' + clean.substring(2, Math.min(11, clean.length));
+  if (clean.length > 11) formatted += '-' + clean.substring(11, 12);
+  return formatted;
 }
 
 function goToRegStep(step) {
@@ -193,6 +209,22 @@ function validateRegStep(step) {
     if (!emg.name.trim()) { showRegError("err-emg-name", "Emergency contact name is required."); valid = false; }
     if (!emg.phone.trim()) { showRegError("err-emg-phone", "Emergency contact phone is required."); valid = false; }
 
+    const phil = regState.philhealth;
+    if (phil.hasCoverage === 'Yes') {
+      const cleanPin = (phil.philhealthNumber || '').replace(/\D/g, '');
+      if (!cleanPin) {
+        showRegError("err-philhealth-pin", "Please enter the 12-digit PhilHealth Identification Number (PIN).");
+        valid = false;
+      } else if (cleanPin.length !== 12) {
+        showRegError("err-philhealth-pin", `PhilHealth PIN requires 12 digits (currently ${cleanPin.length} digits). Format: XX-XXXXXXXXX-X.`);
+        valid = false;
+      }
+      if (phil.memberType === 'Parents' && !phil.memberName.trim()) {
+        showRegError("err-philhealth-parent-name", "Please enter the parent / principal member's full name.");
+        valid = false;
+      }
+    }
+
     return valid;
   }
 
@@ -250,8 +282,10 @@ function renderRegStep1() {
   const p = regState.personal;
   const emg = regState.emergency;
   const med = regState.medical;
+  const phil = regState.philhealth;
   const existing = regState.existingPatient;
   p.age = calculateAgeFromDob(p.dob);
+  const cleanPinLength = (phil.philhealthNumber || '').replace(/\D/g, '').length;
 
   return `
     <div class="step-container space-y-8">
@@ -266,17 +300,6 @@ function renderRegStep1() {
           <p class="text-xs sm:text-sm text-slate-500 mt-1">Let's start by getting to know you. Please provide your basic personal, emergency, and medical history.</p>
         </div>
 
-        <!-- 1-Click Preset Demo Loader -->
-        <div class="shrink-0 flex items-center gap-2">
-          <label class="text-xs font-bold text-slate-500">Preset Case:</label>
-          <select id="reg-preset-select" class="text-xs bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-medium text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none">
-            <option value="">-- Choose Sample --</option>
-            <option value="gastritis">🩺 Gastritis / Stomach Pain (GI)</option>
-            <option value="migraine">🧠 Severe Migraine (Neuro)</option>
-            <option value="chest_palp">🫀 Chest Palpitations (Cardio)</option>
-            <option value="knee_sprain">🦴 Knee Joint Pain (Ortho)</option>
-          </select>
-        </div>
       </div>
 
       <form id="reg-form-1" class="space-y-8" onsubmit="return false;">
@@ -382,9 +405,9 @@ function renderRegStep1() {
           <!-- Contact Details -->
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label class="block text-xs font-bold text-slate-700 mb-1">Contact Phone *</label>
-              <input type="tel" id="reg-phone" value="${p.phone}" placeholder="+1 (555) 000-0000" 
-                     class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800" />
+              <label class="block text-xs font-bold text-slate-700 mb-1">Contact Phone * <span class="text-[10px] font-normal text-slate-400">(Numbers only)</span></label>
+              <input type="tel" id="reg-phone" value="${p.phone}" placeholder="09123456789" maxlength="11" inputmode="numeric" pattern="[0-9]*"
+                     class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:ring-2 focus:ring-blue-500 focus:bg-white" />
               <p id="err-phone" class="reg-form-err text-rose-500 text-[11px] mt-1 hidden"></p>
             </div>
             <div>
@@ -401,6 +424,172 @@ function renderRegStep1() {
                    class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800" />
             <p id="err-address" class="reg-form-err text-rose-500 text-[11px] mt-1 hidden"></p>
           </div>
+        </div>
+
+        <!-- Enhanced PhilHealth Registration & Coverage Card -->
+        <div class="${existing ? 'hidden' : ''} bg-white rounded-2xl p-6 border border-emerald-200/90 shadow-2xs space-y-5 relative overflow-hidden">
+          <div class="absolute top-0 right-0 w-40 h-40 bg-emerald-50/60 rounded-full blur-2xl -mr-12 -mt-12 pointer-events-none"></div>
+
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-emerald-100">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-md shadow-emerald-600/20">
+                <i data-lucide="shield-check" class="w-5 h-5"></i>
+              </div>
+              <div>
+                <div class="flex items-center gap-2">
+                  <h3 class="text-sm font-extrabold text-slate-900">PhilHealth Registration & Identification</h3>
+                  <span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 uppercase tracking-wider">NHIP • Philippines</span>
+                </div>
+                <p class="text-[11px] text-slate-500 mt-0.5">National Health Insurance Program coverage, membership categorization, and PIN tracking</p>
+              </div>
+            </div>
+            <div class="flex items-center gap-1.5 px-3 py-1 bg-emerald-50 border border-emerald-200 rounded-xl text-[11px] font-bold text-emerald-800">
+              <i data-lucide="badge-check" class="w-3.5 h-3.5 text-emerald-600"></i>
+              <span>Universal Healthcare Benefit</span>
+            </div>
+          </div>
+
+          <!-- Coverage Toggle -->
+          <div class="space-y-2">
+            <label class="block text-xs font-bold text-slate-700">Does the patient have active PhilHealth coverage? *</label>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <label class="phil-coverage-card cursor-pointer border ${phil.hasCoverage === 'Yes' ? 'border-emerald-600 bg-emerald-50/90 text-emerald-950 ring-2 ring-emerald-500/20 shadow-xs' : 'border-slate-200 bg-slate-50/60 text-slate-700'} p-3.5 rounded-xl flex items-center gap-3 transition">
+                <input type="radio" name="reg-phil-coverage" value="Yes" class="hidden" ${phil.hasCoverage === 'Yes' ? 'checked' : ''}>
+                <div class="w-8 h-8 rounded-lg ${phil.hasCoverage === 'Yes' ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-600'} flex items-center justify-center shrink-0">
+                  <i data-lucide="check" class="w-4 h-4 stroke-[3]"></i>
+                </div>
+                <div>
+                  <div class="text-xs font-extrabold">Yes, Covered by PhilHealth</div>
+                  <div class="text-[11px] text-slate-500">Principal member or legal child dependent</div>
+                </div>
+              </label>
+
+              <label class="phil-coverage-card cursor-pointer border ${phil.hasCoverage === 'No' ? 'border-slate-600 bg-slate-100 text-slate-900 ring-2 ring-slate-400/20 shadow-xs' : 'border-slate-200 bg-slate-50/60 text-slate-700'} p-3.5 rounded-xl flex items-center gap-3 transition">
+                <input type="radio" name="reg-phil-coverage" value="No" class="hidden" ${phil.hasCoverage === 'No' ? 'checked' : ''}>
+                <div class="w-8 h-8 rounded-lg ${phil.hasCoverage === 'No' ? 'bg-slate-700 text-white' : 'bg-slate-200 text-slate-600'} flex items-center justify-center shrink-0">
+                  <i data-lucide="x" class="w-4 h-4 stroke-[3]"></i>
+                </div>
+                <div>
+                  <div class="text-xs font-extrabold">No / Non-Member / Self-Pay</div>
+                  <div class="text-[11px] text-slate-500">Self-pay or Point-of-Service (POS) assistance</div>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          <!-- PhilHealth Registration Fields (Visible if hasCoverage === 'Yes') -->
+          <div id="philhealth-fields-wrap" class="${phil.hasCoverage === 'Yes' ? '' : 'hidden'} space-y-5 pt-2 border-t border-slate-100">
+            
+            <!-- Membership Account Ownership: Personal vs Parents -->
+            <div>
+              <label class="block text-xs font-bold text-slate-700 mb-2 flex items-center justify-between">
+                <span class="flex items-center gap-1.5">
+                  <i data-lucide="user-cog" class="w-3.5 h-3.5 text-emerald-600"></i>
+                  <span>Whose PhilHealth account is it? *</span>
+                </span>
+                <span class="text-[11px] font-normal text-slate-500">Specify whether Personal or Parents' PhilHealth</span>
+              </label>
+              
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                
+                <!-- Personal (Self / Member) -->
+                <label class="phil-owner-card cursor-pointer border ${phil.memberType === 'Personal' ? 'border-emerald-600 bg-emerald-50 text-emerald-950 ring-2 ring-emerald-500/20 shadow-xs' : 'border-slate-200 bg-slate-50/60 text-slate-700 hover:border-slate-300'} p-4 rounded-xl flex items-start gap-3 transition">
+                  <input type="radio" name="reg-phil-owner" value="Personal" class="hidden" ${phil.memberType === 'Personal' ? 'checked' : ''}>
+                  <div class="w-9 h-9 rounded-xl ${phil.memberType === 'Personal' ? 'bg-emerald-600 text-white shadow-xs' : 'bg-slate-200 text-slate-600'} flex items-center justify-center shrink-0 mt-0.5">
+                    <i data-lucide="user-check" class="w-4 h-4"></i>
+                  </div>
+                  <div class="flex-1 min-w-0">
+                    <div class="flex items-center justify-between gap-1">
+                      <span class="text-xs font-black truncate">Personal (Member / Self)</span>
+                      <span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${phil.memberType === 'Personal' ? 'bg-emerald-200 text-emerald-900' : 'bg-slate-200 text-slate-600'} shrink-0">Principal</span>
+                    </div>
+                    <p class="text-[11px] text-slate-500 mt-1 leading-relaxed">
+                      Patient is the registered principal contributor (Employed, Voluntary/Self-Employed, Senior Citizen, or Indigent).
+                    </p>
+                  </div>
+                </label>
+
+                <!-- Parents (Dependent / Child) -->
+                <label class="phil-owner-card cursor-pointer border ${phil.memberType === 'Parents' ? 'border-emerald-600 bg-emerald-50 text-emerald-950 ring-2 ring-emerald-500/20 shadow-xs' : 'border-slate-200 bg-slate-50/60 text-slate-700 hover:border-slate-300'} p-4 rounded-xl flex items-start gap-3 transition">
+                  <input type="radio" name="reg-phil-owner" value="Parents" class="hidden" ${phil.memberType === 'Parents' ? 'checked' : ''}>
+                  <div class="w-9 h-9 rounded-xl ${phil.memberType === 'Parents' ? 'bg-emerald-600 text-white shadow-xs' : 'bg-slate-200 text-slate-600'} flex items-center justify-center shrink-0 mt-0.5">
+                    <i data-lucide="users" class="w-4 h-4"></i>
+                  </div>
+                  <div class="flex-1 min-w-0">
+                    <div class="flex items-center justify-between gap-1">
+                      <span class="text-xs font-black truncate">Parents' PhilHealth</span>
+                      <span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${phil.memberType === 'Parents' ? 'bg-emerald-200 text-emerald-900' : 'bg-slate-200 text-slate-600'} shrink-0">Dependent</span>
+                    </div>
+                    <p class="text-[11px] text-slate-500 mt-1 leading-relaxed">
+                      Patient is covered as a legal dependent under the PhilHealth account of their father or mother (unmarried children below 21 yrs).
+                    </p>
+                  </div>
+                </label>
+
+              </div>
+            </div>
+
+            <!-- PhilHealth PIN / ID and Parent Name Inputs -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              
+              <!-- PhilHealth Identification Number (PIN / ID) -->
+              <div>
+                <label class="block text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
+                  <span class="flex items-center gap-1.5">
+                    <i data-lucide="credit-card" class="w-3.5 h-3.5 text-emerald-600"></i>
+                    <span>PhilHealth ID Number (PIN) *</span>
+                  </span>
+                  <span id="reg-phil-pin-badge" class="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md ${cleanPinLength === 12 ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 'bg-slate-100 text-slate-600'}">
+                    ${cleanPinLength}/12 digits
+                  </span>
+                </label>
+                <div class="relative">
+                  <input type="text" id="reg-philhealth-pin" value="${phil.philhealthNumber}" maxlength="14" placeholder="00-000000000-0" inputmode="numeric" pattern="[0-9-]*"
+                         class="w-full pl-3.5 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-bold text-slate-800 tracking-wider focus:ring-2 focus:ring-emerald-500 focus:bg-white transition" />
+                  <div class="absolute right-3 top-2.5 flex items-center pointer-events-none">
+                    <span id="reg-phil-pin-check" class="${cleanPinLength === 12 ? '' : 'hidden'} text-emerald-600">
+                      <i data-lucide="check-circle-2" class="w-4 h-4"></i>
+                    </span>
+                  </div>
+                </div>
+                <p class="text-[11px] text-slate-400 mt-1">Official 12-digit PhilHealth PIN (e.g. <strong>12-345678901-2</strong>) found on ID or MDR.</p>
+                <p id="err-philhealth-pin" class="reg-form-err text-rose-500 text-[11px] mt-1 hidden"></p>
+              </div>
+
+              <!-- Parent / Principal Member Name (Shown when Parents is selected) -->
+              <div id="phil-parent-name-wrap" class="${phil.memberType === 'Parents' ? '' : 'hidden'}">
+                <label class="block text-xs font-bold text-slate-700 mb-1 flex items-center gap-1.5">
+                  <i data-lucide="user" class="w-3.5 h-3.5 text-blue-600"></i>
+                  <span>Parent / Principal Member Full Name *</span>
+                </label>
+                <input type="text" id="reg-phil-parent-name" value="${phil.memberName}" placeholder="e.g. Juan Dela Cruz (Father)" 
+                       class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:bg-white" />
+                <p class="text-[11px] text-slate-400 mt-1">Full name of the father/mother holding the principal PhilHealth policy.</p>
+                <p id="err-philhealth-parent-name" class="reg-form-err text-rose-500 text-[11px] mt-1 hidden"></p>
+              </div>
+
+            </div>
+
+            <!-- Health Insurance Policy Notice -->
+            <div class="p-3.5 bg-emerald-50/70 border border-emerald-200 rounded-xl flex items-start gap-2.5 text-[11px] text-emerald-900">
+              <i data-lucide="info" class="w-4 h-4 text-emerald-700 shrink-0 mt-0.5"></i>
+              <div>
+                <strong>PhilHealth UHC & Claims Integration:</strong>
+                Validating the PhilHealth PIN and relationship category connects this visit directly to hospital PhilHealth claim processing and prescription co-pay exemptions under the Universal Health Care Act.
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Non-Member Advisory Box -->
+          <div id="philhealth-nonmember-wrap" class="${phil.hasCoverage === 'No' ? '' : 'hidden'} p-4 bg-slate-50 border border-slate-200 rounded-xl flex items-start gap-3 text-xs text-slate-600">
+            <i data-lucide="help-circle" class="w-5 h-5 text-slate-400 shrink-0 mt-0.5"></i>
+            <div>
+              <strong class="text-slate-800 block mb-0.5">Non-PhilHealth / Direct Out-of-Pocket Registration</strong>
+              Patient will be logged as self-pay. Hospital billing will reflect standard municipal charges. Patients needing financial assistance can be evaluated for Point-of-Service (POS) sponsorship via the Medical Social Services office.
+            </div>
+          </div>
+
         </div>
 
         <!-- Emergency Contact Card -->
@@ -429,9 +618,9 @@ function renderRegStep1() {
               </select>
             </div>
             <div>
-              <label class="block text-xs font-bold text-slate-700 mb-1">Emergency Phone *</label>
-              <input type="tel" id="reg-emg-phone" value="${emg.phone}" placeholder="+1 (555) 000-0000" 
-                     class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800" />
+              <label class="block text-xs font-bold text-slate-700 mb-1">Emergency Phone * <span class="text-[10px] font-normal text-slate-400">(Numbers only)</span></label>
+              <input type="tel" id="reg-emg-phone" value="${emg.phone}" placeholder="09987654321" maxlength="11" inputmode="numeric" pattern="[0-9]*"
+                     class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:ring-2 focus:ring-blue-500 focus:bg-white" />
               <p id="err-emg-phone" class="reg-form-err text-rose-500 text-[11px] mt-1 hidden"></p>
             </div>
           </div>
@@ -521,6 +710,12 @@ function attachRegStep1Events() {
       email: patient.Email || '',
       address: patient.Address || ''
     };
+    regState.philhealth = {
+      hasCoverage: patient.PhilHealthNumber ? 'Yes' : 'No',
+      memberType: patient.PhilHealthMemberType || (patient.PhilHealthNumber ? 'Personal' : 'None'),
+      philhealthNumber: patient.PhilHealthNumber ? formatPhilHealthPin(patient.PhilHealthNumber) : '',
+      memberName: patient.PhilHealthMemberName || ''
+    };
     searchInput.value = `${patient.FirstName} ${patient.LastName} (${patient.PatientCode})`;
     renderRegStep(1);
     updateRegStepper();
@@ -576,6 +771,12 @@ function attachRegStep1Events() {
   if (clearExisting) {
     clearExisting.addEventListener("click", () => {
       regState.existingPatient = null;
+      regState.philhealth = {
+        hasCoverage: 'Yes',
+        memberType: 'Personal',
+        philhealthNumber: '',
+        memberName: ''
+      };
       searchInput.value = '';
       renderRegStep(1);
       updateRegStepper();
@@ -612,17 +813,114 @@ function attachRegStep1Events() {
     if (el) el.addEventListener("input", (e) => obj[key] = e.target.value);
   };
 
+  const bindNumericOnly = (id, obj, key, maxLength = null) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+
+    // 1. Strictly block letters and non-digit characters on keydown
+    el.addEventListener("keydown", (e) => {
+      // Allow browser shortcuts (Ctrl/Cmd + C, V, A, X, Z)
+      if (e.ctrlKey || e.altKey || e.metaKey) return;
+
+      // Allow navigation and functional editing keys
+      const allowedSpecialKeys = [
+        "Backspace", "Delete", "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown",
+        "Tab", "Enter", "Escape", "Home", "End"
+      ];
+      if (allowedSpecialKeys.includes(e.key)) return;
+
+      // Strictly block any single character that is not a numeric digit 0-9
+      if (e.key.length === 1 && !/^[0-9]$/.test(e.key)) {
+        e.preventDefault();
+        e.stopPropagation();
+        return false;
+      }
+
+      // Block if maximum length reached (unless text is highlighted for replacement)
+      const currentDigits = el.value.replace(/\D/g, '');
+      if (maxLength && currentDigits.length >= maxLength && el.selectionStart === el.selectionEnd) {
+        e.preventDefault();
+        e.stopPropagation();
+        return false;
+      }
+    });
+
+    // 2. Fallback keypress block
+    el.addEventListener("keypress", (e) => {
+      if (e.ctrlKey || e.altKey || e.metaKey || e.key.length > 1) return;
+      if (!/^[0-9]$/.test(e.key)) {
+        e.preventDefault();
+        e.stopPropagation();
+        return false;
+      }
+    });
+
+    // 3. Modern standard: prevent non-digit input before DOM insertion (handles virtual keyboards, dictation, autocompletion)
+    el.addEventListener("beforeinput", (e) => {
+      if (e.data && !/^[0-9]+$/.test(e.data)) {
+        e.preventDefault();
+        e.stopPropagation();
+        return false;
+      }
+    });
+
+    // 4. Block drag and drop of text containing letters
+    el.addEventListener("drop", (e) => {
+      e.preventDefault();
+      const dropped = e.dataTransfer?.getData("text") || "";
+      const cleanDigits = dropped.replace(/\D/g, "");
+      if (cleanDigits) {
+        const current = el.value.replace(/\D/g, "");
+        let combined = (current + cleanDigits).slice(0, maxLength || undefined);
+        el.value = combined;
+        if (obj && key) obj[key] = combined;
+      }
+    });
+
+    // 5. Strictly strip letters and non-digits on paste
+    el.addEventListener("paste", (e) => {
+      e.preventDefault();
+      const pasted = (e.clipboardData || window.clipboardData)?.getData('text') || '';
+      const clean = pasted.replace(/\D/g, '');
+      const current = el.value.replace(/\D/g, '');
+      const start = el.selectionStart !== null ? el.selectionStart : current.length;
+      const end = el.selectionEnd !== null ? el.selectionEnd : current.length;
+      let newVal = current.slice(0, start) + clean + current.slice(end);
+      if (maxLength && newVal.length > maxLength) {
+        newVal = newVal.slice(0, maxLength);
+      }
+      el.value = newVal;
+      if (obj && key) {
+        obj[key] = newVal;
+      }
+    });
+
+    // 6. Continuous input sanitizer guarantee
+    el.addEventListener("input", (e) => {
+      let digits = e.target.value.replace(/\D/g, '');
+      if (maxLength && digits.length > maxLength) {
+        digits = digits.slice(0, maxLength);
+      }
+      if (e.target.value !== digits) {
+        e.target.value = digits;
+      }
+      if (obj && key) {
+        obj[key] = digits;
+      }
+    });
+  };
+
   bind("reg-first-name", p, "firstName");
   bind("reg-middle-name", p, "middleName");
   bind("reg-last-name", p, "lastName");
   bind("reg-civil", p, "civilStatus");
-  bind("reg-phone", p, "phone");
+  bindNumericOnly("reg-phone", p, "phone", 11);
   bind("reg-email", p, "email");
   bind("reg-address", p, "address");
 
   bind("reg-emg-name", emg, "name");
   bind("reg-emg-rel", emg, "relationship");
-  bind("reg-emg-phone", emg, "phone");
+  bindNumericOnly("reg-emg-phone", emg, "phone", 11);
 
   bind("reg-med-blood", med, "bloodType");
   bind("reg-med-allergies", med, "allergies");
@@ -630,16 +928,176 @@ function attachRegStep1Events() {
   bind("reg-med-meds", med, "medications");
   bind("reg-med-hosp", med, "hospitalization");
 
-  // Preset demo loader
-  const presetSel = document.getElementById("reg-preset-select");
-  if (presetSel && window.DEMO_PRESETS) {
-    presetSel.addEventListener("change", (e) => {
-      const val = e.target.value;
-      if (DEMO_PRESETS[val]) {
-        applyRegPreset(DEMO_PRESETS[val]);
+  // PhilHealth Event Handlers
+  const phil = regState.philhealth;
+
+  // Coverage toggle (Yes / No)
+  const coverageCards = document.querySelectorAll(".phil-coverage-card");
+  const philWrap = document.getElementById("philhealth-fields-wrap");
+  const nonMemberWrap = document.getElementById("philhealth-nonmember-wrap");
+  coverageCards.forEach(card => {
+    card.addEventListener("click", () => {
+      const radio = card.querySelector("input[type=radio]");
+      if (radio) {
+        radio.checked = true;
+        phil.hasCoverage = radio.value;
+        coverageCards.forEach(c => {
+          c.className = "phil-coverage-card cursor-pointer border border-slate-200 bg-slate-50/60 text-slate-700 p-3.5 rounded-xl flex items-center gap-3 transition";
+          const iconBox = c.querySelector("div");
+          if (iconBox) iconBox.className = "w-8 h-8 rounded-lg bg-slate-200 text-slate-600 flex items-center justify-center shrink-0";
+        });
+        if (phil.hasCoverage === 'Yes') {
+          card.className = "phil-coverage-card cursor-pointer border border-emerald-600 bg-emerald-50/90 text-emerald-950 ring-2 ring-emerald-500/20 shadow-xs p-3.5 rounded-xl flex items-center gap-3 transition";
+          card.querySelector("div").className = "w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0";
+          if (philWrap) philWrap.classList.remove("hidden");
+          if (nonMemberWrap) nonMemberWrap.classList.add("hidden");
+        } else {
+          card.className = "phil-coverage-card cursor-pointer border border-slate-600 bg-slate-100 text-slate-900 ring-2 ring-slate-400/20 shadow-xs p-3.5 rounded-xl flex items-center gap-3 transition";
+          card.querySelector("div").className = "w-8 h-8 rounded-lg bg-slate-700 text-white flex items-center justify-center shrink-0";
+          if (philWrap) philWrap.classList.add("hidden");
+          if (nonMemberWrap) nonMemberWrap.classList.remove("hidden");
+        }
+        initLucideIcons();
       }
     });
+  });
+
+  // Ownership Radio Selection (Personal vs Parents)
+  const ownerCards = document.querySelectorAll(".phil-owner-card");
+  const parentNameWrap = document.getElementById("phil-parent-name-wrap");
+  ownerCards.forEach(card => {
+    card.addEventListener("click", () => {
+      const radio = card.querySelector("input[type=radio]");
+      if (radio) {
+        radio.checked = true;
+        phil.memberType = radio.value;
+        ownerCards.forEach(c => {
+          c.className = "phil-owner-card cursor-pointer border border-slate-200 bg-slate-50/60 text-slate-700 hover:border-slate-300 p-4 rounded-xl flex items-start gap-3 transition";
+          const iconBox = c.querySelector("div");
+          if (iconBox) iconBox.className = "w-9 h-9 rounded-xl bg-slate-200 text-slate-600 flex items-center justify-center shrink-0 mt-0.5";
+          const badge = c.querySelector("span.rounded-full");
+          if (badge) badge.className = "text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-200 text-slate-600 shrink-0";
+        });
+        card.className = "phil-owner-card cursor-pointer border border-emerald-600 bg-emerald-50 text-emerald-950 ring-2 ring-emerald-500/20 shadow-xs p-4 rounded-xl flex items-start gap-3 transition";
+        card.querySelector("div").className = "w-9 h-9 rounded-xl bg-emerald-600 text-white shadow-xs flex items-center justify-center shrink-0 mt-0.5";
+        const activeBadge = card.querySelector("span.rounded-full");
+        if (activeBadge) activeBadge.className = "text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-200 text-emerald-900 shrink-0";
+        
+        if (parentNameWrap) {
+          if (phil.memberType === 'Parents') {
+            parentNameWrap.classList.remove("hidden");
+          } else {
+            parentNameWrap.classList.add("hidden");
+          }
+        }
+        initLucideIcons();
+      }
+    });
+  });
+
+  // PhilHealth PIN Auto-formatter input (Strictly digits only with automatic mask)
+  const pinInput = document.getElementById("reg-philhealth-pin");
+  const pinBadge = document.getElementById("reg-phil-pin-badge");
+  const pinCheck = document.getElementById("reg-phil-pin-check");
+  if (pinInput) {
+    const updatePinUi = (cleanDigits) => {
+      const cleanLen = cleanDigits.length;
+      if (pinBadge) {
+        pinBadge.textContent = `${cleanLen}/12 digits`;
+        if (cleanLen === 12) {
+          pinBadge.className = "text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 border border-emerald-200";
+        } else {
+          pinBadge.className = "text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-slate-100 text-slate-600";
+        }
+      }
+      if (pinCheck) {
+        if (cleanLen === 12) {
+          pinCheck.classList.remove("hidden");
+        } else {
+          pinCheck.classList.add("hidden");
+        }
+      }
+    };
+
+    // 1. Strictly block letters and non-digit characters on keydown
+    pinInput.addEventListener("keydown", (e) => {
+      if (e.ctrlKey || e.altKey || e.metaKey) return;
+      const allowedSpecialKeys = [
+        "Backspace", "Delete", "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown",
+        "Tab", "Enter", "Escape", "Home", "End"
+      ];
+      if (allowedSpecialKeys.includes(e.key)) return;
+
+      // Letters and non-digit characters must NOT be entered
+      if (e.key.length === 1 && !/^[0-9]$/.test(e.key)) {
+        e.preventDefault();
+        e.stopPropagation();
+        return false;
+      }
+      const rawDigits = pinInput.value.replace(/\D/g, '');
+      if (rawDigits.length >= 12 && pinInput.selectionStart === pinInput.selectionEnd) {
+        e.preventDefault();
+        e.stopPropagation();
+        return false;
+      }
+    });
+
+    // 2. Fallback keypress block
+    pinInput.addEventListener("keypress", (e) => {
+      if (e.ctrlKey || e.altKey || e.metaKey || e.key.length > 1) return;
+      if (!/^[0-9]$/.test(e.key)) {
+        e.preventDefault();
+        e.stopPropagation();
+        return false;
+      }
+    });
+
+    // 3. Modern standard: prevent non-digit input before insertion
+    pinInput.addEventListener("beforeinput", (e) => {
+      if (e.data && !/^[0-9]+$/.test(e.data)) {
+        e.preventDefault();
+        e.stopPropagation();
+        return false;
+      }
+    });
+
+    // 4. Block dragging non-digits
+    pinInput.addEventListener("drop", (e) => {
+      e.preventDefault();
+      const dropped = e.dataTransfer?.getData("text") || "";
+      const cleanDigits = dropped.replace(/\D/g, '').slice(0, 12);
+      if (cleanDigits) {
+        const formatted = formatPhilHealthPin(cleanDigits);
+        pinInput.value = formatted;
+        phil.philhealthNumber = formatted;
+        updatePinUi(cleanDigits);
+      }
+    });
+
+    // 5. Strictly strip non-digits on paste and format
+    pinInput.addEventListener("paste", (e) => {
+      e.preventDefault();
+      const pasted = (e.clipboardData || window.clipboardData)?.getData('text') || '';
+      const cleanDigits = pasted.replace(/\D/g, '').slice(0, 12);
+      const formatted = formatPhilHealthPin(cleanDigits);
+      pinInput.value = formatted;
+      phil.philhealthNumber = formatted;
+      updatePinUi(cleanDigits);
+    });
+
+    // 6. Sanitize on input & format
+    pinInput.addEventListener("input", (e) => {
+      const cleanDigits = e.target.value.replace(/\D/g, '').slice(0, 12);
+      const formatted = formatPhilHealthPin(cleanDigits);
+      pinInput.value = formatted;
+      phil.philhealthNumber = formatted;
+      updatePinUi(cleanDigits);
+    });
   }
+
+  // Parent / Member Name input
+  bind("reg-phil-parent-name", phil, "memberName");
+
 
   const btnCont = document.getElementById("btn-reg1-continue");
   if (btnCont) {
@@ -675,6 +1133,7 @@ function renderRegStep2() {
   const p = regState.personal;
   const emg = regState.emergency;
   const med = regState.medical;
+  const phil = regState.philhealth;
   const fullName = `${p.firstName} ${p.middleName ? p.middleName + ' ' : ''}${p.lastName}`;
 
   return `
@@ -739,6 +1198,40 @@ function renderRegStep2() {
             <div><span class="text-slate-400 font-semibold">Allergies:</span> <span class="text-slate-800 ml-1">${med.allergies || 'None'}</span></div>
             <div><span class="text-slate-400 font-semibold">Conditions:</span> <span class="text-slate-800 ml-1">${med.conditions || 'None'}</span></div>
             <div><span class="text-slate-400 font-semibold">Medications:</span> <span class="text-slate-800 ml-1">${med.medications || 'None'}</span></div>
+          </div>
+        </div>
+
+        <!-- PhilHealth Review Card -->
+        <div class="bg-white rounded-2xl p-6 border border-emerald-200/90 shadow-2xs space-y-3 md:col-span-2">
+          <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider pb-2 border-b border-slate-100 flex items-center justify-between">
+            <span class="flex items-center gap-1.5 text-emerald-900 font-extrabold">
+              <i data-lucide="shield-check" class="w-4 h-4 text-emerald-600"></i>
+              PhilHealth Coverage & ID Registration
+            </span>
+            <span class="text-[10px] font-bold px-2.5 py-0.5 rounded-full ${phil.hasCoverage === 'Yes' ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 'bg-slate-100 text-slate-600'}">
+              ${phil.hasCoverage === 'Yes' ? 'Active Coverage / NHIP' : 'Non-Member / Self-Pay'}
+            </span>
+          </h3>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs pt-1">
+            ${phil.hasCoverage === 'Yes' ? `
+              <div>
+                <span class="text-slate-400 font-semibold block text-[11px] mb-0.5">PhilHealth ID (PIN):</span>
+                <strong class="font-mono text-emerald-700 text-sm tracking-wider font-extrabold">${phil.philhealthNumber}</strong>
+              </div>
+              <div>
+                <span class="text-slate-400 font-semibold block text-[11px] mb-0.5">Account Ownership:</span>
+                <span class="inline-flex items-center gap-1 font-bold text-slate-800">
+                  <i data-lucide="${phil.memberType === 'Parents' ? 'users' : 'user-check'}" class="w-3.5 h-3.5 text-emerald-600"></i>
+                  ${phil.memberType === 'Parents' ? "Parents' Account (Dependent)" : "Personal (Principal Member / Self)"}
+                </span>
+              </div>
+              <div>
+                <span class="text-slate-400 font-semibold block text-[11px] mb-0.5">${phil.memberType === 'Parents' ? "Parent / Member Name:" : "Member Status:"}</span>
+                <strong class="text-slate-800 font-semibold">${phil.memberType === 'Parents' ? (phil.memberName || 'Not specified') : 'Principal Contributor'}</strong>
+              </div>
+            ` : `
+              <div class="col-span-3 text-slate-500 italic">No PhilHealth policy attached to this intake. Patient is registered for direct hospital self-payment or MSS assistance.</div>
+            `}
           </div>
         </div>
 
@@ -1097,6 +1590,7 @@ function showDiseaseSuggestionPopup() {
 // ----------------------------------------------------
 function renderRegStep6() {
   const p = regState.personal;
+  const phil = regState.philhealth;
   const sys = regState.bodySystemData || { SystemName: 'Digestive System', Emoji: '🩺' };
 
   return `
@@ -1115,12 +1609,31 @@ function renderRegStep6() {
         
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div class="space-y-4">
-            <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider">Patient Demographics</h4>
+            <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider">Patient Demographics & Insurance</h4>
             <div class="p-4 bg-slate-50 rounded-2xl border border-slate-100 space-y-2 text-xs">
               <div class="font-bold text-slate-900 text-sm">${p.firstName} ${p.lastName}</div>
               <div>${p.gender} • ${p.age} yrs • DOB: ${p.dob}</div>
               <div>Phone: ${p.phone} • Email: ${p.email}</div>
               <div>Address: ${p.address}</div>
+              
+              <div class="pt-2 mt-2 border-t border-slate-200/80">
+                ${phil.hasCoverage === 'Yes' ? `
+                  <div class="flex items-center justify-between">
+                    <span class="inline-flex items-center gap-1 font-bold text-emerald-800">
+                      <i data-lucide="shield-check" class="w-3.5 h-3.5 text-emerald-600"></i>
+                      <span>PhilHealth: ${phil.philhealthNumber}</span>
+                    </span>
+                    <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+                      ${phil.memberType === 'Parents' ? "Parents' Dependent" : "Personal / Member"}
+                    </span>
+                  </div>
+                  ${phil.memberType === 'Parents' && phil.memberName ? `
+                    <div class="text-[11px] text-slate-500 mt-0.5">Parent: <strong>${phil.memberName}</strong></div>
+                  ` : ''}
+                ` : `
+                  <div class="text-slate-500 italic text-[11px]">Non-PhilHealth / Direct Self-Pay</div>
+                `}
+              </div>
             </div>
           </div>
 
@@ -1247,7 +1760,13 @@ async function selectDoctorAndSubmit(doctorId) {
   try {
     const payload = {
       patient_id: regState.existingPatient?.PatientID || null,
-      personal: regState.personal,
+      personal: {
+        ...regState.personal,
+        philhealthNumber: regState.philhealth.hasCoverage === 'Yes' ? regState.philhealth.philhealthNumber : null,
+        philhealthMemberType: regState.philhealth.hasCoverage === 'Yes' ? regState.philhealth.memberType : 'None',
+        philhealthMemberName: regState.philhealth.hasCoverage === 'Yes' && regState.philhealth.memberType === 'Parents' ? regState.philhealth.memberName : null
+      },
+      philhealth: regState.philhealth,
       emergency: regState.emergency,
       medical: regState.medical,
       complaint: regState.complaint,

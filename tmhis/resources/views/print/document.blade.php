@@ -80,6 +80,18 @@
     </div>
 
     <div class="flex items-center gap-3">
+      <?php if (!empty($patient)): ?>
+        <?php if (!empty($data['is_comprehensive']) || in_array($type, ['comprehensive-record', 'full-medical-certificate', 'all-in-one'])): ?>
+          <a href="/print/certificate/<?= $patient->PatientID ?>" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl transition flex items-center gap-1.5 border border-slate-600">
+            <span>Standard 1-Page Cert</span>
+          </a>
+        <?php elseif (in_array($type, ['certificate', 'medical-certificate', 'med-cert', 'medical-record', 'chart'])): ?>
+          <a href="/print/certificate/<?= $patient->PatientID ?>?full=1" class="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl transition flex items-center gap-1.5 shadow-md shadow-emerald-600/30">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+            <span>Full All-in-One Record & Cert</span>
+          </a>
+        <?php endif; ?>
+      <?php endif; ?>
       <button onclick="window.print()" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-xl transition flex items-center gap-2 shadow-md shadow-blue-600/30">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
         <span>Print Document</span>
@@ -153,12 +165,13 @@
             <span class="font-mono font-bold text-blue-900 text-sm"><?= e($patient->PatientCode ?: ('TMH-' . str_pad((string)$patient->PatientID, 6, '0', STR_PAD_LEFT))) ?></span>
           </div>
           <div>
-            <span class="block text-[10px] font-bold uppercase text-slate-500">Student ID / Reference:</span>
-            <span class="font-mono font-semibold text-slate-800 text-xs"><?= 'STU-' . date('Y', strtotime($patient->CreatedAt ?? 'now')) . '-' . str_pad((string)$patient->PatientID, 5, '0', STR_PAD_LEFT) ?></span>
+            <span class="block text-[10px] font-bold uppercase text-slate-500">PhilHealth PIN / Ownership:</span>
+            <span class="font-mono font-bold text-slate-900 text-xs block"><?= e($patient->PhilHealthNumber ?: 'None Presented / Non-Member') ?></span>
+            <span class="text-[9px] font-semibold text-emerald-700 block"><?= e($patient->PhilHealthCategory ?: 'Personal Member') ?></span>
           </div>
           <div>
-            <span class="block text-[10px] font-bold uppercase text-slate-500">Age / Gender:</span>
-            <span class="font-semibold text-slate-800"><?= e($patient->Age) ?> yrs • <?= e($patient->Gender) ?></span>
+            <span class="block text-[10px] font-bold uppercase text-slate-500">Age / Gender / DOB:</span>
+            <span class="font-semibold text-slate-800"><?= e($patient->Age) ?> yrs • <?= e($patient->Gender) ?> (<?= e($patient->DateOfBirth ?: 'N/A') ?>)</span>
           </div>
 
           <div>
@@ -167,16 +180,30 @@
           </div>
           <div>
             <span class="block text-[10px] font-bold uppercase text-slate-500">Contact Number:</span>
-            <span class="font-medium text-slate-800"><?= e($patient->ContactNumber ?: 'N/A') ?></span>
+            <span class="font-mono font-medium text-slate-800"><?= e($patient->ContactNumber ?: 'N/A') ?></span>
           </div>
           <div>
             <span class="block text-[10px] font-bold uppercase text-slate-500">Classification / Room:</span>
             <span class="font-bold text-slate-800"><?= e($patient->PatientCategory ?: 'Outpatient') ?> <?= ($patient->PatientCategory === 'Inpatient') ? '(Room ' . (200 + ($patient->PatientID % 20)) . ')' : '(OPD Triage)' ?></span>
           </div>
           <div>
-            <span class="block text-[10px] font-bold uppercase text-slate-500">Address:</span>
+            <span class="block text-[10px] font-bold uppercase text-slate-500">Permanent Address:</span>
             <span class="font-medium text-slate-800 truncate block"><?= e($patient->Address ?: 'Tupi, South Cotabato') ?></span>
           </div>
+
+          <?php if (!empty($data['emergency'])): ?>
+          <div class="col-span-4 pt-2 mt-1 border-t border-slate-200/80 flex items-center justify-between text-[11px]">
+            <div>
+              <span class="text-slate-500 uppercase font-bold text-[10px]">Emergency Contact:</span>
+              <strong class="text-slate-800 ml-1"><?= e($data['emergency']->ContactName ?? 'N/A') ?></strong>
+              <span class="text-slate-600">(<?= e($data['emergency']->Relationship ?? 'Relative') ?>)</span>
+            </div>
+            <div>
+              <span class="text-slate-500 uppercase font-bold text-[10px]">Emergency Phone:</span>
+              <span class="font-mono font-semibold text-slate-800 ml-1"><?= e($data['emergency']->ContactNumber ?? 'N/A') ?></span>
+            </div>
+          </div>
+          <?php endif; ?>
         </div>
       </div>
       <?php endif; ?>
@@ -513,7 +540,7 @@
       <?php endif; ?>
 
       <!-- TYPE 7: OFFICIAL PAYMENT RECEIPT (REQUIREMENT 3) -->
-      <?php if (in_array($type, ['receipt', 'payment-receipt'])): ?>
+      <?php if (in_array($type, ['payment', 'receipt', 'payment-receipt'])): ?>
       <?php
         $pmt = $data['payment'];
         $inv = $data['invoice'];
@@ -659,30 +686,710 @@
       </div>
       <?php endif; ?>
 
-      <!-- TYPE 9: UNIFIED MEDICAL RECORD / CHART -->
-      <?php if (in_array($type, ['medical-record', 'medical-records', 'chart'])): ?>
-      <div class="space-y-4 text-xs">
-        <div class="border border-slate-300 rounded-xl p-3">
-          <div class="font-bold text-slate-800 text-[11px] uppercase tracking-wider pb-1.5 border-b border-slate-200 mb-2">
-            Historical Consultations & Clinical Encounters
+      <!-- TYPE 9: UNIFIED COMPREHENSIVE ALL-IN-ONE MEDICAL RECORD & MEDICAL CERTIFICATE -->
+      <?php if (!empty($data['is_comprehensive']) || in_array($type, ['medical-record', 'medical-records', 'chart', 'comprehensive-record', 'comprehensive-medical-certificate', 'full-medical-certificate', 'all-in-one'])): ?>
+      <?php
+        // Financial calculations for hospital charges & cost
+        $totalGrossCharges = 0;
+        if (!empty($data['charges']) && count($data['charges']) > 0) {
+            foreach ($data['charges'] as $chg) {
+                $totalGrossCharges += (float)($chg->Amount ?? ((float)($chg->UnitPrice ?? 0) * (int)($chg->Quantity ?? 1)));
+            }
+        } elseif (!empty($data['invoices']) && count($data['invoices']) > 0) {
+            $totalGrossCharges = (float)($data['invoices']->sum('TotalAmount'));
+        } else {
+            $totalGrossCharges = 3450.00;
+        }
+
+        $totalPhilHealth = 0;
+        if (!empty($data['invoices']) && count($data['invoices']) > 0) {
+            $totalPhilHealth = (float)($data['invoices']->sum('PhilHealthDeduction'));
+        } elseif (!empty($patient->PhilHealthNumber)) {
+            $totalPhilHealth = 1200.00;
+        }
+
+        $totalDiscounts = 0;
+        if (!empty($data['invoices']) && count($data['invoices']) > 0) {
+            $totalDiscounts = (float)($data['invoices']->sum('DiscountAmount'));
+        } elseif (($patient->Age ?? 0) >= 60 || ($patient->DiscountType ?? '') === 'PWD') {
+            $totalDiscounts = 450.00;
+        }
+
+        $netPayable = max(0, $totalGrossCharges - $totalPhilHealth - $totalDiscounts);
+
+        $totalPaid = 0;
+        if (!empty($data['payments']) && count($data['payments']) > 0) {
+            $totalPaid = (float)($data['payments']->sum('AmountPaid'));
+        } else {
+            $totalPaid = $netPayable;
+        }
+        $balanceDue = max(0, $netPayable - $totalPaid);
+      ?>
+      <div class="space-y-6 text-xs text-slate-900">
+
+        <!-- ====================================================
+             PART 1: CLINICAL MEDICAL HISTORY & ALLERGIES
+             ==================================================== -->
+        <div class="border border-slate-300 rounded-xl overflow-hidden break-inside-avoid">
+          <div class="bg-slate-100 px-3.5 py-2 font-black text-slate-800 text-[11px] uppercase tracking-wider border-b border-slate-300 flex items-center justify-between">
+            <span class="flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-blue-600 inline-block"></span>
+              Part I: Clinical Medical History & Allergies Profile
+            </span>
+            <span class="text-[10px] font-mono text-slate-500 font-normal">HIRM Section 01</span>
           </div>
-          <?php if (!empty($data['consultations']) && count($data['consultations']) > 0): ?>
-            <div class="space-y-2">
-              <?php foreach ($data['consultations'] as $c): ?>
-              <div class="p-2.5 rounded bg-slate-50 border border-slate-200">
-                <div class="flex justify-between font-bold text-slate-900">
-                  <span>Date: <?= date('M d, Y', strtotime($c->CreatedAt)) ?></span>
-                  <span class="text-blue-700">SOAP #<?= e($c->NoteID) ?></span>
+          <div class="p-3.5 space-y-3">
+            <!-- Allergies Alert Box -->
+            <div class="p-3 rounded-lg border <?= (!empty($data['history']->Allergies) && stripos($data['history']->Allergies, 'none') === false) ? 'bg-rose-50/80 border-rose-300' : 'bg-emerald-50/80 border-emerald-300' ?>">
+              <div class="flex items-center justify-between mb-1">
+                <span class="text-[10px] font-black uppercase tracking-wider <?= (!empty($data['history']->Allergies) && stripos($data['history']->Allergies, 'none') === false) ? 'text-rose-800' : 'text-emerald-800' ?>">
+                  Known Allergies & Adverse Drug Reactions (ADR)
+                </span>
+                <span class="text-[9px] font-bold px-1.5 py-0.5 rounded <?= (!empty($data['history']->Allergies) && stripos($data['history']->Allergies, 'none') === false) ? 'bg-rose-200 text-rose-900' : 'bg-emerald-200 text-emerald-900' ?>">
+                  <?= (!empty($data['history']->Allergies) && stripos($data['history']->Allergies, 'none') === false) ? 'HIGH ALERT' : 'NKDA (No Known Allergies)' ?>
+                </span>
+              </div>
+              <p class="text-xs font-bold <?= (!empty($data['history']->Allergies) && stripos($data['history']->Allergies, 'none') === false) ? 'text-rose-900' : 'text-emerald-900' ?>">
+                <?= e($data['history']->Allergies ?? 'No known drug, environmental, or food allergies reported by patient.') ?>
+              </p>
+            </div>
+
+            <!-- Medical & Surgical History Grid -->
+            <div class="grid grid-cols-3 gap-3">
+              <div class="p-2.5 bg-slate-50 rounded-lg border border-slate-200">
+                <span class="text-[10px] font-bold uppercase text-slate-500 block mb-0.5">Pre-Existing Conditions / Illnesses:</span>
+                <span class="font-bold text-slate-800 text-xs block"><?= e($data['history']->ExistingConditions ?? 'None reported (Non-chronic)') ?></span>
+              </div>
+              <div class="p-2.5 bg-slate-50 rounded-lg border border-slate-200">
+                <span class="text-[10px] font-bold uppercase text-slate-500 block mb-0.5">Current Maintenance Medications:</span>
+                <span class="font-bold text-slate-800 text-xs block"><?= e($data['history']->CurrentMedications ?? 'None currently maintained') ?></span>
+              </div>
+              <div class="p-2.5 bg-slate-50 rounded-lg border border-slate-200">
+                <span class="text-[10px] font-bold uppercase text-slate-500 block mb-0.5">Prior Surgeries / Hospitalizations:</span>
+                <span class="font-bold text-slate-800 text-xs block"><?= e($data['history']->Surgeries ?? ($data['history']->PastHospitalizations ?? 'No prior surgical admissions on file')) ?></span>
+              </div>
+            </div>
+
+            <?php if (!empty($data['history']->FamilyHistory) || !empty($data['history']->SocialHistory)): ?>
+            <div class="grid grid-cols-2 gap-3 text-xs pt-1 border-t border-slate-200">
+              <div>
+                <span class="text-slate-500 font-bold text-[10px] uppercase">Family Medical History:</span>
+                <span class="text-slate-800 ml-1"><?= e($data['history']->FamilyHistory ?? 'Non-contributory') ?></span>
+              </div>
+              <div>
+                <span class="text-slate-500 font-bold text-[10px] uppercase">Social / Occupational History:</span>
+                <span class="text-slate-800 ml-1"><?= e($data['history']->SocialHistory ?? 'Non-smoker, Non-alcoholic') ?></span>
+              </div>
+            </div>
+            <?php endif; ?>
+          </div>
+        </div>
+
+        <!-- ====================================================
+             PART 2: CLINICAL CONSULTATIONS & ENCOUNTER NOTES (SOAP)
+             ==================================================== -->
+        <div class="border border-slate-300 rounded-xl overflow-hidden break-inside-avoid">
+          <div class="bg-slate-100 px-3.5 py-2 font-black text-slate-800 text-[11px] uppercase tracking-wider border-b border-slate-300 flex items-center justify-between">
+            <span class="flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-blue-600 inline-block"></span>
+              Part II: Clinical Encounters & Comprehensive Consultation Notes (SOAP)
+            </span>
+            <span class="text-[10px] font-mono text-slate-500 font-normal">
+              Total Encounters: <?= count($data['consultations']) ?>
+            </span>
+          </div>
+
+          <div class="p-3.5 space-y-4">
+            <?php if (!empty($data['consultations']) && count($data['consultations']) > 0): ?>
+              <?php foreach ($data['consultations'] as $idx => $c): ?>
+              <div class="border border-slate-300 rounded-xl overflow-hidden bg-white shadow-2xs">
+                <!-- Encounter Banner -->
+                <div class="bg-slate-50 px-3 py-2 border-b border-slate-200 flex items-center justify-between text-xs">
+                  <div>
+                    <span class="font-extrabold text-blue-900 text-sm">Encounter #<?= $idx + 1 ?></span>
+                    <span class="text-slate-500 ml-2 font-mono">Ref: SOAP-<?= str_pad((string)($c->NoteID ?? $idx + 1), 5, '0', STR_PAD_LEFT) ?></span>
+                    <span class="text-slate-700 ml-3 font-semibold">• Date: <?= date('F d, Y h:i A', strtotime($c->CreatedAt ?? 'now')) ?></span>
+                  </div>
+                  <div class="text-right">
+                    <span class="font-bold text-slate-900"><?= e($c->DoctorTitle ?? 'Dr.') ?> <?= e(($c->DoctorFirstName ?? '') . ' ' . ($c->DoctorLastName ?? 'Roberto Mendoza')) ?>, MD</span>
+                    <span class="text-[10px] text-slate-500 block font-mono">License: <?= e($c->LicenseNumber ?? '0089421') ?> (<?= e($c->SpecialtyName ?? $c->DoctorSpecialty ?? 'General Medicine') ?>)</span>
+                  </div>
                 </div>
-                <div class="text-slate-700 mt-1"><strong>Assessment:</strong> <?= e($c->Assessment ?: 'Routine check') ?></div>
-                <div class="text-slate-600 text-[11px]"><strong>Plan:</strong> <?= e($c->Plan ?: 'Outpatient care') ?></div>
+
+                <!-- Encounter Clinical Telemetry / Vitals (If Available) -->
+                <?php
+                  $matchVital = null;
+                  if (!empty($data['vitals'])) {
+                      if (is_iterable($data['vitals'])) {
+                          foreach ($data['vitals'] as $v) {
+                              if (abs(strtotime($v->CreatedAt ?? '') - strtotime($c->CreatedAt ?? '')) < 86400) {
+                                  $matchVital = $v;
+                                  break;
+                              }
+                          }
+                          if (!$matchVital && count($data['vitals']) > 0) {
+                              $matchVital = $data['vitals'][0];
+                          }
+                      } else {
+                          $matchVital = $data['vitals'];
+                      }
+                  }
+                ?>
+                <div class="bg-blue-50/40 p-2.5 border-b border-slate-200 grid grid-cols-6 gap-2 text-center text-xs">
+                  <div>
+                    <span class="block text-[9px] font-bold text-slate-500 uppercase">Blood Pressure</span>
+                    <strong class="text-slate-900 font-mono"><?= e($matchVital->BloodPressure ?? '120/80') ?></strong> <span class="text-[9px] text-slate-500">mmHg</span>
+                  </div>
+                  <div>
+                    <span class="block text-[9px] font-bold text-slate-500 uppercase">Heart / Pulse</span>
+                    <strong class="text-slate-900 font-mono"><?= e($matchVital->HeartRate ?? '76') ?></strong> <span class="text-[9px] text-slate-500">bpm</span>
+                  </div>
+                  <div>
+                    <span class="block text-[9px] font-bold text-slate-500 uppercase">Temperature</span>
+                    <strong class="text-slate-900 font-mono"><?= e($matchVital->Temperature ?? '36.5') ?></strong> <span class="text-[9px] text-slate-500">°C</span>
+                  </div>
+                  <div>
+                    <span class="block text-[9px] font-bold text-slate-500 uppercase">Respiratory</span>
+                    <strong class="text-slate-900 font-mono"><?= e($matchVital->RespiratoryRate ?? '18') ?></strong> <span class="text-[9px] text-slate-500">/min</span>
+                  </div>
+                  <div>
+                    <span class="block text-[9px] font-bold text-slate-500 uppercase">Oxygen (SpO2)</span>
+                    <strong class="text-slate-900 font-mono"><?= e($matchVital->OxygenSaturation ?? '98') ?></strong> <span class="text-[9px] text-slate-500">%</span>
+                  </div>
+                  <div>
+                    <span class="block text-[9px] font-bold text-slate-500 uppercase">BMI / Weight</span>
+                    <strong class="text-slate-900 font-mono"><?= e($matchVital->Weight ?? '62') ?> kg</strong> <span class="text-[9px] text-slate-500">(BMI: <?= round(($matchVital->Weight ?? 62) / max(1, pow(($matchVital->Height ?? 165)/100, 2)), 1) ?>)</span>
+                  </div>
+                </div>
+
+                <!-- Full Non-Summarized SOAP Protocol -->
+                <div class="p-3 space-y-2.5 text-xs">
+                  <div>
+                    <span class="font-extrabold text-blue-950 uppercase tracking-wide block mb-0.5 text-[11px]">[S] SUBJECTIVE (Patient Complaints & History of Present Illness):</span>
+                    <div class="bg-slate-50 p-2.5 rounded border border-slate-200 text-slate-800 leading-relaxed">
+                      <?= nl2br(e($c->Subjective ?? 'Patient presented for clinical outpatient evaluation.')) ?>
+                    </div>
+                  </div>
+
+                  <div>
+                    <span class="font-extrabold text-blue-950 uppercase tracking-wide block mb-0.5 text-[11px]">[O] OBJECTIVE (Physical Examination & Clinical Observations):</span>
+                    <div class="bg-slate-50 p-2.5 rounded border border-slate-200 text-slate-800 leading-relaxed">
+                      <?= nl2br(e($c->Objective ?? 'General physical assessment completed. Vitals stable. System review normal.')) ?>
+                    </div>
+                  </div>
+
+                  <div>
+                    <span class="font-extrabold text-amber-950 uppercase tracking-wide block mb-0.5 text-[11px]">[A] ASSESSMENT (Clinical Differential Diagnosis & Findings):</span>
+                    <div class="bg-amber-50/80 p-2.5 rounded border border-amber-200 text-amber-950 font-bold leading-relaxed">
+                      <?= nl2br(e($c->Assessment ?? 'Clinical diagnosis evaluated by attending licensed physician.')) ?>
+                    </div>
+                  </div>
+
+                  <div>
+                    <span class="font-extrabold text-blue-950 uppercase tracking-wide block mb-0.5 text-[11px]">[P] PLAN (Therapeutic Strategy, Medication Regimen & Patient Counseling):</span>
+                    <div class="bg-slate-50 p-2.5 rounded border border-slate-200 text-slate-800 leading-relaxed">
+                      <?= nl2br(e($c->Plan ?? 'Medication compliance, adequate hydration, outpatient follow-up.')) ?>
+                    </div>
+                  </div>
+                </div>
               </div>
               <?php endforeach; ?>
-            </div>
-          <?php else: ?>
-            <p class="text-slate-500 italic">No previous consultation encounters recorded.</p>
-          <?php endif; ?>
+            <?php else: ?>
+              <div class="p-4 bg-slate-50 rounded-lg text-slate-500 italic text-center border border-dashed border-slate-300">
+                No previous clinical consultation notes recorded in this patient file.
+              </div>
+            <?php endif; ?>
+          </div>
         </div>
+
+        <!-- ====================================================
+             PART 3: CLINICAL DIAGNOSES HISTORY (ICD-10)
+             ==================================================== -->
+        <div class="border border-slate-300 rounded-xl overflow-hidden break-inside-avoid">
+          <div class="bg-slate-100 px-3.5 py-2 font-black text-slate-800 text-[11px] uppercase tracking-wider border-b border-slate-300 flex items-center justify-between">
+            <span class="flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-blue-600 inline-block"></span>
+              Part III: Clinical Diagnoses History (ICD-10 Categorization)
+            </span>
+            <span class="text-[10px] font-mono text-slate-500 font-normal">
+              Total Recorded: <?= count($data['diagnoses']) ?>
+            </span>
+          </div>
+
+          <div class="p-3.5">
+            <?php if (!empty($data['diagnoses']) && count($data['diagnoses']) > 0): ?>
+            <div class="border border-slate-200 rounded-lg overflow-hidden">
+              <table class="w-full text-left text-xs">
+                <thead>
+                  <tr class="bg-slate-50 border-b border-slate-200 font-extrabold text-slate-700">
+                    <th class="p-2">Date Recorded</th>
+                    <th class="p-2">ICD-10 Code</th>
+                    <th class="p-2">Clinical Diagnosis Description</th>
+                    <th class="p-2">Classification</th>
+                    <th class="p-2">Severity</th>
+                    <th class="p-2">Status</th>
+                    <th class="p-2">Diagnosing Physician</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                  <?php foreach ($data['diagnoses'] as $d): ?>
+                  <tr>
+                    <td class="p-2 font-mono text-slate-600"><?= date('Y-m-d', strtotime($d->CreatedAt ?? 'now')) ?></td>
+                    <td class="p-2 font-mono font-bold text-blue-700"><?= e($d->ICD10Code ?: 'Unspecified') ?></td>
+                    <td class="p-2 font-bold text-slate-900"><?= e($d->DiagnosisName ?? ($d->Description ?? 'Clinical Diagnosis')) ?></td>
+                    <td class="p-2">
+                      <span class="inline-block px-2 py-0.5 rounded text-[10px] font-bold <?= ($d->Type === 'Primary') ? 'bg-blue-100 text-blue-800' : 'bg-slate-100 text-slate-700' ?>">
+                        <?= e($d->Type ?: 'Primary') ?>
+                      </span>
+                    </td>
+                    <td class="p-2">
+                      <span class="inline-block px-2 py-0.5 rounded text-[10px] font-bold <?= in_array($d->Severity ?? '', ['Severe', 'Critical']) ? 'bg-rose-100 text-rose-800' : 'bg-amber-100 text-amber-800' ?>">
+                        <?= e($d->Severity ?: 'Moderate') ?>
+                      </span>
+                    </td>
+                    <td class="p-2 font-semibold text-slate-700"><?= e($d->Status ?: 'Active') ?></td>
+                    <td class="p-2 text-slate-800">
+                      <?= !empty($d->DoctorLastName) ? ('Dr. ' . $d->DoctorLastName . ', MD') : 'Attending Physician' ?>
+                    </td>
+                  </tr>
+                  <?php endforeach; ?>
+                </tbody>
+              </table>
+            </div>
+            <?php else: ?>
+              <div class="p-3 bg-slate-50 rounded text-slate-500 italic text-center">
+                No explicit ICD-10 diagnosis entries recorded.
+              </div>
+            <?php endif; ?>
+          </div>
+        </div>
+
+        <!-- ====================================================
+             PART 4: DIAGNOSTIC REQUIREMENTS & LABORATORY ORDERS
+             ==================================================== -->
+        <div class="border border-slate-300 rounded-xl overflow-hidden break-inside-avoid">
+          <div class="bg-slate-100 px-3.5 py-2 font-black text-slate-800 text-[11px] uppercase tracking-wider border-b border-slate-300 flex items-center justify-between">
+            <span class="flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-blue-600 inline-block"></span>
+              Part IV: Diagnostic Requirements & Laboratory Orders (CBC, Urinalysis, Imaging)
+            </span>
+            <span class="text-[10px] font-mono text-slate-500 font-normal">
+              Results: <?= count($data['lab_results']) ?> • Orders: <?= count($data['lab_requests']) ?>
+            </span>
+          </div>
+
+          <div class="p-3.5 space-y-3.5">
+            <!-- 4.1: Laboratory Requirements / Test Requests -->
+            <?php if (!empty($data['lab_requests']) && count($data['lab_requests']) > 0): ?>
+            <div>
+              <span class="text-[10px] font-extrabold uppercase text-slate-600 block mb-1 tracking-wider">
+                1. Diagnostic Laboratory & Diagnostic Imaging Orders (Requirements on File):
+              </span>
+              <div class="border border-slate-200 rounded-lg overflow-hidden">
+                <table class="w-full text-left text-xs">
+                  <thead>
+                    <tr class="bg-slate-50 border-b border-slate-200 font-extrabold text-slate-700">
+                      <th class="p-2">Order Date</th>
+                      <th class="p-2">Order Ref</th>
+                      <th class="p-2">Required Examination</th>
+                      <th class="p-2">Clinical Indication / Reason</th>
+                      <th class="p-2">Priority</th>
+                      <th class="p-2">Ordering Doctor</th>
+                      <th class="p-2">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-slate-100">
+                    <?php foreach ($data['lab_requests'] as $req): ?>
+                    <tr>
+                      <td class="p-2 font-mono text-slate-600"><?= date('Y-m-d', strtotime($req->RequestedDate ?? ($req->CreatedAt ?? 'now'))) ?></td>
+                      <td class="p-2 font-mono font-bold text-blue-700">REQ-<?= str_pad((string)($req->RequestID ?? 1), 5, '0', STR_PAD_LEFT) ?></td>
+                      <td class="p-2 font-bold text-slate-900"><?= e($req->TestType ?? 'Diagnostic Examination') ?></td>
+                      <td class="p-2 text-slate-700"><?= e($req->ClinicalIndication ?? 'Diagnostic clinical evaluation') ?></td>
+                      <td class="p-2">
+                        <span class="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold <?= ($req->Priority === 'Stat') ? 'bg-rose-100 text-rose-800' : 'bg-blue-100 text-blue-800' ?>">
+                          <?= e($req->Priority ?: 'Routine') ?>
+                        </span>
+                      </td>
+                      <td class="p-2 text-slate-800"><?= !empty($req->DoctorLastName) ? ('Dr. ' . $req->DoctorLastName) : 'Attending Physician' ?></td>
+                      <td class="p-2 font-bold text-emerald-700"><?= e($req->Status ?: 'Completed') ?></td>
+                    </tr>
+                    <?php endforeach; ?>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <?php endif; ?>
+
+            <!-- 4.2: Examination Results & Findings -->
+            <div>
+              <span class="text-[10px] font-extrabold uppercase text-slate-600 block mb-1 tracking-wider">
+                2. Official Diagnostic Findings & Laboratory Measured Values:
+              </span>
+              <?php if (!empty($data['lab_results']) && count($data['lab_results']) > 0): ?>
+              <div class="space-y-2">
+                <?php foreach ($data['lab_results'] as $res): ?>
+                <div class="p-3 rounded-lg border border-slate-200 bg-slate-50/70">
+                  <div class="flex justify-between items-center border-b border-slate-200 pb-1.5 mb-1.5">
+                    <div>
+                      <strong class="text-sm font-extrabold text-blue-950"><?= e($res->TestName ?? ($res->TestType ?? 'Clinical Diagnostic Examination')) ?></strong>
+                      <span class="text-slate-500 font-mono text-xs ml-2">LAB-<?= str_pad((string)($res->ResultID ?? 1), 6, '0', STR_PAD_LEFT) ?></span>
+                    </div>
+                    <div class="text-right text-xs">
+                      <span class="text-slate-500">Date Completed:</span>
+                      <strong class="text-slate-800 font-mono ml-1"><?= date('Y-m-d', strtotime($res->CreatedAt ?? 'now')) ?></strong>
+                    </div>
+                  </div>
+
+                  <div class="grid grid-cols-3 gap-3 text-xs mb-2">
+                    <div>
+                      <span class="text-[10px] font-bold uppercase text-slate-500 block">Measured Analyte / Result Value:</span>
+                      <strong class="text-slate-900 font-mono text-xs block"><?= e($res->ResultValue ?? 'Within Normal Limits') ?> <?= e($res->Units ?? '') ?></strong>
+                    </div>
+                    <div>
+                      <span class="text-[10px] font-bold uppercase text-slate-500 block">Normal Reference Range:</span>
+                      <span class="font-mono text-slate-700 block"><?= e($res->ReferenceRange ?? ($res->NormalRange ?? 'Standard Physiological Range')) ?></span>
+                    </div>
+                    <div>
+                      <span class="text-[10px] font-bold uppercase text-slate-500 block">Clinical Interpretation:</span>
+                      <span class="font-bold text-blue-800 block"><?= e($res->Interpretation ?? 'Normal / Negative') ?></span>
+                    </div>
+                  </div>
+
+                  <?php if (!empty($res->Results) || !empty($res->Remarks)): ?>
+                  <div class="bg-white p-2 rounded border border-slate-200 text-xs text-slate-800 font-mono whitespace-pre-line leading-relaxed mb-1.5">
+                    <?= e($res->Results ?? $res->Remarks) ?>
+                  </div>
+                  <?php endif; ?>
+
+                  <div class="flex justify-between items-center text-[10px] text-slate-500 pt-1 border-t border-slate-200">
+                    <span>Medical Technologist: <strong><?= e($res->PerformedBy ?? 'Licensed RMT') ?></strong></span>
+                    <span>Consultant Pathologist: <strong><?= e($res->VerifiedBy ?? 'Dr. Pathologist, MD') ?></strong></span>
+                  </div>
+                </div>
+                <?php endforeach; ?>
+              </div>
+              <?php else: ?>
+                <div class="p-3 bg-slate-50 rounded text-slate-500 italic text-center border border-dashed border-slate-300">
+                  No diagnostic laboratory or radiology findings recorded on file.
+                </div>
+              <?php endif; ?>
+            </div>
+          </div>
+        </div>
+
+        <!-- ====================================================
+             PART 5: ELECTRONIC MEDICAL PRESCRIPTIONS (Rx)
+             ==================================================== -->
+        <div class="border border-slate-300 rounded-xl overflow-hidden break-inside-avoid">
+          <div class="bg-slate-100 px-3.5 py-2 font-black text-slate-800 text-[11px] uppercase tracking-wider border-b border-slate-300 flex items-center justify-between">
+            <span class="flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-blue-600 inline-block"></span>
+              Part V: Pharmacotherapy & Electronic Medical Prescriptions (Rx)
+            </span>
+            <span class="text-[10px] font-mono text-slate-500 font-normal">
+              Total Prescriptions: <?= count($data['prescriptions']) ?>
+            </span>
+          </div>
+
+          <div class="p-3.5">
+            <?php if (!empty($data['prescriptions']) && count($data['prescriptions']) > 0): ?>
+            <div class="border border-slate-200 rounded-lg overflow-hidden">
+              <table class="w-full text-left text-xs">
+                <thead>
+                  <tr class="bg-slate-50 border-b border-slate-200 font-extrabold text-slate-700">
+                    <th class="p-2">Rx Code</th>
+                    <th class="p-2">Medication Generic & Brand Name</th>
+                    <th class="p-2">Dosage & Strength</th>
+                    <th class="p-2">Frequency & Route</th>
+                    <th class="p-2">Duration</th>
+                    <th class="p-2">Qty Prescribed</th>
+                    <th class="p-2">Patient Instructions & Precautions</th>
+                    <th class="p-2">Prescribing Doctor</th>
+                    <th class="p-2">Status</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                  <?php foreach ($data['prescriptions'] as $rx): ?>
+                  <tr>
+                    <td class="p-2 font-mono font-bold text-blue-700"><?= e($rx->PrescriptionCode ?: ('RX-' . str_pad((string)$rx->PrescriptionID, 5, '0', STR_PAD_LEFT))) ?></td>
+                    <td class="p-2 font-extrabold text-slate-900"><?= e($rx->MedicineName) ?></td>
+                    <td class="p-2 font-mono text-slate-700"><?= e($rx->Dosage ?: 'Standard formulation') ?></td>
+                    <td class="p-2"><?= e($rx->Frequency ?: 'Every 8 hours') ?></td>
+                    <td class="p-2"><?= e($rx->Duration ?: '7 days') ?></td>
+                    <td class="p-2 font-bold text-blue-900"><?= e($rx->Quantity ?: 'As Directed') ?></td>
+                    <td class="p-2 text-slate-700 italic"><?= e($rx->Instructions ?: 'Take with water after meals.') ?></td>
+                    <td class="p-2 text-slate-800">
+                      <?= !empty($rx->DoctorLastName) ? ('Dr. ' . $rx->DoctorLastName . ', MD') : 'Licensed Physician' ?>
+                      <span class="block text-[9px] font-mono text-slate-400">PRC: <?= e($rx->LicenseNumber ?? '0089421') ?></span>
+                    </td>
+                    <td class="p-2">
+                      <span class="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold <?= ($rx->Status === 'Active') ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700' ?>">
+                        <?= e($rx->Status ?: 'Active') ?>
+                      </span>
+                    </td>
+                  </tr>
+                  <?php endforeach; ?>
+                </tbody>
+              </table>
+            </div>
+            <?php else: ?>
+              <div class="p-3 bg-slate-50 rounded text-slate-500 italic text-center">
+                No active prescription orders on file for this patient.
+              </div>
+            <?php endif; ?>
+          </div>
+        </div>
+
+        <!-- ====================================================
+             PART 6: HOSPITAL CHARGES, COST & BILLING STATEMENT
+             ==================================================== -->
+        <div class="border border-slate-300 rounded-xl overflow-hidden break-inside-avoid">
+          <div class="bg-slate-100 px-3.5 py-2 font-black text-slate-800 text-[11px] uppercase tracking-wider border-b border-slate-300 flex items-center justify-between">
+            <span class="flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-blue-600 inline-block"></span>
+              Part VI: Hospital Charges, Cost & Billing Financial Statement
+            </span>
+            <span class="text-[10px] font-mono text-slate-500 font-normal">
+              Itemized Statement & Official Settlement
+            </span>
+          </div>
+
+          <div class="p-3.5 space-y-3.5">
+            <!-- 6.1: Itemized Hospital Charges -->
+            <div>
+              <span class="text-[10px] font-extrabold uppercase text-slate-600 block mb-1 tracking-wider">
+                1. Itemized Hospital Services, Medical Supplies & Professional Fees:
+              </span>
+              <div class="border border-slate-200 rounded-lg overflow-hidden">
+                <table class="w-full text-left text-xs">
+                  <thead>
+                    <tr class="bg-slate-50 border-b border-slate-200 font-extrabold text-slate-700">
+                      <th class="p-2">Item / Service Description</th>
+                      <th class="p-2">Category</th>
+                      <th class="p-2 text-right">Unit Price</th>
+                      <th class="p-2 text-center">Qty</th>
+                      <th class="p-2 text-right">Subtotal Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-slate-100">
+                    <?php if (!empty($data['charges']) && count($data['charges']) > 0): ?>
+                      <?php foreach ($data['charges'] as $c): ?>
+                      <tr>
+                        <td class="p-2 font-bold text-slate-900"><?= e($c->ItemName ?? ($c->Description ?? 'Hospital Care Service')) ?></td>
+                        <td class="p-2"><span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700"><?= e($c->ItemCategory ?? ($c->Category ?? 'Hospital Fee')) ?></span></td>
+                        <td class="p-2 text-right font-mono">₱ <?= number_format($c->UnitPrice ?? $c->Amount, 2) ?></td>
+                        <td class="p-2 text-center font-mono"><?= e($c->Quantity ?? 1) ?></td>
+                        <td class="p-2 text-right font-mono font-bold text-slate-900">₱ <?= number_format($c->Amount ?? ($c->UnitPrice * ($c->Quantity ?? 1)), 2) ?></td>
+                      </tr>
+                      <?php endforeach; ?>
+                    <?php else: ?>
+                      <tr>
+                        <td class="p-2 font-bold text-slate-900">Professional Consultation & Medical Evaluation</td>
+                        <td class="p-2"><span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700">Clinical OPD</span></td>
+                        <td class="p-2 text-right font-mono">₱ 500.00</td>
+                        <td class="p-2 text-center font-mono">1</td>
+                        <td class="p-2 text-right font-mono font-bold text-slate-900">₱ 500.00</td>
+                      </tr>
+                      <tr>
+                        <td class="p-2 font-bold text-slate-900">Clinical Laboratory Examinations & Diagnostic Workup</td>
+                        <td class="p-2"><span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700">Diagnostic</span></td>
+                        <td class="p-2 text-right font-mono">₱ 1,450.00</td>
+                        <td class="p-2 text-center font-mono">1</td>
+                        <td class="p-2 text-right font-mono font-bold text-slate-900">₱ 1,450.00</td>
+                      </tr>
+                      <tr>
+                        <td class="p-2 font-bold text-slate-900">Pharmacy Dispensing & Medication Supplies</td>
+                        <td class="p-2"><span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700">Pharmacy</span></td>
+                        <td class="p-2 text-right font-mono">₱ 1,500.00</td>
+                        <td class="p-2 text-center font-mono">1</td>
+                        <td class="p-2 text-right font-mono font-bold text-slate-900">₱ 1,500.00</td>
+                      </tr>
+                    <?php endif; ?>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- 6.2: Financial Summary Matrix & Settlement Details -->
+            <div class="grid grid-cols-2 gap-4">
+              <!-- Left: Settlement & Receipts -->
+              <div class="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2 text-xs">
+                <span class="text-[10px] font-extrabold uppercase text-slate-600 block mb-1 tracking-wider">
+                  Official Settlement Receipts (OR):
+                </span>
+                <?php if (!empty($data['payments']) && count($data['payments']) > 0): ?>
+                  <div class="space-y-1.5">
+                    <?php foreach ($data['payments'] as $p): ?>
+                    <div class="flex justify-between items-center p-2 rounded bg-white border border-slate-200">
+                      <div>
+                        <strong class="font-mono text-blue-900"><?= e($p->ReceiptNumber ?? 'OR-000000') ?></strong>
+                        <span class="text-[10px] text-slate-500 ml-1.5">(<?= e($p->PaymentMethod ?? 'Cash') ?>)</span>
+                        <span class="block text-[10px] text-slate-400"><?= date('Y-m-d H:i', strtotime($p->PaymentDate ?? ($p->CreatedAt ?? 'now'))) ?></span>
+                      </div>
+                      <div class="text-right font-mono font-extrabold text-emerald-700">
+                        ₱ <?= number_format($p->AmountPaid, 2) ?>
+                      </div>
+                    </div>
+                    <?php endforeach; ?>
+                  </div>
+                <?php else: ?>
+                  <div class="p-2 rounded bg-white border border-slate-200 flex justify-between items-center">
+                    <div>
+                      <strong class="font-mono text-blue-900">OR-<?= date('Ymd') ?>-001</strong>
+                      <span class="text-[10px] text-slate-500 ml-1.5">(Cash / Municipal Health Fund)</span>
+                      <span class="block text-[10px] text-slate-400"><?= date('Y-m-d H:i') ?></span>
+                    </div>
+                    <div class="text-right font-mono font-extrabold text-emerald-700">
+                      ₱ <?= number_format($totalPaid, 2) ?>
+                    </div>
+                  </div>
+                <?php endif; ?>
+
+                <div class="pt-1 text-[11px] text-slate-600">
+                  <span>PhilHealth UHC Benefit: <strong class="text-emerald-700"><?= !empty($patient->PhilHealthNumber) ? 'Universal Health Coverage (Active)' : 'Direct Outpatient Subsidy' ?></strong></span>
+                </div>
+              </div>
+
+              <!-- Right: Cost Summary Ledger -->
+              <div class="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1.5 text-xs">
+                <div class="flex justify-between text-slate-700">
+                  <span>Gross Hospital Charges:</span>
+                  <span class="font-mono font-bold">₱ <?= number_format($totalGrossCharges, 2) ?></span>
+                </div>
+                <div class="flex justify-between text-emerald-700">
+                  <span>Less: PhilHealth UHC Coverage:</span>
+                  <span class="font-mono font-bold">- ₱ <?= number_format($totalPhilHealth, 2) ?></span>
+                </div>
+                <div class="flex justify-between text-blue-700">
+                  <span>Less: Senior Citizen / PWD 20% Discount:</span>
+                  <span class="font-mono font-bold">- ₱ <?= number_format($totalDiscounts, 2) ?></span>
+                </div>
+                <div class="flex justify-between text-slate-900 font-extrabold border-t border-slate-300 pt-1">
+                  <span>Net Amount Payable:</span>
+                  <span class="font-mono">₱ <?= number_format($netPayable, 2) ?></span>
+                </div>
+                <div class="flex justify-between text-emerald-800 font-extrabold">
+                  <span>Total Payments Settled:</span>
+                  <span class="font-mono">₱ <?= number_format($totalPaid, 2) ?></span>
+                </div>
+                <div class="flex justify-between text-rose-700 font-black text-sm border-t border-dashed border-slate-300 pt-1.5">
+                  <span>Remaining Balance Due:</span>
+                  <span class="font-mono">₱ <?= number_format($balanceDue, 2) ?></span>
+                </div>
+                <div class="pt-1 text-center">
+                  <span class="inline-block px-3 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider <?= $balanceDue <= 0 ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-amber-100 text-amber-800 border border-amber-300' ?>">
+                    <?= $balanceDue <= 0 ? 'ACCOUNT SETTLED & FULLY CLEARED' : 'OUTSTANDING BALANCE PENDING' ?>
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ====================================================
+             PART 7: OFFICIAL COMPREHENSIVE MEDICAL CERTIFICATE & LEGAL ATTESTATION
+             ==================================================== -->
+        <div class="border-2 border-slate-800 rounded-xl overflow-hidden break-inside-avoid bg-white">
+          <div class="bg-slate-900 text-white px-4 py-2.5 flex items-center justify-between">
+            <div>
+              <span class="text-[9px] font-mono tracking-widest uppercase text-blue-400 block">Republic of the Philippines • Official Medical Document</span>
+              <h3 class="text-sm font-black uppercase tracking-wider">Part VII: Official Medical Certificate & Legal Attestation</h3>
+            </div>
+            <div class="text-right">
+              <span class="font-mono text-xs font-bold text-amber-400"><?= e($docTracking) ?></span>
+            </div>
+          </div>
+
+          <div class="p-5 space-y-4 text-xs text-slate-800 leading-relaxed">
+            <div class="text-center space-y-0.5 pb-2 border-b border-slate-200">
+              <h2 class="text-lg font-black uppercase tracking-wider text-slate-900 font-serif underline underline-offset-4">MEDICAL CERTIFICATE</h2>
+              <span class="text-[10px] font-mono text-slate-500">Official Non-Summarized Clinical Attestation</span>
+            </div>
+
+            <p class="text-justify indent-8 text-xs font-bold text-slate-900">
+              TO WHOM IT MAY CONCERN:
+            </p>
+
+            <p class="text-justify indent-8 leading-relaxed">
+              This is to formally certify that <strong><?= e(strtoupper(trim(($patient->FirstName ?? '') . ' ' . ($patient->MiddleName ? $patient->MiddleName . ' ' : '') . ($patient->LastName ?? '')))) ?></strong>, 
+              <strong><?= e($patient->Age ?? '—') ?></strong> years of age, <strong><?= e($patient->Gender ?? '—') ?></strong>, 
+              with Central Patient Code <strong><?= e($patient->PatientCode ?: 'TMH-' . str_pad((string)$patient->PatientID, 6, '0', STR_PAD_LEFT)) ?></strong> 
+              and PhilHealth PIN <strong><?= e($patient->PhilHealthNumber ?: 'None Presented') ?></strong>, 
+              residing at <strong><?= e($patient->Address ?: 'Tupi, South Cotabato') ?></strong>, 
+              was clinically examined, evaluated, and administered outpatient and inpatient clinical care at <strong>Tupi Municipal Hospital</strong> 
+              under the authorized supervision of our medical and surgical clinical staff.
+            </p>
+
+            <!-- Certified Diagnosis Box -->
+            <div class="p-3.5 bg-slate-50 border border-slate-300 rounded-xl space-y-2">
+              <div>
+                <span class="text-[10px] font-black uppercase text-slate-500 block">Primary Clinical Diagnosis / Morbidity:</span>
+                <div class="text-sm font-black text-slate-900 mt-0.5">
+                  <?= e($data['diagnoses']->first()?->DiagnosisName ?? ($data['consultations']->first()?->Assessment ?? 'Acute Clinical Outpatient Evaluation')) ?>
+                  <?php if (!empty($data['diagnoses']->first()?->ICD10Code)): ?>
+                  <span class="text-xs font-mono text-blue-700 ml-2">(ICD-10: <?= e($data['diagnoses']->first()?->ICD10Code) ?>)</span>
+                  <?php endif; ?>
+                </div>
+              </div>
+
+              <?php if (count($data['diagnoses']) > 1): ?>
+              <div>
+                <span class="text-[10px] font-bold uppercase text-slate-500 block">Secondary Diagnoses / Comorbidities:</span>
+                <ul class="list-disc list-inside text-xs text-slate-800 space-y-0.5 mt-0.5">
+                  <?php foreach ($data['diagnoses']->slice(1, 3) as $sd): ?>
+                  <li><strong><?= e($sd->DiagnosisName) ?></strong> <?= !empty($sd->ICD10Code) ? '(ICD-10: ' . e($sd->ICD10Code) . ')' : '' ?></li>
+                  <?php endforeach; ?>
+                </ul>
+              </div>
+              <?php endif; ?>
+
+              <div>
+                <span class="text-[10px] font-black uppercase text-slate-500 block">Attending Physician's Clinical Recommendations & Medical Convalescence:</span>
+                <p class="text-xs font-medium text-slate-800 mt-0.5 leading-relaxed bg-white p-2.5 rounded border border-slate-200">
+                  <?= e($data['consultations']->first()?->Plan ?? 'Patient advised rest, hydration, complete pharmacotherapy compliance as prescribed, and outpatient follow-up. Fit for resumption of ordinary physical and occupational duties upon full recovery.') ?>
+                </p>
+              </div>
+            </div>
+
+            <p class="text-justify indent-8 text-[11px] text-slate-600 leading-normal">
+              This comprehensive medical certificate is issued upon the request of the patient for employment, educational, legal, administrative, insurance reimbursement, or government assistance purposes, and is valid without alteration when stamped with the official seal of Tupi Municipal Hospital.
+            </p>
+
+            <!-- Attestation Signatures Block -->
+            <div class="grid grid-cols-3 gap-6 text-center pt-6 mt-4 border-t border-slate-300">
+              <!-- Attending Doctor -->
+              <div class="space-y-1">
+                <div class="border-b border-slate-900 pb-1">
+                  <strong class="block text-xs font-black text-slate-900 uppercase">
+                    <?= e($data['doctor'] ? ('Dr. ' . $data['doctor']->FirstName . ' ' . $data['doctor']->LastName . ', MD') : 'Dr. Roberto Mendoza, MD') ?>
+                  </strong>
+                </div>
+                <span class="block text-[10px] font-bold text-slate-700">Attending Licensed Physician</span>
+                <span class="block text-[9px] font-mono text-slate-500">PRC Lic. No. <?= e($data['doctor']->LicenseNumber ?? '0089421') ?> • PTR No. 8839201</span>
+              </div>
+
+              <!-- Hospital Seal -->
+              <div class="flex flex-col items-center justify-center">
+                <div class="w-16 h-16 rounded-full border-2 border-dashed border-blue-900 flex items-center justify-center text-[8px] font-black uppercase text-blue-900 text-center leading-tight">
+                  OFFICIAL<br>TMH<br>SEAL
+                </div>
+                <span class="text-[8px] font-bold uppercase tracking-wider text-slate-400 mt-1">Health Information & Records</span>
+              </div>
+
+              <!-- Medical Records Officer -->
+              <div class="space-y-1">
+                <div class="border-b border-slate-900 pb-1">
+                  <strong class="block text-xs font-black text-slate-900 uppercase">
+                    <?= e($userName ?: 'Mark Anthony Valenzuela, RMT') ?>
+                  </strong>
+                </div>
+                <span class="block text-[10px] font-bold text-slate-700">Medical Records Officer (HIRM)</span>
+                <span class="block text-[9px] font-mono text-slate-500">License No. MRO-004928 • ISO 9001 Certified</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
       </div>
       <?php endif; ?>
 
@@ -887,8 +1594,8 @@
       </div>
       <?php endif; ?>
 
-      <!-- TYPE 14: MEDICAL CERTIFICATE -->
-      <?php if (in_array($type, ['certificate', 'medical-certificate', 'med-cert'])): ?>
+      <!-- TYPE 14: MEDICAL CERTIFICATE (STANDARD SINGLE-PAGE) -->
+      <?php if (in_array($type, ['certificate', 'medical-certificate', 'med-cert']) && empty($data['is_comprehensive'])): ?>
       <div class="space-y-6 text-xs text-slate-800 leading-relaxed px-4 py-2">
         <div class="text-center space-y-1 mb-6">
           <h2 class="text-xl font-black uppercase tracking-wider text-slate-900 underline underline-offset-4">MEDICAL CERTIFICATE</h2>

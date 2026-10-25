@@ -16,6 +16,16 @@ class BillingPayment extends Model
 
     protected $guarded = [];
 
+    protected $casts = [
+        'paid_at'       => 'datetime',
+        'failed_at'     => 'datetime',
+        'cancelled_at'  => 'datetime',
+        'expires_at'    => 'datetime',
+        'verified_at'   => 'datetime',
+        'created_at'    => 'datetime',
+        'updated_at'    => 'datetime',
+    ];
+
     public function invoice()
     {
         return $this->belongsTo(BillingInvoice::class, 'InvoiceID', 'InvoiceID');

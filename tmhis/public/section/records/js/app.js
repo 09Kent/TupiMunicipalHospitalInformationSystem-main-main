@@ -857,6 +857,9 @@ document.addEventListener('DOMContentLoaded', () => {
             <button class="btn btn-primary btn-sm" onclick="window.openGenerateSummaryModal('${patient.id}')">
               <i data-lucide="file-text"></i> Generate Summary
             </button>
+            <button class="btn btn-success btn-sm" style="background:#0f766e; border-color:#0f766e; color:#fff;" onclick="window.open('/print/comprehensive-record/' + (patient.patient_id || patient.id) + '?full=1', '_blank')" title="Print Whole Medical Certificate & Complete Record (All-in-One: Diagnosis, History, Consultations, Requirements, Prescriptions, Cost)">
+              <i data-lucide="printer"></i> Print All-in-One Record & Cert
+            </button>
           </div>
         </div>
       </div>
@@ -1186,6 +1189,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         </button>
                         <button class="btn btn-primary btn-xs" onclick="window.printSummaryDocument('${s.summaryId}')" title="Print Summary">
                           <i data-lucide="printer" style="width:13px;height:13px;"></i> Print
+                        </button>
+                        <button class="btn btn-success btn-xs" style="background:#0f766e; border-color:#0f766e; color:#fff;" onclick="window.open('/print/comprehensive-record/' + (s.patientId) + '?full=1', '_blank')" title="Print Full All-in-One Medical Certificate & Record">
+                          <i data-lucide="printer" style="width:13px;height:13px;"></i> All-in-One
                         </button>
                       </div>
                     </td>
@@ -1687,6 +1693,9 @@ document.addEventListener('DOMContentLoaded', () => {
       </div>
 
       <div style="display:flex; flex-direction:column; gap:0.5rem; margin-top:0.5rem;">
+        <button class="btn btn-primary" style="background:#0f766e; border-color:#0f766e; color:#fff;" onclick="window.open('/print/comprehensive-record/' + (patient.patient_id || patient.id) + '?full=1', '_blank');">
+          <i data-lucide="printer"></i> Print Full Medical Record & Certificate (All-in-One)
+        </button>
         <button class="btn btn-primary" onclick="window.editPatientRecord('${patient.id}'); document.getElementById('viewPatientDrawer').classList.remove('show');">
           <i data-lucide="edit-2"></i> Edit Record
         </button>
@@ -2610,12 +2619,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const patient = state.patients.find(p => p.id === patientId) || state.patients[0];
 
     const sections = [];
-    if (document.getElementById('gen_chk_patient').checked) sections.push("Patient Information");
-    if (document.getElementById('gen_chk_reg').checked) sections.push("Registration Information");
-    if (document.getElementById('gen_chk_med').checked) sections.push("Medical History");
-    if (document.getElementById('gen_chk_con').checked) sections.push("Consultation History");
-    if (document.getElementById('gen_chk_lab').checked) sections.push("Laboratory History");
-    if (document.getElementById('gen_chk_tx').checked) sections.push("Treatment History");
+    if (document.getElementById('gen_chk_patient')?.checked) sections.push("Patient Information");
+    if (document.getElementById('gen_chk_med')?.checked) sections.push("Medical History & Allergies");
+    if (document.getElementById('gen_chk_con')?.checked) sections.push("Consultations & SOAP Notes");
+    if (document.getElementById('gen_chk_diag')?.checked) sections.push("Clinical Diagnoses History");
+    if (document.getElementById('gen_chk_lab')?.checked) sections.push("Requirements & Laboratory");
+    if (document.getElementById('gen_chk_rx')?.checked) sections.push("Prescriptions & Pharmacotherapy");
+    if (document.getElementById('gen_chk_tx')?.checked) sections.push("Treatment History");
+    if (document.getElementById('gen_chk_cost')?.checked) sections.push("Hospital Cost & Billing");
+    if (document.getElementById('gen_chk_cert')?.checked) sections.push("Official Medical Certificate");
+    if (document.getElementById('gen_chk_reg')?.checked) sections.push("Registration Information");
 
     const summaryId = `MRS-2026-${String(state.summaries.length + 1).padStart(3, '0')}`;
     const now = new Date();
@@ -2821,6 +2834,12 @@ document.addEventListener('DOMContentLoaded', () => {
     `;
 
     document.getElementById('previewSummaryPrintBtn').onclick = () => window.printSummaryDocument(summary.summaryId);
+    const allInOneBtn = document.getElementById('previewSummaryAllInOneBtn');
+    if (allInOneBtn) {
+      allInOneBtn.onclick = () => {
+        window.open('/print/comprehensive-record/' + (patient.patient_id || patient.id) + '?full=1', '_blank');
+      };
+    }
 
     openModal('previewSummaryModal');
     refreshIcons();

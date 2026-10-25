@@ -528,40 +528,59 @@
             <label class="form-label">Purpose of Summary / Release Request <span class="required">*</span></label>
             <input type="text" id="genSummaryPurpose" class="form-control" placeholder="e.g. Pre-operative clearance, Insurance claim, Second opinion referral" required>
           </div>
-          <div class="form-section-header">SELECT INFORMATION MODULES TO INCLUDE</div>
+          <div class="form-section-header">SELECT INFORMATION MODULES TO INCLUDE (ALL-IN-ONE RECORD)</div>
           <div class="col-12" style="display:flex; flex-direction:column; gap:0.5rem;">
             <div class="checklist-item checked">
               <input type="checkbox" id="gen_chk_patient" class="checklist-checkbox" checked>
-              <label for="gen_chk_patient" class="checklist-label">☑ Patient Information (Demographics, Age, Gender, Contact)</label>
-            </div>
-            <div class="checklist-item checked">
-              <input type="checkbox" id="gen_chk_reg" class="checklist-checkbox" checked>
-              <label for="gen_chk_reg" class="checklist-label">☑ Registration Information (Admission Date, Type, Verification)</label>
+              <label for="gen_chk_patient" class="checklist-label">☑ Patient Information (Demographics, Age, Gender, PhilHealth PIN, Contact)</label>
             </div>
             <div class="checklist-item checked">
               <input type="checkbox" id="gen_chk_med" class="checklist-checkbox" checked>
-              <label for="gen_chk_med" class="checklist-label">☑ Medical History (Conditions, Allergies, Surgical Procedures)</label>
+              <label for="gen_chk_med" class="checklist-label">☑ Medical History & Allergies (Conditions, Allergies, Surgical Procedures)</label>
             </div>
             <div class="checklist-item checked">
               <input type="checkbox" id="gen_chk_con" class="checklist-checkbox" checked>
-              <label for="gen_chk_con" class="checklist-label">☑ Consultation History (Diagnoses, Physician Assessments)</label>
+              <label for="gen_chk_con" class="checklist-label">☑ Clinical Encounters & Consultations (Unsummarized SOAP Notes & Vitals)</label>
+            </div>
+            <div class="checklist-item checked">
+              <input type="checkbox" id="gen_chk_diag" class="checklist-checkbox" checked>
+              <label for="gen_chk_diag" class="checklist-label">☑ Clinical Diagnoses History (ICD-10 Codes, Severity, Status)</label>
             </div>
             <div class="checklist-item checked">
               <input type="checkbox" id="gen_chk_lab" class="checklist-checkbox" checked>
-              <label for="gen_chk_lab" class="checklist-label">☑ Laboratory History (Diagnostic Tests, Pathology Results)</label>
+              <label for="gen_chk_lab" class="checklist-label">☑ Diagnostic Requirements & Laboratory Orders (CBC, Urinalysis, Imaging, Pathology)</label>
             </div>
             <div class="checklist-item checked">
-              <input type="checkbox" id="gen_chk_tx" class="checklist-checkbox" checked>
-              <label for="gen_chk_tx" class="checklist-label">☑ Treatment History (Medications, Procedures, Protocols)</label>
+              <input type="checkbox" id="gen_chk_rx" class="checklist-checkbox" checked>
+              <label for="gen_chk_rx" class="checklist-label">☑ Pharmacotherapy & Electronic Prescriptions (Rx Dosages, Instructions, Status)</label>
+            </div>
+            <div class="checklist-item checked">
+              <input type="checkbox" id="gen_chk_cost" class="checklist-checkbox" checked>
+              <label for="gen_chk_cost" class="checklist-label">☑ Hospital Charges, Cost & Billing Financial Statement (Itemized Fees, PhilHealth Deductions, Official Receipts)</label>
+            </div>
+            <div class="checklist-item checked">
+              <input type="checkbox" id="gen_chk_cert" class="checklist-checkbox" checked>
+              <label for="gen_chk_cert" class="checklist-label">☑ Official Medical Certificate & Legal Attestation (Attending Physician & MRO Signatures, Hospital Seal)</label>
+            </div>
+            <div class="checklist-item checked">
+              <input type="checkbox" id="gen_chk_reg" class="checklist-checkbox" checked>
+              <label for="gen_chk_reg" class="checklist-label">☑ Registration & Triage Verification Information</label>
             </div>
           </div>
         </div>
       </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-close-modal>Cancel</button>
-        <button type="submit" class="btn btn-primary">
-          <i data-lucide="file-plus"></i> Generate Summary
-        </button>
+      <div class="modal-footer" style="display:flex; justify-content:space-between; align-items:center;">
+        <div>
+          <button type="button" class="btn btn-success" style="background:#0f766e; border-color:#0f766e; color:#fff;" onclick="const pid = document.getElementById('genSummaryPatientSelect').value; if (pid) window.open('/print/comprehensive-record/' + pid + '?full=1', '_blank');">
+            <i data-lucide="printer"></i> Print Whole Medical Record & Certificate (All-in-One)
+          </button>
+        </div>
+        <div style="display:flex; gap:0.5rem;">
+          <button type="button" class="btn btn-secondary" data-close-modal>Cancel</button>
+          <button type="submit" class="btn btn-primary">
+            <i data-lucide="file-plus"></i> Generate Summary
+          </button>
+        </div>
       </div>
     </form>
   </div>
@@ -582,11 +601,18 @@
     <div class="modal-body" id="previewSummaryModalContent">
       <!-- Rendered by js/app.js -->
     </div>
-    <div class="modal-footer">
-      <button type="button" class="btn btn-secondary" data-close-modal>Close</button>
-      <button type="button" class="btn btn-primary" id="previewSummaryPrintBtn">
-        <i data-lucide="printer"></i> Print Summary
-      </button>
+    <div class="modal-footer" style="display:flex; justify-content:space-between; align-items:center;">
+      <div>
+        <button type="button" class="btn btn-success" id="previewSummaryAllInOneBtn" style="background:#0f766e; border-color:#0f766e; color:#fff;">
+          <i data-lucide="award"></i> Print Whole Medical Certificate & Record (All-in-One Sheet)
+        </button>
+      </div>
+      <div style="display:flex; gap:0.5rem;">
+        <button type="button" class="btn btn-secondary" data-close-modal>Close</button>
+        <button type="button" class="btn btn-primary" id="previewSummaryPrintBtn">
+          <i data-lucide="printer"></i> Print Summary
+        </button>
+      </div>
     </div>
   </div>
 </div>

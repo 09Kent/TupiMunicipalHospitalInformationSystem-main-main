@@ -37,4 +37,9 @@ class Doctor extends Model
         return $this->belongsToMany(Specialty::class, 'doctor_specialties', 'DoctorID', 'SpecialtyID')
             ->withPivot('IsPrimary');
     }
+
+    public function admissions()
+    {
+        return $this->hasMany(Admission::class, 'DoctorID', 'DoctorID');
+    }
 }

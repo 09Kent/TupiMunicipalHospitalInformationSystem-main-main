@@ -23,7 +23,15 @@ class ReferralApiController extends Controller
         $referralType = $request->input('referral_type', 'Internal'); // Internal or External
         $reason = trim((string)$request->input('reason', ''));
         $clinicalSummary = trim((string)$request->input('clinical_summary', ''));
-        $priority = $request->input('priority', 'Routine');
+        $rawPriority = trim((string)$request->input('priority', 'Routine'));
+        $normalizedPriority = ucfirst(strtolower($rawPriority));
+        if (in_array($normalizedPriority, ['Routine', 'Urgent', 'Emergency'])) {
+            $priority = $normalizedPriority;
+        } elseif (in_array(strtoupper($rawPriority), ['STAT', 'CRITICAL', 'HIGH'])) {
+            $priority = 'Emergency';
+        } else {
+            $priority = 'Routine';
+        }
         $urgency = $request->input('urgency', $priority);
 
         if ($patientId <= 0 || empty($reason)) {
@@ -60,9 +68,10 @@ class ReferralApiController extends Controller
 
         if ($duplicateCheck) {
             return response()->json([
-                'success' => true,
-                'message' => 'Referral already recorded.',
-                'data'    => $duplicateCheck
+                'success'   => true,
+                'message'   => 'Referral already recorded.',
+                'data'      => $duplicateCheck,
+                'print_url' => "/print/referral/{$duplicateCheck->ReferralID}"
             ]);
         }
 
@@ -163,6 +172,47 @@ class ReferralApiController extends Controller
             'success' => true,
             'message' => "Referral tracking updated to '{$referral->TrackingStatus}' (Status: {$referral->Status}).",
             'data'    => $referral
+        ]);
+    }
+
+    /**
+     * Route alias for createReferral
+     */
+    public function create(Request $request): JsonResponse
+    {
+        return $this->createReferral($request);
+    }
+
+    /**
+     * List all clinical referrals for a patient
+     */
+    public function listForPatient(int $patientId): JsonResponse
+    {
+        $patient = Patient::find($patientId);
+        if (!$patient) {
+            return response()->json(['success' => false, 'message' => 'Patient not found.'], 404);
+        }
+
+        $referrals = DB::table('referrals as r')
+            ->leftJoin('doctors as rd', 'r.ReferringDoctorID', '=', 'rd.DoctorID')
+            ->leftJoin('doctors as td', 'r.TargetDoctorID', '=', 'td.DoctorID')
+            ->where('r.PatientID', $patientId)
+            ->select(
+                'r.*',
+                'rd.FirstName as ReferringDocFirst',
+                'rd.LastName as ReferringDocLast',
+                'td.FirstName as TargetDocFirst',
+                'td.LastName as TargetDocLast'
+            )
+            ->orderBy('r.ReferralID', 'desc')
+            ->get();
+
+        return response()->json([
+            'success'      => true,
+            'patient_id'   => $patientId,
+            'patient_name' => trim($patient->FirstName . ' ' . $patient->LastName),
+            'count'        => count($referrals),
+            'data'         => $referrals
         ]);
     }
 }

@@ -19,10 +19,12 @@ $currentUser = Session::getCurrentUser();
 $doctorId = $currentUser['doctor_id'] ?? (int)session('doctor_id', 1);
 
 $patientModel = new Patient();
+$doctorModel = new Doctor();
 $consultationModel = new Consultation();
 $noteModel = new ConsultationNote();
 $diagnosisModel = new Diagnosis();
 $treatmentModel = new TreatmentPlan();
+$allDoctorsList = $doctorModel->getAll();
 
 // Selected patient ID from query, post, or active patient
 $patientId = (int)($_POST['patient_id'] ?? $_GET['patient_id'] ?? (function_exists('request') ? request('patient_id', 0) : 0));
@@ -483,14 +485,88 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
 
-            // 5. Complete consultation in appointment and queue
+            // 5. Complete consultation with doctor's explicit disposition decision
+            $disposition = strtoupper(trim($_POST['disposition'] ?? 'OUTPATIENT'));
+            $admissionData = [
+                'ward'             => trim($_POST['admission_ward'] ?? 'Medical Ward'),
+                'room_number'      => trim($_POST['admission_room'] ?? 'Room 201'),
+                'bed_number'       => trim($_POST['admission_bed'] ?? 'Bed-01'),
+                'admission_reason' => trim($_POST['admission_reason'] ?? ($finalAss ?: 'Admitted for inpatient medical care and management'))
+            ];
+
             if ($appId > 0) {
-                $consultationModel->completeConsultation($appId, $doctorId, $summary ?: $finalNotes);
+                $consultationModel->completeConsultation($appId, $doctorId, $summary ?: $finalNotes, $disposition, $admissionData);
+            }
+
+            $referralId = null;
+            $refCode = null;
+            if ($disposition === 'REFER') {
+                $refType = $_POST['referral_type'] ?? 'Internal';
+                $receivingHospital = trim($_POST['receiving_hospital'] ?? $_POST['referral_facility'] ?? '');
+                $refReason = trim($_POST['referral_reason'] ?? ($finalAss ?: 'Referred for specialized clinical evaluation and care'));
+                $clinicalSummary = trim($_POST['referral_summary'] ?? ($finalNotes ?: ($finalPlan ?: 'Clinical referral initiated following comprehensive physician consultation.')));
+                $targetDoctorId = !empty($_POST['target_doctor_id']) ? (int)$_POST['target_doctor_id'] : null;
+                $targetSpecId = !empty($_POST['target_specialty_id']) ? (int)$_POST['target_specialty_id'] : 1;
+                $priority = $_POST['referral_priority'] ?? 'Urgent';
+                $urgency = $priority;
+
+                $refCode = 'REF-' . date('Ymd') . '-' . rand(1000, 9999);
+
+                $stmtRef = $db->prepare("
+                    INSERT INTO referrals (
+                        ReferralCode, ReferralType, PatientID, ReferringDoctorID, ReferringDepartment,
+                        TargetSpecialtyID, TargetDoctorID, ReceivingHospital, HospitalAddress,
+                        RequestedService, Reason, ClinicalSummary, Priority, Urgency, Status, TrackingStatus,
+                        CreatedAt, UpdatedAt
+                    ) VALUES (
+                        :code, :rtype, :pid, :doc_id, :dept,
+                        :tspec, :tdoc, :hosp, :haddr,
+                        :serv, :reason, :summary, :priority, :urgency, 'Pending', :track,
+                        NOW(), NOW()
+                    )
+                ");
+                $stmtRef->execute([
+                    ':code'     => $refCode,
+                    ':rtype'    => ($refType === 'External' || !empty($receivingHospital)) ? 'External' : 'Internal',
+                    ':pid'      => $patientId,
+                    ':doc_id'   => $doctorId,
+                    ':dept'     => $currentUser['specialty'] ?? 'Outpatient & Emergency Department',
+                    ':tspec'    => $targetSpecId,
+                    ':tdoc'     => $targetDoctorId,
+                    ':hosp'     => $receivingHospital ?: null,
+                    ':haddr'    => trim($_POST['hospital_address'] ?? 'South Cotabato'),
+                    ':serv'     => trim($_POST['requested_service'] ?? 'Specialized Medical Evaluation / Transfer'),
+                    ':reason'   => $refReason,
+                    ':summary'  => $clinicalSummary,
+                    ':priority' => $priority,
+                    ':urgency'  => $urgency,
+                    ':track'    => ($refType === 'External' || !empty($receivingHospital)) ? 'Sent' : 'Created'
+                ]);
+                $referralId = (int)$db->lastInsertId();
+
+                try {
+                    $auditStmt = $db->prepare("
+                        INSERT INTO system_audit_logs (UserID, UserName, UserRole, Action, Module, RecordID, Details, IPAddress, CreatedAt)
+                        VALUES (:uid, :uname, 'Doctor', 'REFERRAL_CREATED', 'Clinical Care', :rec, :det, '127.0.0.1', NOW())
+                    ");
+                    $auditStmt->execute([
+                        ':uid'   => $currentUser['user_id'] ?? $doctorId,
+                        ':uname' => $currentUser['full_name'] ?? 'Attending Physician',
+                        ':rec'   => $referralId,
+                        ':det'   => "Physician initiated {$refType} referral ({$refCode}) for Patient #{$patientId}."
+                    ]);
+                } catch (\Throwable $ae) {}
             }
 
             $db->commit();
 
-            Session::setFlash('success', 'Consultation marked as Completed. Clinical records archived and available in Medical Records.');
+            if ($disposition === 'ADMIT') {
+                Session::setFlash('success', "Admission Created Successfully! Patient assigned to {$admissionData['ward']}, {$admissionData['room_number']} ({$admissionData['bed_number']}) and routed to Inpatient Nurse Station.");
+            } elseif ($disposition === 'REFER' && $referralId) {
+                Session::setFlash('success', "Patient Referral Registered (Code: {$refCode})! <a href=\"/print/referral/{$referralId}\" target=\"_blank\" class=\"underline font-bold text-blue-600 hover:text-blue-800 ml-1\">🖨️ Print Referral / Transfer Slip</a>");
+            } else {
+                Session::setFlash('success', "Consultation completed as $disposition. Outpatient records updated and archived.");
+            }
             header("Location: " . doctor_url("views/patients/view.php?id=$patientId"));
             if (function_exists('app') && app()->environment('testing')) { return; }
             exit;
@@ -592,24 +668,10 @@ require_once __DIR__ . '/../includes/sidebar.php';
           <a href="/print/patient/<?= $patientId ?>" target="_blank" class="px-3.5 py-2.5 bg-white/10 hover:bg-white/20 text-white font-bold rounded-xl text-xs transition flex items-center gap-1.5 border border-white/20" title="Print Comprehensive Patient Record">
             <i data-lucide="file-text" class="w-4 h-4"></i>
             <span>Print Profile</span>
-          </a>
-          <form id="completeConsultationForm" method="POST" action="" onsubmit="return handleCompleteConsultationSubmit(this);" class="inline">
-            <input type="hidden" name="csrf_token" value="<?= csrf_token() ?>" />
-            <input type="hidden" name="action" value="complete_consultation" />
-            <input type="hidden" name="subjective" value="" />
-            <input type="hidden" name="objective" value="" />
-            <input type="hidden" name="assessment" value="" />
-            <input type="hidden" name="plan" value="" />
-            <input type="hidden" name="vital_bp" value="" />
-            <input type="hidden" name="vital_hr" value="" />
-            <input type="hidden" name="vital_temp" value="" />
-            <input type="hidden" name="vital_spo2" value="" />
-            <input type="hidden" name="vital_weight" value="" />
-            <button type="submit" class="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs shadow-lg shadow-emerald-600/20 transition flex items-center gap-1.5">
-              <i data-lucide="check-circle-2" class="w-4 h-4"></i>
-              <span>Complete Consultation</span>
-            </button>
-          </form>
+          <button type="button" onclick="openDispositionModal()" class="px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-black rounded-xl text-xs shadow-lg shadow-emerald-600/20 transition flex items-center gap-1.5">
+            <i data-lucide="clipboard-check" class="w-4 h-4"></i>
+            <span>Decide Disposition & Finalize</span>
+          </button>
         </div>
       </div>
 
@@ -1139,6 +1201,356 @@ require_once __DIR__ . '/../includes/sidebar.php';
 
       </div>
 
+    <!-- ========================================================
+         MODAL: DOCTOR DISPOSITION DECISION (Prompt Section 20)
+         ======================================================== -->
+    <div id="modal-disposition" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+      <div class="bg-white rounded-3xl max-w-xl w-full p-6 shadow-2xl border border-slate-100 relative space-y-5 animate-in fade-in zoom-in-95 duration-200">
+        
+        <div class="flex items-center justify-between pb-4 border-b border-slate-100">
+          <div class="flex items-center gap-2.5">
+            <div class="w-10 h-10 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white flex items-center justify-center shadow-md">
+              <i data-lucide="stethoscope" class="w-5 h-5"></i>
+            </div>
+            <div>
+              <h3 class="text-base font-extrabold text-slate-900 font-display">DECIDE PATIENT DISPOSITION</h3>
+              <p class="text-xs text-slate-400">Select clinical care trajectory after consultation</p>
+            </div>
+          </div>
+          <button type="button" onclick="closeDispositionModal()" class="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100">
+            <i data-lucide="x" class="w-4 h-4"></i>
+          </button>
+        </div>
+
+        <!-- Patient Quick Summary -->
+        <div class="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80 flex items-center justify-between text-xs">
+          <div>
+            <span class="text-slate-400 text-[10px] uppercase font-bold block">Patient</span>
+            <strong class="text-slate-800 text-sm"><?= e($patient['FirstName'] . ' ' . $patient['LastName']) ?></strong>
+            <span class="text-[11px] text-slate-500 font-mono ml-1">(<?= e($patient['PatientCode']) ?>)</span>
+          </div>
+          <div class="text-right">
+            <span class="text-slate-400 text-[10px] uppercase font-bold block">Admitting Physician</span>
+            <strong class="text-slate-800"><?= e($assignedDoctorName) ?></strong>
+          </div>
+        </div>
+
+        <!-- Master Form -->
+        <form id="dispositionMasterForm" method="POST" action="" onsubmit="return handleDispositionFormSubmit(event)">
+          <input type="hidden" name="csrf_token" value="<?= csrf_token() ?>" />
+          <input type="hidden" name="action" value="complete_consultation" />
+          <input type="hidden" name="disposition" id="form-disposition-value" value="OUTPATIENT" />
+          
+          <!-- Hidden SOAP fields passed through -->
+          <input type="hidden" name="subjective" id="disp-subjective" value="" />
+          <input type="hidden" name="objective" id="disp-objective" value="" />
+          <input type="hidden" name="assessment" id="disp-assessment" value="" />
+          <input type="hidden" name="plan" id="disp-plan" value="" />
+          <input type="hidden" name="vital_bp" id="disp-vital-bp" value="" />
+          <input type="hidden" name="vital_hr" id="disp-vital-hr" value="" />
+          <input type="hidden" name="vital_temp" id="disp-vital-temp" value="" />
+          <input type="hidden" name="vital_spo2" id="disp-vital-spo2" value="" />
+          <input type="hidden" name="vital_weight" id="disp-vital-weight" value="" />
+
+          <!-- Disposition Options Selection -->
+          <div>
+            <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-2">Doctor's Disposition Decision *</label>
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <button type="button" id="btn-disp-outpatient" onclick="setDispositionMode('OUTPATIENT')" class="p-3 rounded-2xl border-2 text-center transition flex flex-col items-center gap-1.5 border-blue-600 bg-blue-50/70 text-blue-900 font-bold shadow-xs">
+                <span class="text-lg">🏥</span>
+                <span class="text-xs">Outpatient</span>
+              </button>
+              <button type="button" id="btn-disp-admit" onclick="setDispositionMode('ADMIT')" class="p-3 rounded-2xl border-2 text-center transition flex flex-col items-center gap-1.5 border-slate-200 bg-white text-slate-600 hover:border-slate-300 font-bold">
+                <span class="text-lg">🛏️</span>
+                <span class="text-xs">Admit Patient</span>
+              </button>
+              <button type="button" id="btn-disp-refer" onclick="setDispositionMode('REFER')" class="p-3 rounded-2xl border-2 text-center transition flex flex-col items-center gap-1.5 border-slate-200 bg-white text-slate-600 hover:border-slate-300 font-bold">
+                <span class="text-lg">🔄</span>
+                <span class="text-xs">Refer</span>
+              </button>
+              <button type="button" id="btn-disp-followup" onclick="setDispositionMode('FOLLOW-UP')" class="p-3 rounded-2xl border-2 text-center transition flex flex-col items-center gap-1.5 border-slate-200 bg-white text-slate-600 hover:border-slate-300 font-bold">
+                <span class="text-lg">📅</span>
+                <span class="text-xs">Follow-up</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Section A: Outpatient / Discharge Details -->
+          <div id="section-disp-outpatient" class="p-4 bg-blue-50/60 rounded-2xl border border-blue-100 text-xs text-blue-900 space-y-2 mt-3">
+            <div class="flex items-center gap-2 font-bold text-blue-950">
+              <i data-lucide="info" class="w-4 h-4 text-blue-600"></i>
+              <span>Outpatient Care Pathway</span>
+            </div>
+            <p class="text-slate-600">Patient will be discharged for outpatient continuation. Active prescriptions and lab orders will route directly to Pharmacy & Laboratory. Patient is <strong>not</strong> admitted to inpatient ward.</p>
+          </div>
+
+          <!-- Section B: Inpatient Admission Details (Section 20 of prompt) -->
+          <div id="section-disp-admit" class="hidden p-4 bg-amber-50/50 rounded-2xl border border-amber-200/80 space-y-3.5 mt-3">
+            <div class="flex items-center gap-2 text-amber-900 font-bold text-xs">
+              <i data-lucide="bed-double" class="w-4 h-4 text-amber-700"></i>
+              <span>Inpatient Admission Placement</span>
+            </div>
+
+            <div>
+              <label class="block text-[11px] font-bold uppercase text-slate-600 mb-1">Admission Reason / Clinical Indication *</label>
+              <input type="text" id="disp-admission-reason" name="admission_reason" value="<?= !empty($existingDiagnoses) ? e($existingDiagnoses[0]['DiagnosisName']) : 'Inpatient medical management and clinical observation' ?>" class="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800" />
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+              <div>
+                <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Ward *</label>
+                <select id="disp-admission-ward" name="admission_ward" class="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800">
+                  <option value="Medical Ward" selected>Medical Ward</option>
+                  <option value="Surgical Ward">Surgical Ward</option>
+                  <option value="Pediatric Ward">Pediatric Ward</option>
+                  <option value="OB-GYN Ward">OB-GYN Ward</option>
+                  <option value="Intensive Care Unit (ICU)">ICU</option>
+                  <option value="Isolation Ward">Isolation Ward</option>
+                </select>
+              </div>
+
+              <div>
+                <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Room Number *</label>
+                <input type="text" id="disp-admission-room" name="admission_room" value="Room 201" class="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800" />
+              </div>
+
+              <div>
+                <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Bed Number *</label>
+                <input type="text" id="disp-admission-bed" name="admission_bed" value="Bed B-12" class="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800" />
+              </div>
+            </div>
+
+            <p class="text-[11px] text-amber-800 font-medium">⚠️ Patient will be placed in the Nurse Inpatient Station and an active admission episode will be opened.</p>
+          </div>
+
+          <!-- Section C: Referral Details (Internal Doctor Handover & External Hospital Transfer) -->
+          <div id="section-disp-refer" class="hidden p-4 bg-purple-50/70 rounded-2xl border border-purple-200/80 space-y-3.5 mt-3">
+            <div class="flex items-center justify-between pb-2 border-b border-purple-200/60">
+              <div class="flex items-center gap-2 text-purple-900 font-bold text-xs">
+                <i data-lucide="share-2" class="w-4 h-4 text-purple-700"></i>
+                <span class="font-extrabold uppercase tracking-wide">Patient Referral & Transfer Protocol</span>
+              </div>
+              <span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-purple-200 text-purple-800">
+                Official Clinical Endorsement
+              </span>
+            </div>
+
+            <!-- Referral Pathway Switcher (Internal Doctor vs External Hospital) -->
+            <input type="hidden" name="referral_type" id="disp-referral-type" value="External" />
+            <div class="grid grid-cols-2 gap-2">
+              <button type="button" id="btn-ref-tab-external" onclick="switchReferralPathway('External')" class="px-3 py-2 rounded-xl text-xs font-bold border-2 transition flex items-center justify-center gap-2 border-purple-600 bg-purple-600 text-white shadow-sm">
+                <i data-lucide="building-2" class="w-3.5 h-3.5"></i>
+                <span>Refer to Other Hospital</span>
+              </button>
+              <button type="button" id="btn-ref-tab-internal" onclick="switchReferralPathway('Internal')" class="px-3 py-2 rounded-xl text-xs font-bold border-2 transition flex items-center justify-center gap-2 border-slate-200 bg-white text-slate-700 hover:border-slate-300">
+                <i data-lucide="user-plus" class="w-3.5 h-3.5"></i>
+                <span>Pass to Another Doctor</span>
+              </button>
+            </div>
+
+            <!-- SUB-PANEL 1: EXTERNAL HOSPITAL TRANSFER (Hospital Can't Take Patient In) -->
+            <div id="panel-ref-external" class="space-y-3 pt-1">
+              <div class="p-3 bg-amber-50 rounded-xl border border-amber-200 text-amber-900 text-xs flex items-start gap-2.5">
+                <i data-lucide="alert-triangle" class="w-4 h-4 text-amber-600 shrink-0 mt-0.5"></i>
+                <div class="leading-relaxed">
+                  <strong class="font-bold">Hospital Capacity & Capability Transfer:</strong> Use when TMHIS cannot accommodate the patient due to lack of ICU, specialized surgical facilities, advanced imaging, or emergency hemodialysis.
+                </div>
+              </div>
+
+              <!-- Receiving Hospital Quick Select -->
+              <div>
+                <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Receiving Tertiary Hospital *</label>
+                <div class="flex flex-wrap gap-1.5 mb-1.5">
+                  <button type="button" onclick="selectReceivingHospital('South Cotabato Provincial Hospital (SCPH)', 'Koronadal City, South Cotabato')" class="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-white hover:bg-purple-100 text-purple-900 border border-purple-200 transition">
+                    🏥 SCPH (Koronadal)
+                  </button>
+                  <button type="button" onclick="selectReceivingHospital('General Santos Doctors Hospital (GSDH)', 'National Highway, General Santos City')" class="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-white hover:bg-purple-100 text-purple-900 border border-purple-200 transition">
+                    🏥 GenSan Doctors
+                  </button>
+                  <button type="button" onclick="selectReceivingHospital('St. Elizabeth Hospital', 'National Highway, General Santos City')" class="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-white hover:bg-purple-100 text-purple-900 border border-purple-200 transition">
+                    🏥 St. Elizabeth
+                  </button>
+                  <button type="button" onclick="selectReceivingHospital('Allison Medical Center', 'Surallah, South Cotabato')" class="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-white hover:bg-purple-100 text-purple-900 border border-purple-200 transition">
+                    🏥 Allison (Surallah)
+                  </button>
+                  <button type="button" onclick="selectReceivingHospital('Howard Hubbard Memorial Hospital', 'Polomolok, South Cotabato')" class="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-white hover:bg-purple-100 text-purple-900 border border-purple-200 transition">
+                    🏥 Howard Hubbard
+                  </button>
+                </div>
+                <input type="text" id="disp-receiving-hospital" name="receiving_hospital" value="South Cotabato Provincial Hospital (SCPH)" placeholder="Name of receiving hospital" class="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800" />
+                <input type="hidden" id="disp-hospital-address" name="hospital_address" value="Koronadal City, South Cotabato" />
+              </div>
+
+              <!-- Reason Hospital Cannot Accommodate Patient -->
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div>
+                  <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Reason TMHIS Cannot Accommodate *</label>
+                  <select id="disp-inability-reason" onchange="updateReferralReasonFromSelect(this)" class="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-800">
+                    <option value="Lack of Intensive Care Unit (ICU) / Ventilator Bed">Lack of ICU / Ventilator Bed</option>
+                    <option value="Specialized Surgical / Orthopedic Trauma Intervention Required">Specialized Surgery / Trauma Required</option>
+                    <option value="Advanced Diagnostic Imaging (CT Scan / MRI) Required">Advanced Imaging (CT / MRI) Required</option>
+                    <option value="Emergency Hemodialysis / Nephrology Center Required">Emergency Hemodialysis Required</option>
+                    <option value="Neonatal ICU (NICU) Bed Unavailable">Neonatal ICU (NICU) Bed Unavailable</option>
+                    <option value="Cardiac Catheterization / Interventional Cardiology Required">Cardiac Cath Lab / Interventional Cardiology</option>
+                    <option value="Patient / Family Explicit Request for Tertiary Transfer">Family Request for Tertiary Transfer</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Transfer Transport Mode *</label>
+                  <select name="requested_service" class="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-800">
+                    <option value="TMHIS Emergency Ambulance (O2 + EMT Accompanying)" selected>🚑 TMHIS Ambulance (O2 + EMT)</option>
+                    <option value="LGU Disaster Risk Reduction / Rescue Vehicle">🚑 LGU MDRRMO Rescue Vehicle</option>
+                    <option value="Private Vehicle (Family Dispatched)">🚗 Private Family Vehicle</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Clinical Indication & Specific Referral Reason *</label>
+                <input type="text" id="disp-referral-reason" name="referral_reason" value="Lack of Intensive Care Unit (ICU) / Ventilator Bed" placeholder="e.g. Severe respiratory failure requiring mechanical ventilation unavailable at TMH" class="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-800" />
+              </div>
+
+              <div>
+                <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">En-route Interventions & Transfer Clinical Summary</label>
+                <textarea name="referral_summary" rows="2" placeholder="Document patient vitals, IV lines, oxygen flow rate, and emergency medications administered prior to ambulance transfer..." class="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-800"></textarea>
+              </div>
+            </div>
+
+            <!-- SUB-PANEL 2: INTERNAL DOCTOR ENDORSEMENT (Pass to Another Doctor / Specialty) -->
+            <div id="panel-ref-internal" class="hidden space-y-3 pt-1">
+              <div class="p-3 bg-blue-50 rounded-xl border border-blue-200 text-blue-900 text-xs flex items-start gap-2.5">
+                <i data-lucide="info" class="w-4 h-4 text-blue-600 shrink-0 mt-0.5"></i>
+                <div class="leading-relaxed">
+                  <strong class="font-bold">Internal Medical Handover:</strong> Transfer patient case or request co-management evaluation with another attending physician or specialty within TMHIS.
+                </div>
+              </div>
+
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div>
+                  <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Target Attending Doctor</label>
+                  <select name="target_doctor_id" class="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800">
+                    <option value="">-- Any Available Specialty Doctor --</option>
+                    <?php if (!empty($allDoctorsList)): ?>
+                      <?php foreach ($allDoctorsList as $dItem): ?>
+                        <?php if ((int)$dItem['DoctorID'] !== $doctorId): ?>
+                          <option value="<?= (int)$dItem['DoctorID'] ?>">
+                            Dr. <?= e($dItem['FirstName'] . ' ' . $dItem['LastName']) ?> (<?= e($dItem['Specialty'] ?? 'General Medicine') ?>)
+                          </option>
+                        <?php endif; ?>
+                      <?php endforeach; ?>
+                    <?php endif; ?>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Target Department / Specialty</label>
+                  <select name="target_specialty_id" class="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800">
+                    <option value="1">General Medicine / Internal Medicine</option>
+                    <option value="2">Pediatrics & Neonatal Care</option>
+                    <option value="3">General Surgery & Trauma</option>
+                    <option value="4">Obstetrics & Gynecology (OB-GYN)</option>
+                    <option value="5">Emergency & Critical Care</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div>
+                  <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Referral Priority</label>
+                  <select name="referral_priority" class="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800">
+                    <option value="Routine">Routine - Next Available Consultation</option>
+                    <option value="Urgent" selected>Urgent - Same Day Clinical Evaluation</option>
+                    <option value="Emergency">STAT / Emergency Handover</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Handover Endorsement Reason</label>
+                  <input type="text" name="internal_reason" placeholder="e.g. Pediatric evaluation required for severe persistent fever" class="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-800" />
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Section D: Follow-up Details -->
+          <div id="section-disp-followup" class="hidden p-4 bg-teal-50/60 rounded-2xl border border-teal-100 space-y-3 mt-3">
+            <div class="flex items-center gap-2 text-teal-900 font-bold text-xs">
+              <i data-lucide="calendar" class="w-4 h-4 text-teal-700"></i>
+              <span>Scheduled Follow-Up Review</span>
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Follow-up Date</label>
+                <input type="date" name="follow_up_date" value="<?= date('Y-m-d', strtotime('+14 days')) ?>" class="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-800" />
+              </div>
+              <div>
+                <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Instructions</label>
+                <input type="text" name="follow_up_instructions" placeholder="e.g. Fasting 8 hrs prior to lab" class="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-800" />
+              </div>
+            </div>
+          </div>
+
+          <!-- Action Buttons -->
+          <div class="pt-4 border-t border-slate-100 flex items-center justify-end gap-2.5 mt-4">
+            <button type="button" onclick="closeDispositionModal()" class="px-4 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50 transition">
+              Cancel
+            </button>
+            <button type="submit" id="btn-submit-disposition" class="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-extrabold shadow-sm transition flex items-center gap-2">
+              <i data-lucide="check" class="w-4 h-4"></i>
+              <span id="btn-submit-disposition-label">Finalize Outpatient Consultation</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- ========================================================
+         MODAL: ADMISSION CONFIRMATION (Prompt Section 21)
+         ======================================================== -->
+    <div id="modal-confirm-admission" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-sm">
+      <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 relative space-y-4 animate-in fade-in zoom-in-95 duration-200">
+        
+        <div class="text-center pb-2 border-b border-slate-100">
+          <div class="w-12 h-12 rounded-2xl bg-amber-100 text-amber-700 mx-auto flex items-center justify-center mb-2 shadow-sm">
+            <i data-lucide="bed" class="w-6 h-6"></i>
+          </div>
+          <h3 class="text-base font-black text-slate-900 font-heading">CONFIRM ADMISSION</h3>
+          <p class="text-xs text-slate-400">Please review inpatient ward placement</p>
+        </div>
+
+        <div class="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2.5 text-xs">
+          <div class="flex justify-between">
+            <span class="text-slate-400">Patient:</span>
+            <strong class="text-slate-900"><?= e($patient['FirstName'] . ' ' . $patient['LastName']) ?></strong>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-slate-400">Reason:</span>
+            <span id="confirm-adm-reason" class="font-bold text-slate-800 text-right max-w-[200px] truncate"></span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-slate-400">Admitting Doctor:</span>
+            <span class="font-bold text-slate-800"><?= e($assignedDoctorName) ?></span>
+          </div>
+          <div class="flex justify-between border-t border-slate-200 pt-2 text-blue-900 font-bold">
+            <span>Ward:</span>
+            <span id="confirm-adm-ward">Medical Ward</span>
+          </div>
+          <div class="flex justify-between text-blue-900 font-bold">
+            <span>Bed / Room:</span>
+            <span id="confirm-adm-bed">Bed B-12 (Room 201)</span>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-end gap-2 pt-2">
+          <button type="button" onclick="closeAdmissionConfirmation()" class="px-4 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50 transition">
+            Cancel
+          </button>
+          <button type="button" onclick="submitAdmissionConfirmed()" class="px-5 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-extrabold shadow-sm transition flex items-center gap-1.5">
+            <i data-lucide="check-circle" class="w-4 h-4"></i>
+            <span>Confirm Admission</span>
+        </div>
+      </div>
+    </div>
+
     <?php endif; ?>
 
   </main>
@@ -1146,23 +1558,179 @@ require_once __DIR__ . '/../includes/sidebar.php';
 </div>
 
 <script>
-function handleCompleteConsultationSubmit(form) {
-    if (!confirm('Complete and archive this consultation?')) {
-        return false;
-    }
+let currentDisposition = 'OUTPATIENT';
+
+function openDispositionModal() {
+    const modal = document.getElementById('modal-disposition');
+    if (!modal) return;
+    
+    // Copy current SOAP and vitals values into hidden form fields
     const soap = document.getElementById('soapNoteForm');
     if (soap) {
-        form.subjective.value = soap.querySelector('textarea[name="subjective"]')?.value || '';
-        form.objective.value = soap.querySelector('textarea[name="objective"]')?.value || '';
-        form.assessment.value = soap.querySelector('textarea[name="assessment"]')?.value || '';
-        form.plan.value = soap.querySelector('textarea[name="plan"]')?.value || '';
-        form.vital_bp.value = soap.querySelector('input[name="vital_bp"]')?.value || '';
-        form.vital_hr.value = soap.querySelector('input[name="vital_hr"]')?.value || '';
-        form.vital_temp.value = soap.querySelector('input[name="vital_temp"]')?.value || '';
-        form.vital_spo2.value = soap.querySelector('input[name="vital_spo2"]')?.value || '';
-        form.vital_weight.value = soap.querySelector('input[name="vital_weight"]')?.value || '';
+        document.getElementById('disp-subjective').value = soap.querySelector('textarea[name="subjective"]')?.value || '';
+        document.getElementById('disp-objective').value = soap.querySelector('textarea[name="objective"]')?.value || '';
+        document.getElementById('disp-assessment').value = soap.querySelector('textarea[name="assessment"]')?.value || '';
+        document.getElementById('disp-plan').value = soap.querySelector('textarea[name="plan"]')?.value || '';
+        document.getElementById('disp-vital-bp').value = soap.querySelector('input[name="vital_bp"]')?.value || '';
+        document.getElementById('disp-vital-hr').value = soap.querySelector('input[name="vital_hr"]')?.value || '';
+        document.getElementById('disp-vital-temp').value = soap.querySelector('input[name="vital_temp"]')?.value || '';
+        document.getElementById('disp-vital-spo2').value = soap.querySelector('input[name="vital_spo2"]')?.value || '';
+        document.getElementById('disp-vital-weight').value = soap.querySelector('input[name="vital_weight"]')?.value || '';
+
+        const currentAss = soap.querySelector('textarea[name="assessment"]')?.value?.trim();
+        const admReasonInput = document.getElementById('disp-admission-reason');
+        if (currentAss && admReasonInput && (!admReasonInput.value || admReasonInput.value === 'Inpatient medical management and clinical observation')) {
+            admReasonInput.value = currentAss;
+        }
+    }
+
+    setDispositionMode(currentDisposition);
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    if (window.lucide) lucide.createIcons();
+}
+
+function closeDispositionModal() {
+    const modal = document.getElementById('modal-disposition');
+    if (modal) {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+    }
+}
+
+function setDispositionMode(mode) {
+    currentDisposition = mode;
+    document.getElementById('form-disposition-value').value = mode;
+
+    const sections = {
+        'OUTPATIENT': document.getElementById('section-disp-outpatient'),
+        'ADMIT': document.getElementById('section-disp-admit'),
+        'REFER': document.getElementById('section-disp-refer'),
+        'FOLLOW-UP': document.getElementById('section-disp-followup')
+    };
+
+    const buttons = {
+        'OUTPATIENT': document.getElementById('btn-disp-outpatient'),
+        'ADMIT': document.getElementById('btn-disp-admit'),
+        'REFER': document.getElementById('btn-disp-refer'),
+        'FOLLOW-UP': document.getElementById('btn-disp-followup')
+    };
+
+    const submitBtn = document.getElementById('btn-submit-disposition');
+    const submitLabel = document.getElementById('btn-submit-disposition-label');
+
+    // Toggle active classes on buttons and sections
+    for (const [key, sec] of Object.entries(sections)) {
+        if (!sec) continue;
+        if (key === mode) sec.classList.remove('hidden');
+        else sec.classList.add('hidden');
+    }
+
+    for (const [key, btn] of Object.entries(buttons)) {
+        if (!btn) continue;
+        if (key === mode) {
+            btn.className = 'p-3 rounded-2xl border-2 text-center transition flex flex-col items-center gap-1.5 border-blue-600 bg-blue-50/70 text-blue-900 font-bold shadow-xs';
+        } else {
+            btn.className = 'p-3 rounded-2xl border-2 text-center transition flex flex-col items-center gap-1.5 border-slate-200 bg-white text-slate-600 hover:border-slate-300 font-bold';
+        }
+    }
+
+    if (mode === 'ADMIT') {
+        submitBtn.className = 'px-5 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-extrabold shadow-sm transition flex items-center gap-2';
+        submitLabel.innerText = 'Review & Confirm Admission';
+    } else if (mode === 'REFER') {
+        submitBtn.className = 'px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-extrabold shadow-sm transition flex items-center gap-2';
+        submitLabel.innerText = 'Finalize & Route Referral';
+    } else if (mode === 'FOLLOW-UP') {
+        submitBtn.className = 'px-5 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold shadow-sm transition flex items-center gap-2';
+        submitLabel.innerText = 'Finalize & Schedule Follow-Up';
+    } else {
+        submitBtn.className = 'px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-extrabold shadow-sm transition flex items-center gap-2';
+        submitLabel.innerText = 'Finalize Outpatient Consultation';
+    }
+
+    if (window.lucide) lucide.createIcons();
+}
+
+function switchReferralPathway(pathway) {
+    const typeInput = document.getElementById('disp-referral-type');
+    if (typeInput) typeInput.value = pathway;
+
+    const btnExt = document.getElementById('btn-ref-tab-external');
+    const btnInt = document.getElementById('btn-ref-tab-internal');
+    const panelExt = document.getElementById('panel-ref-external');
+    const panelInt = document.getElementById('panel-ref-internal');
+
+    if (pathway === 'External') {
+        if (panelExt) panelExt.classList.remove('hidden');
+        if (panelInt) panelInt.classList.add('hidden');
+        if (btnExt) btnExt.className = 'px-3 py-2 rounded-xl text-xs font-bold border-2 transition flex items-center justify-center gap-2 border-purple-600 bg-purple-600 text-white shadow-sm';
+        if (btnInt) btnInt.className = 'px-3 py-2 rounded-xl text-xs font-bold border-2 transition flex items-center justify-center gap-2 border-slate-200 bg-white text-slate-700 hover:border-slate-300';
+    } else {
+        if (panelInt) panelInt.classList.remove('hidden');
+        if (panelExt) panelExt.classList.add('hidden');
+        if (btnInt) btnInt.className = 'px-3 py-2 rounded-xl text-xs font-bold border-2 transition flex items-center justify-center gap-2 border-purple-600 bg-purple-600 text-white shadow-sm';
+        if (btnExt) btnExt.className = 'px-3 py-2 rounded-xl text-xs font-bold border-2 transition flex items-center justify-center gap-2 border-slate-200 bg-white text-slate-700 hover:border-slate-300';
+    }
+    if (window.lucide) lucide.createIcons();
+}
+
+function selectReceivingHospital(name, address) {
+    const input = document.getElementById('disp-receiving-hospital');
+    const addrInput = document.getElementById('disp-hospital-address');
+    if (input) input.value = name;
+    if (addrInput) addrInput.value = address;
+}
+
+function updateReferralReasonFromSelect(selectEl) {
+    const reasonInput = document.getElementById('disp-referral-reason');
+    if (reasonInput && selectEl) {
+        reasonInput.value = selectEl.value;
+    }
+}
+
+function handleDispositionFormSubmit(event) {
+    if (currentDisposition === 'ADMIT') {
+        event.preventDefault();
+        // Prompt Section 21: Show Admission Confirmation Modal
+        openAdmissionConfirmation();
+        return false;
     }
     return true;
+}
+
+function openAdmissionConfirmation() {
+    const confirmModal = document.getElementById('modal-confirm-admission');
+    if (!confirmModal) return;
+
+    const reason = document.getElementById('disp-admission-reason')?.value || 'Acute clinical indication';
+    const ward = document.getElementById('disp-admission-ward')?.value || 'Medical Ward';
+    const room = document.getElementById('disp-admission-room')?.value || 'Room 201';
+    const bed = document.getElementById('disp-admission-bed')?.value || 'Bed B-12';
+
+    document.getElementById('confirm-adm-reason').innerText = reason;
+    document.getElementById('confirm-adm-ward').innerText = ward;
+    document.getElementById('confirm-adm-bed').innerText = `${bed} (${room})`;
+
+    confirmModal.classList.remove('hidden');
+    confirmModal.classList.add('flex');
+    if (window.lucide) lucide.createIcons();
+}
+
+function closeAdmissionConfirmation() {
+    const confirmModal = document.getElementById('modal-confirm-admission');
+    if (confirmModal) {
+        confirmModal.classList.add('hidden');
+        confirmModal.classList.remove('flex');
+    }
+}
+
+function submitAdmissionConfirmed() {
+    closeAdmissionConfirmation();
+    const form = document.getElementById('dispositionMasterForm');
+    if (form) {
+        form.submit();
+    }
 }
 
 // Helper: Append disease to SOAP Assessment

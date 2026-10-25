@@ -20,29 +20,35 @@ try {
 $patients = [];
 foreach ($dbQueue as $q) {
     $p = $q->patient;
+    $qStatus = $q->QueueStatus ?: 'Waiting';
+    $activeAdm = \App\Models\Admission::where('PatientID', $q->PatientID)->where('Status', 'Admitted')->first();
+    $roomLabel = $activeAdm 
+        ? ($activeAdm->Ward . ' • ' . $activeAdm->RoomNumber . ' (' . $activeAdm->BedNumber . ')')
+        : 'Outpatient Triage';
+
+    $latestVital = \App\Models\PatientVital::where('PatientID', $q->PatientID)->orderBy('VitalID', 'desc')->first();
+
     $patients[] = [
-        'queue_id' => $q->QueueID,
-        'id' => $q->PatientID,
-        'queue_number' => $q->QueueNumber,
-        'name' => $p ? ($p->FirstName . ' ' . $p->LastName) : 'Patient #' . $q->PatientID,
-        'age' => $p ? $p->Age : 35,
-        'gender' => $p ? $p->Gender : 'Male',
-        'room' => 'Ward ' . (100 + ($q->PatientID % 20)),
-        'queue_status' => $q->Status,
-        'bp' => '120/80',
-        'assigned_task' => 'Triage & Vital Signs Check',
-        'time' => substr((string)$q->CreatedAt, 11, 5)
+        'queue_id'      => $q->QueueID,
+        'id'            => $q->PatientID,
+        'queue_number'  => $q->QueueNumber ?: ('Q-' . $q->QueueID),
+        'name'          => $p ? trim($p->FirstName . ' ' . $p->LastName) : 'Patient #' . $q->PatientID,
+        'age'           => $p ? (int)$p->Age : 35,
+        'gender'        => $p ? $p->Gender : 'Male',
+        'room'          => $roomLabel,
+        'queue_status'  => $qStatus,
+        'is_admitted'   => $activeAdm ? true : false,
+        'bp'            => $latestVital ? ($latestVital->BloodPressure ?: '120/80') : '120/80',
+        'assigned_task' => $activeAdm ? 'Inpatient Ward Nursing Care & Vitals' : 'Triage & Vital Signs Check',
+        'time'          => substr((string)$q->CreatedAt, 11, 5)
     ];
-}
-if (empty($patients)) {
-    $patients = getDemoPatients();
 }
 
 // Separate into queue buckets
-$waitingList = array_filter($patients, fn($p) => ($p['queue_status'] ?? '') === 'Waiting');
+$waitingList = array_filter($patients, fn($p) => in_array($p['queue_status'] ?? '', ['Waiting', 'Triage']));
 $calledList = array_filter($patients, fn($p) => in_array($p['queue_status'] ?? '', ['Called', 'Ready for Consultation']));
-$inProgressList = array_filter($patients, fn($p) => in_array($p['queue_status'] ?? '', ['In Progress', 'Under Observation']));
-$completedList = array_filter($patients, fn($p) => in_array($p['queue_status'] ?? '', ['Completed', 'For Discharge']));
+$inProgressList = array_filter($patients, fn($p) => in_array($p['queue_status'] ?? '', ['In Progress', 'Under Observation', 'In Consultation']));
+$completedList = array_filter($patients, fn($p) => in_array($p['queue_status'] ?? '', ['Completed', 'For Discharge', 'Admitted - Inpatient']));
 
 
 require_once __DIR__ . '/../includes/header.php';

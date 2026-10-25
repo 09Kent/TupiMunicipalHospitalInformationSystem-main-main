@@ -8,22 +8,6 @@ $user = Session::getCurrentUser() ?: [
     'email' => 'sarah.jenkins@tupimunicipal.gov.ph'
 ];
 ?>
-<!-- TOP EMERGENCY ADVISORY (No Print) -->
-<header class="no-print bg-slate-900 text-white text-xs py-1.5 px-4 border-b border-slate-800">
-  <div class="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
-    <div class="flex items-center gap-2">
-      <span class="inline-flex items-center justify-center w-4 h-4 rounded-full bg-rose-500 text-white font-bold text-[10px]">!</span>
-      <span class="font-medium text-slate-300 text-[11px]">
-        <strong class="text-white">Clinical Triage:</strong> In emergency or critical distress, route immediately to Acute ER.
-      </span>
-    </div>
-    <div class="flex items-center gap-4 text-slate-400 text-[11px]">
-      <span class="flex items-center gap-1"><i data-lucide="shield-check" class="w-3.5 h-3.5 text-emerald-400"></i> HIPAA Compliant</span>
-      <span class="flex items-center gap-1"><i data-lucide="database" class="w-3.5 h-3.5 text-blue-400"></i> Supabase Connected</span>
-      <span class="flex items-center gap-1"><i data-lucide="clock" class="w-3.5 h-3.5 text-slate-300"></i> <?= date('D, d M Y') ?></span>
-    </div>
-  </div>
-</header>
 
 <!-- MAIN TOP NAVBAR (No Print) -->
 <nav class="no-print sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200/90 shadow-2xs">

@@ -14,21 +14,21 @@ const AppState = {
   invoiceFilter: 'all',
   receiptFilter: 'all',
   
-  // Data references
-  currentUser: { ...BILLING_DATA.currentUser },
-  metrics: { ...BILLING_DATA.metrics },
-  patients: [ ...BILLING_DATA.patients ],
-  charges: [ ...BILLING_DATA.charges ],
-  bills: [ ...BILLING_DATA.bills ],
-  invoices: [ ...BILLING_DATA.invoices ],
-  payments: [ ...BILLING_DATA.payments ],
-  officialReceipts: [ ...BILLING_DATA.officialReceipts ],
-  recentActivities: [ ...BILLING_DATA.recentActivities ],
-  notifications: [ ...BILLING_DATA.notifications ],
-  settings: { ...BILLING_DATA.settings },
+  // Data references (use live server database records when available)
+  currentUser: (window.SERVER_BILLING_DATA && window.SERVER_BILLING_DATA.currentUser) ? { ...window.SERVER_BILLING_DATA.currentUser } : { ...BILLING_DATA.currentUser },
+  metrics: (window.SERVER_BILLING_DATA && window.SERVER_BILLING_DATA.metrics) ? { ...window.SERVER_BILLING_DATA.metrics } : { ...BILLING_DATA.metrics },
+  patients: (window.SERVER_BILLING_DATA && window.SERVER_BILLING_DATA.patients && window.SERVER_BILLING_DATA.patients.length) ? [ ...window.SERVER_BILLING_DATA.patients ] : [ ...BILLING_DATA.patients ],
+  charges: (window.SERVER_BILLING_DATA && window.SERVER_BILLING_DATA.charges && window.SERVER_BILLING_DATA.charges.length) ? [ ...window.SERVER_BILLING_DATA.charges ] : [ ...BILLING_DATA.charges ],
+  bills: (window.SERVER_BILLING_DATA && window.SERVER_BILLING_DATA.bills && window.SERVER_BILLING_DATA.bills.length) ? [ ...window.SERVER_BILLING_DATA.bills ] : [ ...BILLING_DATA.bills ],
+  invoices: (window.SERVER_BILLING_DATA && window.SERVER_BILLING_DATA.invoices && window.SERVER_BILLING_DATA.invoices.length) ? [ ...window.SERVER_BILLING_DATA.invoices ] : [ ...BILLING_DATA.invoices ],
+  payments: (window.SERVER_BILLING_DATA && window.SERVER_BILLING_DATA.payments && window.SERVER_BILLING_DATA.payments.length) ? [ ...window.SERVER_BILLING_DATA.payments ] : [ ...BILLING_DATA.payments ],
+  officialReceipts: (window.SERVER_BILLING_DATA && window.SERVER_BILLING_DATA.officialReceipts && window.SERVER_BILLING_DATA.officialReceipts.length) ? [ ...window.SERVER_BILLING_DATA.officialReceipts ] : [ ...BILLING_DATA.officialReceipts ],
+  recentActivities: (window.SERVER_BILLING_DATA && window.SERVER_BILLING_DATA.recentActivities && window.SERVER_BILLING_DATA.recentActivities.length) ? [ ...window.SERVER_BILLING_DATA.recentActivities ] : [ ...BILLING_DATA.recentActivities ],
+  notifications: (window.SERVER_BILLING_DATA && window.SERVER_BILLING_DATA.notifications && window.SERVER_BILLING_DATA.notifications.length) ? [ ...window.SERVER_BILLING_DATA.notifications ] : [ ...BILLING_DATA.notifications ],
+  settings: (window.SERVER_BILLING_DATA && window.SERVER_BILLING_DATA.settings) ? { ...window.SERVER_BILLING_DATA.settings } : { ...BILLING_DATA.settings },
 
   // Currently selected items for active flows
-  selectedPatientForBill: 'P-2026-001',
+  selectedPatientForBill: (window.SERVER_BILLING_DATA && window.SERVER_BILLING_DATA.patients && window.SERVER_BILLING_DATA.patients.length > 0) ? window.SERVER_BILLING_DATA.patients[0].id : 'P-2026-001',
   activeInvoice: null,
   activeReceipt: null,
   chargeToEdit: null,
@@ -45,6 +45,10 @@ const AppState = {
     accounts: 1
   }
 };
+
+if (AppState.patients && AppState.patients.length > 0) {
+  AppState.selectedPatientForBill = AppState.patients[0].id;
+}
 
 // Currency Formatter for Philippine Peso (₱)
 function formatPeso(amount) {
@@ -615,6 +619,64 @@ document.addEventListener('click', (e) => {
   }
 });
 
+// Resilient Active Bill Finder for Bill Processing, Deductions, Payments, and Invoices
+function getActiveBillForProcessing() {
+  const sel = document.getElementById('bill-patient-select');
+  let selectedId = (sel && sel.value) ? sel.value : AppState.selectedPatientForBill;
+  
+  if ((!selectedId || selectedId === 'P-2026-001') && AppState.patients && AppState.patients.length > 0) {
+    selectedId = AppState.patients[0].id;
+  }
+  AppState.selectedPatientForBill = selectedId;
+
+  let bill = AppState.bills.find(b => b.patientId === selectedId);
+
+  if (!bill) {
+    if (typeof renderBillProcessing === 'function') {
+      renderBillProcessing();
+    }
+    bill = AppState.bills.find(b => b.patientId === selectedId);
+  }
+
+  if (!bill && AppState.bills.length > 0) {
+    bill = AppState.bills[0];
+    AppState.selectedPatientForBill = bill.patientId;
+  }
+
+  if (!bill) {
+    const patient = (AppState.patients && AppState.patients.find(p => p.id === selectedId)) || 
+                    (AppState.patients && AppState.patients[0]) || 
+                    { id: selectedId || 'PAT-DEFAULT', name: 'Active Patient', room: 'OPD Triage', physician: 'Attending Physician' };
+    bill = {
+      billId: "BILL-2026-" + Math.floor(100 + Math.random() * 900),
+      patientId: patient.id,
+      patientName: patient.name,
+      invoiceId: "INV-2026-" + Math.floor(100 + Math.random() * 900),
+      date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+      items: [
+        { service: "Hospital Clinical Consultation & Diagnostic Care", department: "Clinical Services", quantity: 1, unitPrice: 500, amount: 500 }
+      ],
+      subtotal: 500,
+      philhealthDeduction: 0,
+      philhealthId: "",
+      discountType: "None",
+      discountRate: 0,
+      discountAmount: 0,
+      discountReason: "",
+      authorizedBy: "Dr. Roberto Mendoza, MD",
+      totalBill: 500,
+      amountPaid: 0,
+      outstandingBalance: 500,
+      status: "UNPAID",
+      dueDate: "Due Upon Discharge"
+    };
+    AppState.bills.push(bill);
+    AppState.invoices.push(bill);
+  }
+
+  return bill;
+}
+
 // Bill Processing View Interactive Computation
 function renderBillProcessing() {
   const patientSelect = document.getElementById('bill-patient-select');
@@ -629,8 +691,19 @@ function renderBillProcessing() {
     patientSelect.innerHTML = options;
   }
 
-  const selectedId = patientSelect.value || AppState.selectedPatientForBill;
-  const patient = AppState.patients.find(p => p.id === selectedId) || AppState.patients[0];
+  let selectedId = patientSelect.value || AppState.selectedPatientForBill;
+  let patient = AppState.patients.find(p => p.id === selectedId);
+  if (!patient && AppState.patients.length > 0) {
+    patient = AppState.patients[0];
+    selectedId = patient.id;
+  }
+  if (!patient) {
+    patient = { id: selectedId || 'PAT-001', name: 'Patient', age: 30, gender: 'Male', room: 'OPD Triage', physician: 'Attending Physician' };
+  }
+  AppState.selectedPatientForBill = patient.id;
+  if (patientSelect.value !== patient.id) {
+    patientSelect.value = patient.id;
+  }
   
   // Update the search bar text if needed
   const searchInput = document.getElementById('bill-patient-search-input');
@@ -831,17 +904,47 @@ function renderPaymentsTable() {
         <td class="text-xs text-slate-500">${p.date}</td>
         <td class="text-xs text-slate-700 font-medium">${p.cashier}</td>
         <td>
-          <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold badge-paid">
-            ${p.status}
-          </span>
+          ${(() => {
+            const s = (p.status || '').toUpperCase();
+            if (s.includes('VERIF')) {
+              return `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-purple-100 text-purple-800 border border-purple-200">Pending Verification</span>`;
+            } else if (s.includes('PENDING') || s.includes('WAITING') || s.includes('PROCESS')) {
+              return `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-200 animate-pulse">Waiting for Payment</span>`;
+            } else if (s.includes('FAIL') || s.includes('DECLINE')) {
+              return `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-rose-100 text-rose-800 border border-rose-200">FAILED</span>`;
+            } else if (s.includes('CANCEL')) {
+              return `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200">CANCELLED</span>`;
+            } else {
+              return `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold badge-paid">PAID</span>`;
+            }
+          })()}
         </td>
         <td class="text-right whitespace-nowrap">
-          <button onclick="openReceiptForPayment('${p.paymentId}')" title="Generate / View Official Receipt" class="px-2.5 py-1 text-xs font-medium text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors inline-flex items-center gap-1">
-            <i data-lucide="receipt" class="w-3.5 h-3.5"></i> Receipt
-          </button>
-          <button onclick="openEditPaymentModal('${p.paymentId}')" title="Update Payment Record" class="p-1.5 text-slate-600 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors">
-            <i data-lucide="edit-3" class="w-4 h-4"></i>
-          </button>
+          ${(() => {
+            const s = (p.status || '').toUpperCase();
+            if (s.includes('VERIF')) {
+              return `
+                <button onclick="verifyBankTransferAction('${p.rawId || p.paymentId}')" title="Verify Bank Deposit Slip" class="px-2.5 py-1 text-xs font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 rounded-lg transition-colors inline-flex items-center gap-1 border border-purple-200 shadow-xs">
+                  <i data-lucide="check-circle" class="w-3.5 h-3.5"></i> Verify Bank
+                </button>
+              `;
+            } else if (s.includes('PENDING') || s.includes('WAITING')) {
+              return `
+                <button onclick="resumeElectronicPayment('${p.rawId || p.paymentId}')" title="Scan QR / Authorize" class="px-2.5 py-1 text-xs font-bold text-sky-700 bg-sky-50 hover:bg-sky-100 rounded-lg transition-colors inline-flex items-center gap-1 border border-sky-200 shadow-xs">
+                  <i data-lucide="qr-code" class="w-3.5 h-3.5"></i> Scan QR
+                </button>
+              `;
+            } else {
+              return `
+                <button onclick="openReceiptForPayment('${p.paymentId}')" title="Generate / View Official Receipt" class="px-2.5 py-1 text-xs font-medium text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors inline-flex items-center gap-1">
+                  <i data-lucide="receipt" class="w-3.5 h-3.5"></i> Receipt
+                </button>
+                <button onclick="openEditPaymentModal('${p.paymentId}')" title="Update Payment Record" class="p-1.5 text-slate-600 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors">
+                  <i data-lucide="edit-3" class="w-4 h-4"></i>
+                </button>
+              `;
+            }
+          })()}
         </td>
       </tr>
     `;
@@ -1074,18 +1177,117 @@ function renderNotificationsView() {
 // MODAL FLOWS & ACTIONS
 // =======================================================
 
+let chargeSearchTimeout = null;
+
+function onChargePatientSearchInput(query) {
+  clearTimeout(chargeSearchTimeout);
+  const q = (query || '').trim();
+  const resultsContainer = document.getElementById('charge-patient-search-results');
+  const spinner = document.getElementById('charge-patient-spinner');
+
+  if (q.length < 1) {
+    if (resultsContainer) {
+      resultsContainer.classList.add('hidden');
+      resultsContainer.innerHTML = '';
+    }
+    return;
+  }
+
+  if (spinner) spinner.classList.remove('hidden');
+
+  chargeSearchTimeout = setTimeout(async () => {
+    try {
+      const res = await fetch(`/api/search/patients?q=${encodeURIComponent(q)}&limit=8`);
+      const json = await res.json();
+      if (spinner) spinner.classList.add('hidden');
+
+      if (!json.success || !json.data || json.data.length === 0) {
+        resultsContainer.innerHTML = `
+          <div class="p-3 text-center text-slate-400 text-xs italic">
+            No patient records found matching "${q}"
+          </div>`;
+        resultsContainer.classList.remove('hidden');
+        return;
+      }
+
+      let html = '';
+      json.data.forEach(p => {
+        const pCode = p.PatientCode || `TMH-${p.PatientID}`;
+        const pName = p.FullName || `${p.FirstName} ${p.LastName}`;
+        const catBadge = p.PatientCategory === 'Inpatient' ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800';
+        html += `
+          <button type="button" onclick="selectChargePatient(${p.PatientID}, '${encodeURIComponent(pName)}', '${pCode}')" 
+                  class="w-full text-left p-2.5 hover:bg-blue-50/80 transition flex items-center justify-between group">
+            <div>
+              <div class="font-extrabold text-slate-900 group-hover:text-blue-700 text-xs">${pName}</div>
+              <div class="text-[10px] text-slate-400 font-mono mt-0.5">ID: ${pCode} • Age: ${p.Age || 'N/A'} • ${p.Gender || ''}</div>
+            </div>
+            <span class="text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${catBadge}">
+              ${p.PatientCategory || 'Outpatient'}
+            </span>
+          </button>
+        `;
+      });
+
+      resultsContainer.innerHTML = html;
+      resultsContainer.classList.remove('hidden');
+    } catch (e) {
+      if (spinner) spinner.classList.add('hidden');
+      console.error(e);
+    }
+  }, 250);
+}
+
+function selectChargePatient(id, encName, code) {
+  const name = decodeURIComponent(encName);
+  const select = document.getElementById('charge-patient-select');
+  if (select) {
+    select.innerHTML = `<option value="${id}" selected>${name} (${code})</option>`;
+  }
+
+  const searchInput = document.getElementById('charge-patient-search-input');
+  if (searchInput) searchInput.value = '';
+
+  const results = document.getElementById('charge-patient-search-results');
+  if (results) results.classList.add('hidden');
+
+  const badge = document.getElementById('charge-patient-selected-badge');
+  const badgeName = document.getElementById('charge-patient-selected-name');
+  const badgeCode = document.getElementById('charge-patient-selected-code');
+
+  if (badge && badgeName && badgeCode) {
+    badgeName.innerText = name;
+    badgeCode.innerText = code;
+    badge.classList.remove('hidden');
+  }
+
+  const existingPatient = AppState.patients.find(p => p.id === String(id) || p.name === name);
+  if (!existingPatient) {
+    AppState.patients.push({ id: String(id), name: name, category: 'OPD' });
+  }
+}
+
+function clearChargePatientSelection() {
+  const select = document.getElementById('charge-patient-select');
+  if (select) select.innerHTML = '<option value="">-- Select Patient --</option>';
+
+  const badge = document.getElementById('charge-patient-selected-badge');
+  if (badge) badge.classList.add('hidden');
+
+  const searchInput = document.getElementById('charge-patient-search-input');
+  if (searchInput) {
+    searchInput.value = '';
+    searchInput.focus();
+  }
+}
+
 // 1. Create Charge Entry Modal
 function openCreateChargeModal() {
   const modal = document.getElementById('modal-create-charge');
   if (!modal) return;
 
-  // Populate patient dropdown
-  const patientSelect = document.getElementById('charge-patient-select');
-  let opts = '<option value="">-- Select Patient --</option>';
-  AppState.patients.forEach(p => {
-    opts += `<option value="${p.id}">${p.name} (${p.id})</option>`;
-  });
-  patientSelect.innerHTML = opts;
+  // Reset live search and badge
+  clearChargePatientSelection();
 
   // Reset inputs
   document.getElementById('charge-category').value = 'Laboratory';
@@ -1313,12 +1515,17 @@ function onDiscountTypeChange() {
 }
 
 function openApplyDiscountModal() {
-  const selectedId = AppState.selectedPatientForBill;
-  const bill = AppState.bills.find(b => b.patientId === selectedId);
-  if (!bill) return;
+  const bill = getActiveBillForProcessing();
+  if (!bill) {
+    alert('No active patient bill selected.');
+    return;
+  }
 
   const modal = document.getElementById('modal-apply-discount');
-  document.getElementById('discount-original-amount').innerText = formatPeso(bill.subtotal);
+  if (!modal) return;
+
+  const origEl = document.getElementById('discount-original-amount');
+  if (origEl) origEl.innerText = formatPeso(bill.subtotal || 0);
   
   // PhilHealth Fields
   const phIdInput = document.getElementById('discount-philhealth-id');
@@ -1327,31 +1534,38 @@ function openApplyDiscountModal() {
   if (phAmtInput) phAmtInput.value = bill.philhealthDeduction || 0;
 
   // Other Discount Fields
-  document.getElementById('discount-type').value = bill.discountType || 'None';
-  document.getElementById('discount-mode').value = bill.discountMode || 'percentage';
-  document.getElementById('discount-rate-value').value = bill.discountRate || (bill.discountType === 'Senior Citizen' || bill.discountType === 'PWD' ? 20 : 0);
-  document.getElementById('discount-reason').value = bill.discountReason || '';
-  document.getElementById('discount-authorized-by').value = bill.authorizedBy || 'Dr. Roberto Mendoza, MD';
+  const discTypeEl = document.getElementById('discount-type');
+  if (discTypeEl) discTypeEl.value = bill.discountType || 'None';
+  const discModeEl = document.getElementById('discount-mode');
+  if (discModeEl) discModeEl.value = bill.discountMode || 'percentage';
+  const discRateEl = document.getElementById('discount-rate-value');
+  if (discRateEl) discRateEl.value = bill.discountRate || (bill.discountType === 'Senior Citizen' || bill.discountType === 'PWD' ? 20 : 0);
+  const discReasonEl = document.getElementById('discount-reason');
+  if (discReasonEl) discReasonEl.value = bill.discountReason || '';
+  const discAuthEl = document.getElementById('discount-authorized-by');
+  if (discAuthEl) discAuthEl.value = bill.authorizedBy || 'Dr. Roberto Mendoza, MD';
 
   updateDiscountLivePreview();
 
   modal.classList.remove('hidden');
   modal.classList.add('flex');
+  if (typeof lucide !== 'undefined' && lucide.createIcons) {
+    lucide.createIcons();
+  }
 }
 
 function updateDiscountLivePreview() {
-  const selectedId = AppState.selectedPatientForBill;
-  const bill = AppState.bills.find(b => b.patientId === selectedId);
+  const bill = getActiveBillForProcessing();
   if (!bill) return;
 
   const subtotal = bill.subtotal || 0;
   const philhealth = Math.max(0, parseFloat(document.getElementById('discount-philhealth-amount')?.value) || 0);
 
-  const mode = document.getElementById('discount-mode').value;
-  const val = Math.max(0, parseFloat(document.getElementById('discount-rate-value').value) || 0);
+  const mode = document.getElementById('discount-mode')?.value || 'percentage';
+  const val = Math.max(0, parseFloat(document.getElementById('discount-rate-value')?.value) || 0);
   let otherDeduction = 0;
 
-  if (document.getElementById('discount-type').value !== 'None') {
+  if (document.getElementById('discount-type')?.value !== 'None') {
     if (mode === 'percentage') {
       otherDeduction = (subtotal * val) / 100;
     } else {
@@ -1380,19 +1594,18 @@ function updateDiscountLivePreview() {
 
 function saveDiscount(event) {
   event.preventDefault();
-  const selectedId = AppState.selectedPatientForBill;
-  const bill = AppState.bills.find(b => b.patientId === selectedId);
+  const bill = getActiveBillForProcessing();
   if (!bill) return;
 
   const subtotal = bill.subtotal || 0;
   const phId = document.getElementById('discount-philhealth-id')?.value || '';
   const philhealth = Math.max(0, parseFloat(document.getElementById('discount-philhealth-amount')?.value) || 0);
 
-  const discType = document.getElementById('discount-type').value;
-  const mode = document.getElementById('discount-mode').value;
-  const val = Math.max(0, parseFloat(document.getElementById('discount-rate-value').value) || 0);
-  const reason = document.getElementById('discount-reason').value;
-  const authBy = document.getElementById('discount-authorized-by').value;
+  const discType = document.getElementById('discount-type')?.value || 'None';
+  const mode = document.getElementById('discount-mode')?.value || 'percentage';
+  const val = Math.max(0, parseFloat(document.getElementById('discount-rate-value')?.value) || 0);
+  const reason = document.getElementById('discount-reason')?.value || '';
+  const authBy = document.getElementById('discount-authorized-by')?.value || 'Dr. Roberto Mendoza, MD';
 
   let otherDeduction = 0;
   if (discType !== 'None') {
@@ -1416,7 +1629,7 @@ function saveDiscount(event) {
   bill.discountReason = reason;
   bill.authorizedBy = authBy;
   bill.totalBill = remainingBalance;
-  bill.outstandingBalance = Math.max(0, remainingBalance - bill.amountPaid);
+  bill.outstandingBalance = Math.max(0, remainingBalance - (bill.amountPaid || 0));
   bill.status = bill.outstandingBalance === 0 ? 'PAID' : (bill.amountPaid > 0 ? 'PARTIALLY PAID' : 'UNPAID');
 
   closeModal('modal-apply-discount');
@@ -1449,47 +1662,182 @@ function saveDiscount(event) {
   recalculateMetrics();
 }
 
-// 6. Record Payment Modal
+// 6. Record Payment Modal & Multi-Method Authentic Processing
+let paymentPollingInterval = null;
+
+function calculateCashChange() {
+  const amount = parseFloat(document.getElementById('payment-input-amount')?.value) || 0;
+  const tendered = parseFloat(document.getElementById('cash-tendered-input')?.value) || 0;
+  const changeDisplay = document.getElementById('cash-change-display');
+  if (!changeDisplay) return;
+
+  const change = Math.max(0, tendered - amount);
+  changeDisplay.innerText = formatPeso(change);
+  if (tendered < amount && tendered > 0) {
+    changeDisplay.classList.remove('text-emerald-700');
+    changeDisplay.classList.add('text-rose-600');
+    changeDisplay.innerText = `Short by ${formatPeso(amount - tendered)}`;
+  } else {
+    changeDisplay.classList.remove('text-rose-600');
+    changeDisplay.classList.add('text-emerald-700');
+  }
+}
+
 function onPaymentMethodChange(val) {
   const refLabel = document.getElementById('payment-ref-label');
   const refInput = document.getElementById('payment-ref-no');
-  const details = document.getElementById('payment-cashless-details');
+  const cashSection = document.getElementById('payment-cash-section');
+  const bankSection = document.getElementById('payment-bank-section');
+  const ewalletSection = document.getElementById('payment-ewallet-section');
+  const emsSection = document.getElementById('payment-ems-section');
+  const cashlessSection = document.getElementById('payment-cashless-section');
+  const submitBtn = document.getElementById('btn-process-payment-submit');
+  const submitLabel = document.getElementById('btn-process-payment-label');
+
+  // Hide all optional helper sections first
+  if (cashSection) cashSection.classList.add('hidden');
+  if (bankSection) bankSection.classList.add('hidden');
+  if (ewalletSection) ewalletSection.classList.add('hidden');
+  if (emsSection) emsSection.classList.add('hidden');
+  if (cashlessSection) cashlessSection.classList.add('hidden');
+
   if (val === 'Cash') {
     if (refLabel) refLabel.innerText = 'Official Slip / Receipt Reference';
-    if (refInput) refInput.placeholder = 'e.g. CSH-' + Math.floor(1000 + Math.random() * 9000);
-    if (details) details.classList.add('hidden');
+    if (refInput) {
+      refInput.placeholder = 'e.g. CSH-' + Math.floor(1000 + Math.random() * 9000);
+      refInput.required = false;
+    }
+    if (cashSection) cashSection.classList.remove('hidden');
+    if (submitLabel) submitLabel.innerText = 'Confirm Cash Payment';
+    if (submitBtn) {
+      submitBtn.className = 'px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold transition-all shadow-sm flex items-center gap-1.5';
+    }
+    calculateCashChange();
+  } else if (val === 'Cashless Payment') {
+    if (refLabel) refLabel.innerText = 'POS Terminal Trace / Ref #';
+    if (refInput) {
+      refInput.placeholder = 'e.g. POS-' + Math.floor(100000 + Math.random() * 900000);
+      refInput.required = false;
+    }
+    if (cashlessSection) cashlessSection.classList.remove('hidden');
+    if (submitLabel) submitLabel.innerText = 'Confirm Cashless Payment';
+    if (submitBtn) {
+      submitBtn.className = 'px-5 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold transition-all shadow-sm flex items-center gap-1.5';
+    }
+  } else if (val === 'MedicalEMS') {
+    if (refLabel) refLabel.innerText = 'MedicalEMS Voucher / Guarantee # *';
+    if (refInput) {
+      refInput.placeholder = 'e.g. EMS-VOUCH-' + Math.floor(1000 + Math.random() * 9000);
+      refInput.required = false;
+    }
+    if (emsSection) emsSection.classList.remove('hidden');
+    if (submitLabel) submitLabel.innerText = 'Apply MedicalEMS Guarantee Voucher';
+    if (submitBtn) {
+      submitBtn.className = 'px-5 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold transition-all shadow-sm flex items-center gap-1.5';
+    }
+  } else if (val === 'Credit Card' || val === 'Debit Card' || val === 'Card') {
+    if (refLabel) refLabel.innerText = 'Card Terminal Approval Code *';
+    if (refInput) {
+      refInput.placeholder = 'e.g. AUTH-' + Math.floor(100000 + Math.random() * 900000);
+      refInput.required = false;
+    }
+    if (cashlessSection) cashlessSection.classList.remove('hidden');
+    if (submitLabel) submitLabel.innerText = `Process ${val} Settlement`;
+    if (submitBtn) {
+      submitBtn.className = 'px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold transition-all shadow-sm flex items-center gap-1.5';
+    }
+  } else if (val === 'Bank Transfer') {
+    if (refLabel) refLabel.innerText = 'Hospital Bank Deposit Slip # *';
+    if (refInput) {
+      refInput.placeholder = 'e.g. BT-REF-' + Math.floor(100000 + Math.random() * 900000);
+      refInput.required = false;
+    }
+    if (bankSection) bankSection.classList.remove('hidden');
+    if (submitLabel) submitLabel.innerText = 'Record Bank Transfer (Pending Verification)';
+    if (submitBtn) {
+      submitBtn.className = 'px-5 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold transition-all shadow-sm flex items-center gap-1.5';
+    }
   } else {
-    if (refLabel) refLabel.innerText = `${val} Reference / Transaction ID *`;
-    if (refInput) refInput.placeholder = `e.g. ${val.toUpperCase().replace(/\s+/g, '')}-TXN-` + Math.floor(100000 + Math.random() * 900000);
-    if (details) details.classList.remove('hidden');
+    // GCash, PayMaya, Maya, QR Ph
+    if (refLabel) refLabel.innerText = `${val} Reference (Auto-Generated)`;
+    if (refInput) {
+      refInput.placeholder = 'Dynamic payment reference will be issued';
+      refInput.required = false;
+    }
+    if (ewalletSection) ewalletSection.classList.remove('hidden');
+    if (submitLabel) submitLabel.innerText = `Generate ${val} Dynamic QR & Pay`;
+    if (submitBtn) {
+      submitBtn.className = 'px-5 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-bold transition-all shadow-sm flex items-center gap-1.5';
+    }
   }
 }
 
 function openPaymentModalForBill(billId) {
-  const bill = AppState.bills.find(b => b.billId === billId);
+  let bill = null;
+  if (billId && typeof billId === 'string') {
+    bill = AppState.bills.find(b => b.billId === billId || b.id === billId || b.invoiceId === billId);
+  }
+  if (!bill) {
+    bill = getActiveBillForProcessing();
+  }
   if (!bill) return;
 
   const modal = document.getElementById('modal-create-payment');
-  document.getElementById('payment-bill-id').value = bill.billId;
-  document.getElementById('payment-patient-name').innerText = `${bill.patientName} (${bill.patientId})`;
-  document.getElementById('payment-invoice-num').innerText = bill.invoiceId;
-  document.getElementById('payment-total-bill').innerText = formatPeso(bill.totalBill);
-  document.getElementById('payment-already-paid').innerText = formatPeso(bill.amountPaid);
-  document.getElementById('payment-outstanding').innerText = formatPeso(bill.outstandingBalance);
+  if (!modal) return;
 
-  document.getElementById('payment-input-amount').value = bill.outstandingBalance;
-  document.getElementById('payment-method-select').value = 'Cash';
-  document.getElementById('payment-ref-no').value = 'CSH-' + Math.floor(1000 + Math.random() * 9000);
-  document.getElementById('payment-notes').value = 'Full settlement of bill';
-  document.getElementById('payment-warning').classList.add('hidden');
+  const billIdInput = document.getElementById('payment-bill-id');
+  if (billIdInput) billIdInput.value = bill.billId;
+
+  const patNameEl = document.getElementById('payment-patient-name');
+  if (patNameEl) patNameEl.innerText = `${bill.patientName || 'Patient'} (${bill.patientId || ''})`;
+
+  const invNumEl = document.getElementById('payment-invoice-num');
+  if (invNumEl) invNumEl.innerText = bill.invoiceId || bill.id || bill.billId;
+
+  const totBillEl = document.getElementById('payment-total-bill');
+  if (totBillEl) totBillEl.innerText = formatPeso(bill.totalBill !== undefined ? bill.totalBill : (bill.subtotal || 0));
+
+  const paidEl = document.getElementById('payment-already-paid');
+  if (paidEl) paidEl.innerText = formatPeso(bill.amountPaid || 0);
+
+  const balance = (bill.outstandingBalance !== undefined) ? bill.outstandingBalance : ((bill.totalBill || bill.subtotal || 0) - (bill.amountPaid || 0));
+  const outEl = document.getElementById('payment-outstanding');
+  if (outEl) outEl.innerText = formatPeso(balance);
+
+  const amtInput = document.getElementById('payment-input-amount');
+  if (amtInput) amtInput.value = balance;
+
+  const methodSelect = document.getElementById('payment-method-select');
+  if (methodSelect) methodSelect.value = 'Cash';
+
+  const refInput = document.getElementById('payment-ref-no');
+  if (refInput) refInput.value = 'CSH-' + Math.floor(1000 + Math.random() * 9000);
+
+  const notesInput = document.getElementById('payment-notes');
+  if (notesInput) notesInput.value = 'Full settlement of bill';
+
+  const warnEl = document.getElementById('payment-warning');
+  if (warnEl) warnEl.classList.add('hidden');
+
+  const tenderedInput = document.getElementById('cash-tendered-input');
+  if (tenderedInput) tenderedInput.value = balance;
 
   const recByEl = document.getElementById('payment-recorded-by');
-  if (recByEl) recByEl.innerText = AppState.currentUser.name || 'Collecting Cashier';
+  if (recByEl) recByEl.innerText = (AppState.currentUser && AppState.currentUser.name) ? AppState.currentUser.name : 'Collecting Cashier';
 
-  onPaymentMethodChange('Cash');
+  if (typeof onPaymentMethodChange === 'function') {
+    onPaymentMethodChange('Cash');
+  }
 
   modal.classList.remove('hidden');
   modal.classList.add('flex');
+  if (typeof lucide !== 'undefined' && lucide.createIcons) {
+    lucide.createIcons();
+  }
+}
+
+function openPaymentModalForCurrentBill() {
+  openPaymentModalForBill();
 }
 
 function onPaymentAmountInput() {
@@ -1506,9 +1854,10 @@ function onPaymentAmountInput() {
   } else {
     warningEl.classList.add('hidden');
   }
+  calculateCashChange();
 }
 
-function processPaymentSubmit(event) {
+async function processPaymentSubmit(event) {
   event.preventDefault();
   const billId = document.getElementById('payment-bill-id').value;
   const bill = AppState.bills.find(b => b.billId === billId);
@@ -1520,72 +1869,39 @@ function processPaymentSubmit(event) {
     return;
   }
 
+  const method = document.getElementById('payment-method-select').value;
+  let refNo = document.getElementById('payment-ref-no')?.value?.trim();
+  const notes = document.getElementById('payment-notes')?.value || '';
+  const cashReceived = parseFloat(document.getElementById('cash-tendered-input')?.value) || amount;
+  const bankName = document.getElementById('bank-name-select')?.value || 'Landbank of the Philippines';
+  const bankRef = document.getElementById('bank-ref-input')?.value?.trim() || refNo;
+
+  if (method === 'Cash' && cashReceived < amount) {
+    alert(`Cash tendered (₱${cashReceived}) cannot be less than payment amount due (₱${amount}).`);
+    return;
+  }
+
+  if (method === 'Bank Transfer' && !bankRef) {
+    alert('Please provide a Bank Slip / Reference Number for audit tracking.');
+    return;
+  }
+
   if (amount > bill.outstandingBalance) {
-    if (!confirm('Payment amount exceeds balance due. Do you wish to proceed with change/credit?')) {
+    if (!confirm('Payment amount exceeds balance due. Do you wish to proceed?')) {
       return;
     }
   }
 
-  const method = document.getElementById('payment-method-select').value;
-  let refNo = document.getElementById('payment-ref-no').value;
-  if (!refNo && method !== 'Cash') {
-    refNo = `${method.toUpperCase().replace(/\s+/g, '')}-` + Math.floor(100000 + Math.random() * 900000);
-  }
-  const notes = document.getElementById('payment-notes').value;
-
-  // Create payment record
-  const newPayId = `PAY-2026-${String(AppState.payments.length + 1).padStart(3, '0')}`;
-  const paymentObj = {
-    paymentId: newPayId,
-    patientId: bill.patientId,
-    patientName: bill.patientName,
-    invoiceId: bill.invoiceId,
-    amount: amount,
-    method: method,
-    referenceNo: refNo || ('CSH-' + Math.floor(1000 + Math.random() * 9000)),
-    date: "Aug 28, 2026 " + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    cashier: AppState.currentUser.name,
-    status: "Completed",
-    notes: notes
-  };
-  AppState.payments.unshift(paymentObj);
-
-  // Update Bill & Invoices
-  bill.amountPaid += amount;
-  bill.outstandingBalance = Math.max(0, bill.totalBill - bill.amountPaid);
-  bill.status = bill.outstandingBalance === 0 ? 'PAID' : 'PARTIALLY PAID';
-
-  const inv = AppState.invoices.find(i => i.invoiceId === bill.invoiceId);
-  if (inv) {
-    inv.paid = bill.amountPaid;
-    inv.balance = bill.outstandingBalance;
-    inv.status = bill.status;
+  const submitBtn = document.getElementById('btn-process-payment-submit');
+  const originalBtnHtml = submitBtn ? submitBtn.innerHTML : '';
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = `<span class="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span> Processing...`;
   }
 
-  // Create BIR-Compliant Official Receipt
-  const newOrNum = `OR-2026-${String(AppState.officialReceipts.length + 1).padStart(3, '0')}`;
-  const orObj = {
-    orNumber: newOrNum,
-    date: "August 28, 2026",
-    receivedFrom: bill.patientName,
-    patientId: bill.patientId,
-    invoiceId: bill.invoiceId,
-    amount: amount,
-    paymentMethod: method,
-    cashier: AppState.currentUser.name,
-    amountInWords: numberToWords(amount),
-    status: "Valid"
-  };
-  AppState.officialReceipts.unshift(orObj);
-
-  closeModal('modal-create-payment');
-  showToast(`Payment of ${formatPeso(amount)} recorded via ${method}! Receipt ${newOrNum} issued.`);
-  addActivityLog('payment', 'Payment received', `${formatPeso(amount)} received from ${bill.patientName} via ${method} (Ref: ${paymentObj.referenceNo}).`, 'CreditCard', 'text-emerald-600 bg-emerald-50');
-
-  // Sync to database if available
-  const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-  if (csrfToken && bill.invoiceId) {
-    fetch('/billing/api/payments', {
+  try {
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+    const res = await fetch('/billing/api/payments', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -1593,26 +1909,445 @@ function processPaymentSubmit(event) {
         'Accept': 'application/json'
       },
       body: JSON.stringify({
-        invoice_id: bill.invoiceId,
-        patient_id: bill.patientId,
+        invoice_id: bill.rawInvoiceId || bill.invoiceId,
+        patient_id: bill.rawPatientId || bill.patientId,
         amount: amount,
         payment_method: method,
-        reference_no: paymentObj.referenceNo,
+        reference_no: refNo || (method === 'Bank Transfer' ? bankRef : ''),
+        cash_received: cashReceived,
+        bank_name: bankName,
+        bank_reference: bankRef,
         notes: notes
       })
-    }).catch(err => console.log('Payment sync note:', err));
+    });
+
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.message || 'Payment initiation failed.');
+    }
+
+    closeModal('modal-create-payment');
+
+    if (data.status === 'PAID') {
+      // 1. CASH PAYMENT COMPLETE
+      const newPayId = data.payment_id ? `PAY-2026-${String(data.payment_id).padStart(3, '0')}` : `PAY-${Date.now()}`;
+      const receiptNo = data.receipt_number || `OR-2026-${String(AppState.officialReceipts.length + 1).padStart(3, '0')}`;
+      
+      const paymentObj = {
+        paymentId: receiptNo,
+        rawId: data.payment_id,
+        patientId: bill.patientId,
+        patientName: bill.patientName,
+        invoiceId: bill.invoiceId,
+        amount: amount,
+        method: method,
+        referenceNo: data.transaction_reference,
+        date: new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }) + ' ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        cashier: AppState.currentUser.name || 'Collecting Cashier',
+        status: 'PAID',
+        notes: notes
+      };
+      AppState.payments.unshift(paymentObj);
+
+      bill.amountPaid += amount;
+      bill.outstandingBalance = Math.max(0, bill.totalBill - bill.amountPaid);
+      bill.status = bill.outstandingBalance === 0 ? 'PAID' : 'PARTIALLY PAID';
+
+      const inv = AppState.invoices.find(i => i.invoiceId === bill.invoiceId);
+      if (inv) {
+        inv.paid = bill.amountPaid;
+        inv.balance = bill.outstandingBalance;
+        inv.status = bill.status;
+      }
+
+      // Add Official Receipt
+      const orObj = {
+        orNumber: receiptNo,
+        date: new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
+        receivedFrom: bill.patientName,
+        patientId: bill.patientId,
+        invoiceId: bill.invoiceId,
+        amount: amount,
+        paymentMethod: method,
+        cashier: AppState.currentUser.name,
+        amountInWords: numberToWords(amount),
+        status: "Valid"
+      };
+      AppState.officialReceipts.unshift(orObj);
+
+      const changeMsg = (data.change && data.change > 0) ? ` Change: ${formatPeso(data.change)}.` : '';
+      showToast(`${method} payment of ${formatPeso(amount)} settled!${changeMsg} Receipt ${receiptNo} issued.`);
+      addActivityLog('payment', `${method} payment settled`, `${formatPeso(amount)} received from ${bill.patientName} (Ref: ${data.transaction_reference}). Receipt: ${receiptNo}`, 'CreditCard', 'text-emerald-600 bg-emerald-50');
+
+      recalculateMetrics();
+      renderPaymentsTable();
+      renderInvoicesTable();
+      renderAccountsTables();
+      if (AppState.activeView === 'billing') renderBillProcessing();
+
+      setTimeout(() => {
+        const changePrompt = (data.change && data.change > 0) ? `\nChange to return: ${formatPeso(data.change)}` : '';
+        if (confirm(`${method} payment confirmed! Official Receipt ${receiptNo} issued.${changePrompt}\n\nWould you like to view/print the Official Receipt now?`)) {
+          viewReceipt(receiptNo);
+        }
+      }, 300);
+
+    } else if (data.status === 'PENDING_VERIFICATION') {
+      // 2. BANK TRANSFER (Pending Verification)
+      const newPayId = data.payment_id ? `PAY-2026-${String(data.payment_id).padStart(3, '0')}` : `PAY-${Date.now()}`;
+      const paymentObj = {
+        paymentId: newPayId,
+        rawId: data.payment_id,
+        patientId: bill.patientId,
+        patientName: bill.patientName,
+        invoiceId: bill.invoiceId,
+        amount: amount,
+        method: 'Bank Transfer',
+        referenceNo: data.transaction_reference,
+        date: new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }) + ' ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        cashier: AppState.currentUser.name || 'Collecting Cashier',
+        status: 'Pending Verification',
+        notes: `Bank: ${data.bank_name}. Ref: ${data.bank_reference}`
+      };
+      AppState.payments.unshift(paymentObj);
+
+      showToast(`Bank transfer recorded under Ref: ${data.transaction_reference}. Awaiting staff verification.`, 'info');
+      addActivityLog('payment', 'Bank transfer pending', `Bank transfer of ${formatPeso(amount)} for ${bill.patientName} via ${data.bank_name}. Status: Pending Verification.`, 'Building', 'text-purple-600 bg-purple-50');
+
+      renderPaymentsTable();
+
+    } else {
+      // 3. ELECTRONIC / QR PAYMENT (GCash, Maya, QR Ph)
+      openQrPaymentModal(data, bill);
+    }
+
+  } catch (err) {
+    alert(err.message || 'Payment processing error');
+  } finally {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = originalBtnHtml;
+    }
   }
+}
+
+function openQrPaymentModal(paymentData, billContext) {
+  AppState.activeElectronicPayment = {
+    ...paymentData,
+    billContext: billContext || AppState.bills.find(b => b.invoiceId === paymentData.invoice_number)
+  };
+
+  const modal = document.getElementById('modal-qr-payment');
+  if (!modal) return;
+
+  // Set Waiting State
+  document.getElementById('qr-state-waiting')?.classList.remove('hidden');
+  document.getElementById('qr-state-success')?.classList.add('hidden');
+  document.getElementById('qr-state-failed')?.classList.add('hidden');
+
+  // Fill in invoice info
+  document.getElementById('qr-invoice-no').innerText = paymentData.invoice_number || 'INV-2026';
+  document.getElementById('qr-patient-name').innerText = paymentData.patient_name || 'Patient Record';
+  document.getElementById('qr-amount-due').innerText = formatPeso(paymentData.amount);
+  document.getElementById('qr-txn-reference').innerText = paymentData.transaction_reference;
+  document.getElementById('qr-live-status').innerText = '● Waiting for Payment...';
+
+  // Render dynamic QR Code graphic
+  const qrContainer = document.getElementById('qr-code-graphic');
+  if (qrContainer) {
+    qrContainer.innerHTML = '';
+    if (window.QRCode && paymentData.qr_payload) {
+      new QRCode(qrContainer, {
+        text: paymentData.qr_payload,
+        width: 170,
+        height: 170,
+        colorDark: "#0f172a",
+        colorLight: "#ffffff",
+        correctLevel: QRCode.CorrectLevel.M
+      });
+    } else {
+      qrContainer.innerHTML = `<div class="p-6 text-center text-xs text-slate-500 font-mono break-all">${paymentData.qr_payload || paymentData.transaction_reference}</div>`;
+    }
+  }
+
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+  if (window.lucide) lucide.createIcons();
+
+  // Start polling every 3 seconds
+  if (paymentPollingInterval) clearInterval(paymentPollingInterval);
+  paymentPollingInterval = setInterval(() => {
+    checkCurrentPaymentStatus(false);
+  }, 3000);
+}
+
+async function checkCurrentPaymentStatus(manual = false) {
+  if (!AppState.activeElectronicPayment?.payment_id) return;
+  const payId = AppState.activeElectronicPayment.payment_id;
+
+  try {
+    const res = await fetch(`/billing/api/payments/${payId}/status`);
+    if (!res.ok) return;
+    const data = await res.json();
+
+    if (data.status === 'PAID') {
+      if (paymentPollingInterval) {
+        clearInterval(paymentPollingInterval);
+        paymentPollingInterval = null;
+      }
+      handleElectronicPaymentSuccess(data);
+    } else if (data.status === 'FAILED' || data.status === 'CANCELLED' || data.status === 'EXPIRED') {
+      if (paymentPollingInterval) {
+        clearInterval(paymentPollingInterval);
+        paymentPollingInterval = null;
+      }
+      handleElectronicPaymentFailure(data);
+    } else if (manual) {
+      showToast(`Status: ${data.status_label || data.status}. Waiting for payment confirmation...`, 'info');
+    }
+  } catch (e) {
+    console.error('Polling status error:', e);
+  }
+}
+
+function handleElectronicPaymentSuccess(data) {
+  const modal = document.getElementById('modal-qr-payment');
+  if (!modal) return;
+
+  document.getElementById('qr-state-waiting')?.classList.add('hidden');
+  document.getElementById('qr-state-success')?.classList.remove('hidden');
+  document.getElementById('qr-state-failed')?.classList.add('hidden');
+
+  document.getElementById('success-amount').innerText = formatPeso(data.amount);
+  document.getElementById('success-method').innerText = (data.payment_method || 'QR Ph').toUpperCase();
+  document.getElementById('success-reference').innerText = data.transaction_reference;
+  document.getElementById('success-provider-id').innerText = data.provider_transaction_id || 'PROVIDER-VERIFIED';
+
+  // Update local AppState
+  const bill = AppState.activeElectronicPayment.billContext;
+  if (bill) {
+    bill.amountPaid += data.amount;
+    bill.outstandingBalance = Math.max(0, bill.totalBill - bill.amountPaid);
+    bill.status = bill.outstandingBalance === 0 ? 'PAID' : 'PARTIALLY PAID';
+
+    const inv = AppState.invoices.find(i => i.invoiceId === bill.invoiceId);
+    if (inv) {
+      inv.paid = bill.amountPaid;
+      inv.balance = bill.outstandingBalance;
+      inv.status = bill.status;
+    }
+  }
+
+  const receiptNo = data.receipt_number || `OR-2026-${String(AppState.officialReceipts.length + 1).padStart(3, '0')}`;
+  AppState.officialReceipts.unshift({
+    orNumber: receiptNo,
+    date: new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
+    receivedFrom: bill?.patientName || 'Patient Record',
+    patientId: bill?.patientId || 'P-2026',
+    invoiceId: data.invoice_number || bill?.invoiceId || 'INV-2026',
+    amount: data.amount,
+    paymentMethod: (data.payment_method || 'QR Ph').toUpperCase(),
+    cashier: AppState.currentUser.name,
+    amountInWords: numberToWords(data.amount),
+    status: "Valid"
+  });
+
+  AppState.payments.unshift({
+    paymentId: receiptNo,
+    rawId: data.payment_id,
+    patientId: bill?.patientId || 'P-2026',
+    patientName: bill?.patientName || 'Patient Record',
+    invoiceId: data.invoice_number || bill?.invoiceId || 'INV-2026',
+    amount: data.amount,
+    method: (data.payment_method || 'QR Ph').toUpperCase(),
+    referenceNo: data.transaction_reference,
+    date: new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }) + ' ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    cashier: AppState.currentUser.name || 'Collecting Cashier',
+    status: 'PAID',
+    notes: `Provider ID: ${data.provider_transaction_id}`
+  });
+
+  showToast(`✓ Payment of ${formatPeso(data.amount)} verified! Official Receipt ${receiptNo} generated.`);
+  addActivityLog('payment', 'Payment verified', `Verified ${data.payment_method} payment for ${data.invoice_number}. Provider Ref: ${data.provider_transaction_id}`, 'CheckCircle2', 'text-emerald-600 bg-emerald-50');
 
   recalculateMetrics();
   renderPaymentsTable();
+  renderInvoicesTable();
+  renderAccountsTables();
   if (AppState.activeView === 'billing') renderBillProcessing();
+  if (window.lucide) lucide.createIcons();
+}
 
-  // Ask to view/print receipt
-  setTimeout(() => {
-    if (confirm(`Payment successful! Would you like to view/print Official Receipt ${newOrNum}?`)) {
-      viewReceipt(newOrNum);
+function handleElectronicPaymentFailure(data) {
+  document.getElementById('qr-state-waiting')?.classList.add('hidden');
+  document.getElementById('qr-state-success')?.classList.add('hidden');
+  document.getElementById('qr-state-failed')?.classList.remove('hidden');
+
+  const reasonEl = document.getElementById('qr-fail-reason');
+  if (reasonEl) {
+    reasonEl.innerText = data.failure_reason || 'Payment was declined or cancelled by the customer.';
+  }
+  if (window.lucide) lucide.createIcons();
+}
+
+async function simulateProviderApproval() {
+  if (!AppState.activeElectronicPayment?.payment_id) return;
+  const payId = AppState.activeElectronicPayment.payment_id;
+
+  try {
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+    const res = await fetch(`/billing/api/payments/${payId}/simulate-callback`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-TOKEN': csrfToken,
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify({ outcome: 'PAID' })
+    });
+    const data = await res.json();
+    if (data.success) {
+      checkCurrentPaymentStatus();
+    } else {
+      alert(data.message || 'Simulation failed');
     }
-  }, 300);
+  } catch (e) {
+    alert('Simulation error: ' + e.message);
+  }
+}
+
+async function simulateProviderFailure() {
+  if (!AppState.activeElectronicPayment?.payment_id) return;
+  const payId = AppState.activeElectronicPayment.payment_id;
+
+  try {
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+    const res = await fetch(`/billing/api/payments/${payId}/simulate-callback`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-TOKEN': csrfToken,
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify({ outcome: 'FAILED' })
+    });
+    const data = await res.json();
+    checkCurrentPaymentStatus();
+  } catch (e) {
+    alert('Simulation error: ' + e.message);
+  }
+}
+
+function cancelElectronicPayment() {
+  if (paymentPollingInterval) {
+    clearInterval(paymentPollingInterval);
+    paymentPollingInterval = null;
+  }
+  closeModal('modal-qr-payment');
+}
+
+function retryElectronicPayment() {
+  closeModal('modal-qr-payment');
+  const bill = AppState.activeElectronicPayment?.billContext;
+  if (bill) {
+    openPaymentModalForBill(bill.billId);
+  }
+}
+
+function viewReceiptFromQrModal() {
+  closeModal('modal-qr-payment');
+  const r = AppState.officialReceipts[0];
+  if (r) viewReceipt(r.orNumber);
+}
+
+function printReceiptFromQrModal() {
+  closeModal('modal-qr-payment');
+  const r = AppState.officialReceipts[0];
+  if (r) printReceiptDirect(r.orNumber);
+}
+
+async function verifyBankTransferAction(paymentId) {
+  const pay = AppState.payments.find(p => p.paymentId === paymentId || p.rawId == paymentId);
+  const rawId = pay?.rawId || paymentId;
+
+  const bankSlip = prompt(`Verify Bank Transfer for ${pay ? pay.patientName : 'Patient'}\n\nEnter verified bank deposit / slip transaction number:`, pay?.referenceNo || '');
+  if (bankSlip === null) return; // User cancelled
+
+  try {
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+    const res = await fetch(`/billing/api/payments/${rawId}/verify-bank`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-TOKEN': csrfToken,
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify({ bank_reference: bankSlip })
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.message || 'Verification failed');
+    }
+
+    if (pay) {
+      pay.status = 'PAID';
+      pay.referenceNo = bankSlip || pay.referenceNo;
+      pay.notes = `Verified by Staff. Receipt: ${data.receipt_number}`;
+    }
+
+    // Update bill & invoice if found
+    const bill = AppState.bills.find(b => b.invoiceId === pay?.invoiceId);
+    if (bill && pay) {
+      bill.amountPaid += pay.amount;
+      bill.outstandingBalance = Math.max(0, bill.totalBill - bill.amountPaid);
+      bill.status = bill.outstandingBalance === 0 ? 'PAID' : 'PARTIALLY PAID';
+
+      const inv = AppState.invoices.find(i => i.invoiceId === bill.invoiceId);
+      if (inv) {
+        inv.paid = bill.amountPaid;
+        inv.balance = bill.outstandingBalance;
+        inv.status = bill.status;
+      }
+    }
+
+    const receiptNo = data.receipt_number || `OR-2026-${String(AppState.officialReceipts.length + 1).padStart(3, '0')}`;
+    AppState.officialReceipts.unshift({
+      orNumber: receiptNo,
+      date: new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
+      receivedFrom: pay?.patientName || 'Patient',
+      patientId: pay?.patientId || 'P-2026',
+      invoiceId: pay?.invoiceId || 'INV-2026',
+      amount: pay?.amount || 0,
+      paymentMethod: 'Bank Transfer (Verified)',
+      cashier: AppState.currentUser.name,
+      amountInWords: numberToWords(pay?.amount || 0),
+      status: "Valid"
+    });
+
+    showToast(`Bank Transfer verified! Status changed to PAID. Official Receipt: ${receiptNo}`);
+    addActivityLog('payment', 'Bank transfer verified', `Bank payment of ${formatPeso(pay?.amount || 0)} verified for ${pay?.patientName}. Slip: ${bankSlip}. Receipt: ${receiptNo}`, 'CheckCircle2', 'text-purple-600 bg-purple-50');
+
+    recalculateMetrics();
+    renderPaymentsTable();
+    renderInvoicesTable();
+    renderAccountsTables();
+  } catch (err) {
+    alert(err.message || 'Verification error');
+  }
+}
+
+async function resumeElectronicPayment(paymentId) {
+  const pay = AppState.payments.find(p => p.paymentId === paymentId || p.rawId == paymentId);
+  const rawId = pay?.rawId || paymentId;
+
+  try {
+    const res = await fetch(`/billing/api/payments/${rawId}/status`);
+    if (!res.ok) throw new Error('Could not fetch payment details');
+    const data = await res.json();
+    openQrPaymentModal(data, AppState.bills.find(b => b.invoiceId === data.invoice_number));
+  } catch (e) {
+    alert(e.message);
+  }
 }
 
 // 7. Edit Payment Record Modal
@@ -1651,56 +2386,108 @@ function saveEditedPayment(event) {
 
 // 8. Generate & View Invoice
 function viewInvoice(invoiceId) {
-  let inv = AppState.invoices.find(i => i.invoiceId === invoiceId);
+  let inv = null;
+  if (invoiceId && typeof invoiceId === 'string') {
+    inv = AppState.invoices.find(i => i.invoiceId === invoiceId || i.id === invoiceId);
+  }
   if (!inv) {
+    const bill = getActiveBillForProcessing();
+    if (bill) {
+      inv = AppState.invoices.find(i => i.invoiceId === bill.invoiceId || i.patientId === bill.patientId) || bill;
+    }
+  }
+  if (!inv && AppState.invoices.length > 0) {
     inv = AppState.invoices[0];
   }
+  if (!inv && AppState.bills.length > 0) {
+    inv = AppState.bills[0];
+  }
+  if (!inv) return;
 
-  const patient = AppState.patients.find(p => p.id === inv.patientId) || AppState.patients[0];
-  const bill = AppState.bills.find(b => b.invoiceId === inv.invoiceId) || AppState.bills[0];
+  const patient = (AppState.patients && AppState.patients.find(p => p.id === inv.patientId)) || 
+                  (AppState.patients && AppState.patients[0]) || 
+                  { name: inv.patientName || 'Patient', id: inv.patientId || 'P-001', room: 'OPD Triage', physician: 'Attending Physician' };
+  const bill = (AppState.bills && AppState.bills.find(b => b.invoiceId === inv.invoiceId || b.patientId === inv.patientId)) || inv;
 
   AppState.activeInvoice = { inv, patient, bill };
   const modal = document.getElementById('modal-view-invoice');
+  if (!modal) return;
 
-  // Populate Invoice Preview
-  document.getElementById('inv-preview-hospital-name').innerText = AppState.settings.hospitalName;
-  document.getElementById('inv-preview-hospital-address').innerText = AppState.settings.hospitalAddress;
-  document.getElementById('inv-preview-hospital-contact').innerText = AppState.settings.hospitalContact;
+  // Populate Invoice Preview with safe null-checking
+  const hospName = document.getElementById('inv-preview-hospital-name');
+  if (hospName) hospName.innerText = (AppState.settings && AppState.settings.hospitalName) || 'Tupi Municipal Hospital';
+  const hospAddr = document.getElementById('inv-preview-hospital-address');
+  if (hospAddr) hospAddr.innerText = (AppState.settings && AppState.settings.hospitalAddress) || 'National Highway, Poblacion, Tupi, South Cotabato';
+  const hospCont = document.getElementById('inv-preview-hospital-contact');
+  if (hospCont) hospCont.innerText = (AppState.settings && AppState.settings.hospitalContact) || 'Tel: (083) 228-1234';
   
-  document.getElementById('inv-preview-num').innerText = inv.invoiceId;
-  document.getElementById('inv-preview-date').innerText = inv.date;
-  document.getElementById('inv-preview-patient-name').innerText = patient.name;
-  document.getElementById('inv-preview-patient-id').innerText = patient.id;
-  document.getElementById('inv-preview-room').innerText = patient.room;
-  document.getElementById('inv-preview-physician').innerText = patient.physician;
+  const invNum = document.getElementById('inv-preview-num');
+  if (invNum) invNum.innerText = inv.invoiceId || inv.id || 'INV-2026-001';
+  const invDate = document.getElementById('inv-preview-date');
+  if (invDate) invDate.innerText = inv.date || new Date().toLocaleDateString();
+  const patName = document.getElementById('inv-preview-patient-name');
+  if (patName) patName.innerText = patient.name || inv.patientName || 'Patient';
+  const patId = document.getElementById('inv-preview-patient-id');
+  if (patId) patId.innerText = patient.id || inv.patientId || '';
+  const patRoom = document.getElementById('inv-preview-room');
+  if (patRoom) patRoom.innerText = patient.room || 'OPD';
+  const patPhys = document.getElementById('inv-preview-physician');
+  if (patPhys) patPhys.innerText = patient.physician || 'Attending Physician';
 
-  let itemsHtml = '';
-  bill.items.forEach(it => {
-    itemsHtml += `
-      <tr class="border-b border-slate-100">
-        <td class="py-2.5 px-3">
-          <div class="font-medium text-slate-800">${it.service}</div>
-          <div class="text-xs text-slate-400">${it.department}</div>
-        </td>
-        <td class="py-2.5 px-3 text-center">${it.quantity}</td>
-        <td class="py-2.5 px-3 text-right">${formatPeso(it.unitPrice)}</td>
-        <td class="py-2.5 px-3 text-right font-semibold text-slate-900">${formatPeso(it.amount)}</td>
-      </tr>
-    `;
-  });
-  document.getElementById('inv-preview-items-tbody').innerHTML = itemsHtml;
+  const tbody = document.getElementById('inv-preview-items-tbody');
+  if (tbody) {
+    let itemsHtml = '';
+    const items = (bill && Array.isArray(bill.items) && bill.items.length > 0) ? bill.items : [
+      { service: 'Hospital Diagnostic & Clinical Care', department: 'Clinical Services', quantity: 1, unitPrice: (bill && bill.subtotal) || 500, amount: (bill && bill.subtotal) || 500 }
+    ];
+    items.forEach(it => {
+      itemsHtml += `
+        <tr class="border-b border-slate-100">
+          <td class="py-2.5 px-3">
+            <div class="font-medium text-slate-800">${it.service}</div>
+            <div class="text-xs text-slate-400">${it.department || 'Clinical'}</div>
+          </td>
+          <td class="py-2.5 px-3 text-center">${it.quantity || 1}</td>
+          <td class="py-2.5 px-3 text-right">${formatPeso(it.unitPrice || 0)}</td>
+          <td class="py-2.5 px-3 text-right font-semibold text-slate-900">${formatPeso(it.amount || 0)}</td>
+        </tr>
+      `;
+    });
+    tbody.innerHTML = itemsHtml;
+  }
 
-  document.getElementById('inv-preview-subtotal').innerText = formatPeso(bill.subtotal);
-  document.getElementById('inv-preview-discount').innerText = `- ${formatPeso(bill.discountAmount)}`;
-  document.getElementById('inv-preview-total').innerText = formatPeso(bill.totalBill);
-  document.getElementById('inv-preview-paid').innerText = formatPeso(inv.paid);
-  document.getElementById('inv-preview-balance').innerText = formatPeso(inv.balance);
-  document.getElementById('inv-preview-status').innerText = inv.status;
-  document.getElementById('inv-preview-cashier').innerText = inv.cashier;
+  const subEl = document.getElementById('inv-preview-subtotal');
+  if (subEl) subEl.innerText = formatPeso((bill && bill.subtotal) || (inv && inv.subtotal) || 0);
+
+  const discEl = document.getElementById('inv-preview-discount');
+  if (discEl) discEl.innerText = `- ${formatPeso((bill && bill.discountAmount) || 0)}`;
+
+  const totEl = document.getElementById('inv-preview-total');
+  if (totEl) totEl.innerText = formatPeso((bill && bill.totalBill) || (inv && inv.totalBill) || 0);
+
+  const paidEl = document.getElementById('inv-preview-paid');
+  const paidVal = inv.amountPaid !== undefined ? inv.amountPaid : (inv.paid !== undefined ? inv.paid : ((bill && bill.amountPaid) || 0));
+  if (paidEl) paidEl.innerText = formatPeso(paidVal);
+
+  const balEl = document.getElementById('inv-preview-balance');
+  const balVal = inv.outstandingBalance !== undefined ? inv.outstandingBalance : (inv.balance !== undefined ? inv.balance : ((bill && bill.outstandingBalance) || 0));
+  if (balEl) balEl.innerText = formatPeso(balVal);
+
+  const statEl = document.getElementById('inv-preview-status');
+  if (statEl) statEl.innerText = inv.status || ((bill && bill.status) || 'UNPAID');
+
+  const cashEl = document.getElementById('inv-preview-cashier');
+  if (cashEl) cashEl.innerText = inv.cashier || (AppState.currentUser && AppState.currentUser.name) || 'Collecting Cashier';
 
   modal.classList.remove('hidden');
   modal.classList.add('flex');
-  lucide.createIcons();
+  if (typeof lucide !== 'undefined' && lucide.createIcons) {
+    lucide.createIcons();
+  }
+}
+
+function viewCurrentPatientInvoice() {
+  viewInvoice();
 }
 
 function printInvoiceDirect(invoiceId) {
@@ -1954,8 +2741,11 @@ document.addEventListener('DOMContentLoaded', () => {
   // Initialize Lucide Icons
   lucide.createIcons();
 
-  // Render initial dashboard
+  // Render initial dashboard & pre-prime bill processing state
   renderDashboard();
+  if (typeof renderBillProcessing === 'function') {
+    renderBillProcessing();
+  }
 
   // Close modals on escape key
   document.addEventListener('keydown', (e) => {

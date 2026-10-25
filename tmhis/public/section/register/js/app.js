@@ -714,17 +714,55 @@ function attachStep1Events() {
     }
   };
 
+  const bindNumericOnlyInput = (id, obj, key, maxLength = 11) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener("keydown", (e) => {
+      if (e.ctrlKey || e.altKey || e.metaKey) return;
+      if (['Backspace','Delete','ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Tab','Enter','Escape','Home','End'].includes(e.key)) return;
+      if (e.key.length === 1 && !/^[0-9]$/.test(e.key)) {
+        e.preventDefault();
+        e.stopPropagation();
+        return false;
+      }
+      if (maxLength && el.value.replace(/\D/g, '').length >= maxLength && el.selectionStart === el.selectionEnd) {
+        e.preventDefault();
+        return false;
+      }
+    });
+    el.addEventListener("beforeinput", (e) => {
+      if (e.data && !/^[0-9]+$/.test(e.data)) {
+        e.preventDefault();
+        return false;
+      }
+    });
+    el.addEventListener("paste", (e) => {
+      e.preventDefault();
+      const pasted = (e.clipboardData || window.clipboardData)?.getData('text') || '';
+      const clean = pasted.replace(/\D/g, '').slice(0, maxLength);
+      el.value = clean;
+      obj[key] = clean;
+      saveState();
+    });
+    el.addEventListener("input", (e) => {
+      const clean = e.target.value.replace(/\D/g, '').slice(0, maxLength);
+      if (e.target.value !== clean) el.value = clean;
+      obj[key] = clean;
+      saveState();
+    });
+  };
+
   bindInput("input-first-name", p, "firstName");
   bindInput("input-middle-name", p, "middleName");
   bindInput("input-last-name", p, "lastName");
   bindInput("input-civil-status", p, "civilStatus");
-  bindInput("input-phone", p, "phone");
+  bindNumericOnlyInput("input-phone", p, "phone", 11);
   bindInput("input-email", p, "email");
   bindInput("input-address", p, "address");
 
   bindInput("input-emg-name", emg, "name");
   bindInput("input-emg-rel", emg, "relationship");
-  bindInput("input-emg-phone", emg, "phone");
+  bindNumericOnlyInput("input-emg-phone", emg, "phone", 11);
 
   bindInput("input-med-allergies", med, "allergies");
   bindInput("input-med-conditions", med, "conditions");

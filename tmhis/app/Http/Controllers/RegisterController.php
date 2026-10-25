@@ -117,9 +117,12 @@ class RegisterController extends Controller
             'ContactNumber'   => 'nullable|string|max:20',
             'Address'         => 'nullable|string|max:255',
             'PatientCategory' => 'nullable|in:Outpatient,Emergency,Admitted,Inpatient',
-            'CivilStatus'     => 'nullable|string|max:50',
-            'BloodType'       => 'nullable|string|max:10',
-            'Status'          => 'nullable|string|max:50',
+            'CivilStatus'          => 'nullable|string|max:50',
+            'BloodType'            => 'nullable|string|max:10',
+            'PhilHealthNumber'     => 'nullable|string|max:50',
+            'PhilHealthMemberType' => 'nullable|string|max:50',
+            'PhilHealthMemberName' => 'nullable|string|max:150',
+            'Status'               => 'nullable|string|max:50',
         ]);
 
         if ($validator->fails()) {

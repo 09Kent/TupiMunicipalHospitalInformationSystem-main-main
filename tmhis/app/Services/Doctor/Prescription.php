@@ -87,7 +87,39 @@ class Prescription
             ':issued_date'   => $data['issued_date'] ?? $data['IssuedDate'] ?? date('Y-m-d')
         ]);
 
-        return (int)$this->db->lastInsertId();
+        $rxId = (int)$this->db->lastInsertId();
+
+        // Automatically schedule Nurse Administration Task for Inpatient medications
+        try {
+            $patientId = (int)($data['patient_id'] ?? $data['PatientID']);
+            $patientCategory = \Illuminate\Support\Facades\DB::table('patients')->where('PatientID', $patientId)->value('PatientCategory');
+            if ($patientCategory === 'Inpatient') {
+                $medName = $data['medicine_name'] ?? $data['MedicineName'] ?? ($data['Medications'][0]['MedicineName'] ?? 'Medication');
+                $dosage = $data['dosage'] ?? $data['Dosage'] ?? ($data['Medications'][0]['Dosage'] ?? 'Standard');
+                $route = $data['route'] ?? 'Oral';
+                $frequency = $data['frequency'] ?? $data['Frequency'] ?? ($data['Medications'][0]['Frequency'] ?? 'Daily');
+
+                \App\Models\NurseTask::create([
+                    'PatientID'      => $patientId,
+                    'DoctorID'       => (int)($data['doctor_id'] ?? $data['DoctorID'] ?? 1),
+                    'TaskTitle'      => "Administer {$medName}",
+                    'Category'       => 'Medication Administration',
+                    'Priority'       => 'High',
+                    'Status'         => 'Due',
+                    'MedicationName' => $medName,
+                    'Dosage'         => $dosage,
+                    'Route'          => $route,
+                    'Frequency'      => $frequency,
+                    'ScheduledTime'  => now()->format('Y-m-d H:i:s'),
+                    'DueTime'        => now()->format('g:i A'),
+                    'PrescriptionID' => $rxId,
+                    'Remarks'        => $data['instructions'] ?? $data['Instructions'] ?? 'Administer per physician orders.',
+                    'CreatedAt'      => now(),
+                ]);
+            }
+        } catch (\Throwable $e) {}
+
+        return $rxId;
     }
 
     public function update(int $prescriptionId, array $data): bool

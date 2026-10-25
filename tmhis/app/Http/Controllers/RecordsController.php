@@ -628,9 +628,18 @@ class RecordsController extends Controller
         $prescriptions = Prescription::where('PatientID', $patientId)->orderBy('CreatedAt', 'desc')->get();
         $labs = LaboratoryResult::where('PatientID', $patientId)->orderBy('CreatedAt', 'desc')->get();
         $vitals = PatientVital::where('PatientID', $patientId)->orderBy('CreatedAt', 'desc')->get();
+        $history = \Illuminate\Support\Facades\DB::table('medical_histories')->where('PatientID', $patientId)->first();
+        $emergency = \Illuminate\Support\Facades\DB::table('emergency_contacts')->where('PatientID', $patientId)->first();
+        $labRequests = \Illuminate\Support\Facades\DB::table('laboratory_requests')->where('PatientID', $patientId)->orderBy('CreatedAt', 'desc')->get();
+        $charges = \Illuminate\Support\Facades\DB::table('billing_charges')->where('PatientID', $patientId)->orderBy('ChargeID', 'asc')->get();
+        $invoices = \Illuminate\Support\Facades\DB::table('billing_invoices')->where('PatientID', $patientId)->orderBy('InvoiceID', 'desc')->get();
+        $payments = \Illuminate\Support\Facades\DB::table('billing_payments')->where('PatientID', $patientId)->orderBy('PaymentID', 'asc')->get();
+        $doctor = \App\Models\Doctor::find($consultations->first()?->DoctorID) ?: \App\Models\Doctor::first();
+        $certificate = \Illuminate\Support\Facades\DB::table('medical_certificates')->where('PatientID', $patientId)->orderBy('CertificateID', 'desc')->first();
 
         return view('medical_officer.summary', compact(
-            'patient', 'consultations', 'diagnoses', 'treatments', 'prescriptions', 'labs', 'vitals'
+            'patient', 'consultations', 'diagnoses', 'treatments', 'prescriptions', 'labs', 'vitals',
+            'history', 'emergency', 'labRequests', 'charges', 'invoices', 'payments', 'doctor', 'certificate'
         ));
     }
 }

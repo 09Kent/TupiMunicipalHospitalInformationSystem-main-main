@@ -2,9 +2,11 @@
 
 @section('title', 'Patient Intake & Pre-Consultation Form | Tupi Municipal Hospital Information Management System')
 
+@section('hide_navbar', 'true')
+
 @section('content')
 
-<main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+<div class="w-full">
   
   <!-- Minimal Top Bar for Intake Mode (No full navbar) -->
   <div class="flex items-center justify-between mb-6">
@@ -52,7 +54,7 @@
 
   </div>
 
-</main>
+</div>
 
 <!-- Inject Server Master Data for Client Engine -->
 <script>

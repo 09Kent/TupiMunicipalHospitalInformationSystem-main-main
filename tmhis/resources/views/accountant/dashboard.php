@@ -738,7 +738,7 @@
               </div>
 
               <!-- Apply Deductions Trigger -->
-              <button onclick="openApplyDiscountModal()" class="w-full py-2.5 px-4 rounded-xl border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 text-xs font-bold flex items-center justify-center gap-2 transition-colors shadow-sm">
+              <button type="button" onclick="openApplyDiscountModal()" class="w-full py-2.5 px-4 rounded-xl border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 text-xs font-bold flex items-center justify-center gap-2 transition-colors shadow-sm cursor-pointer active:scale-[0.98]">
                 <i data-lucide="calculator" class="w-4 h-4 text-blue-600"></i>
                 <span>Apply PhilHealth & Other Deductions</span>
               </button>
@@ -746,12 +746,12 @@
 
             <!-- Bill Processing Actions -->
             <div class="space-y-2.5 pt-4 border-t border-slate-100">
-              <button onclick="viewInvoice(AppState.bills.find(b => b.patientId === AppState.selectedPatientForBill)?.invoiceId || 'INV-2026-001')" class="btn-primary w-full py-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-sm">
+              <button type="button" onclick="viewCurrentPatientInvoice()" class="btn-primary w-full py-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-sm cursor-pointer active:scale-[0.98]">
                 <i data-lucide="file-text" class="w-4 h-4"></i>
                 <span>Generate & View Invoice</span>
               </button>
 
-              <button onclick="openPaymentModalForBill(AppState.bills.find(b => b.patientId === AppState.selectedPatientForBill)?.billId || 'BILL-2026-001')" class="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center justify-center gap-2 shadow-sm transition-all">
+              <button type="button" onclick="openPaymentModalForCurrentBill()" class="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer active:scale-[0.98]">
                 <i data-lucide="credit-card" class="w-4 h-4"></i>
                 <span>Process Payment for this Bill</span>
               </button>
@@ -779,7 +779,7 @@
             <button onclick="AppState.paymentFilter='card'; renderPaymentsTable();" class="px-3 py-1.5 text-xs font-semibold rounded-xl bg-white text-slate-600 border border-slate-200 hover:bg-slate-50 transition-colors">Credit Card</button>
           </div>
 
-          <button onclick="openPaymentModalForBill('BILL-2026-001')" class="btn-primary px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 shadow-sm whitespace-nowrap">
+          <button type="button" onclick="openPaymentModalForCurrentBill()" class="btn-primary px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 shadow-sm whitespace-nowrap cursor-pointer active:scale-[0.98]">
             <i data-lucide="plus-circle" class="w-4 h-4"></i>
             <span>Create Payment Record</span>
           </button>
@@ -1076,11 +1076,32 @@
       </div>
 
       <form onsubmit="saveNewCharge(event)" class="mt-4 space-y-4 text-xs">
-        <div>
-          <label class="block font-bold text-slate-700 mb-1">Select Patient *</label>
-          <select id="charge-patient-select" required class="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-800 focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500">
-            <!-- Populated via JS -->
-          </select>
+        <!-- Live Patient Search Autocomplete (Instead of Dropdown) -->
+        <div class="relative">
+          <label class="block font-bold text-slate-700 mb-1">Search Patient *</label>
+          <div class="relative">
+            <input type="text" id="charge-patient-search-input" oninput="onChargePatientSearchInput(this.value)" placeholder="Type patient name, code (e.g. TMH-...), or PhilHealth # to search..." autocomplete="off" class="w-full pl-9 pr-8 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-xs text-slate-800 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition">
+            <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 top-2.5 pointer-events-none"></i>
+            <span id="charge-patient-spinner" class="hidden absolute right-3 top-2.5 text-blue-600 text-xs">⏳</span>
+          </div>
+
+          <!-- Selected Patient Badge -->
+          <div id="charge-patient-selected-badge" class="hidden mt-1.5 p-2 bg-blue-50 border border-blue-200 rounded-xl flex items-center justify-between text-xs">
+            <div class="flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+              <strong id="charge-patient-selected-name" class="text-blue-950 font-extrabold">Selected Patient</strong>
+              <span id="charge-patient-selected-code" class="text-[10px] font-mono bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded">TMH-000</span>
+            </div>
+            <button type="button" onclick="clearChargePatientSelection()" class="text-slate-400 hover:text-rose-600 text-[11px] font-bold">Change</button>
+          </div>
+
+          <!-- Live Autocomplete Dropdown List -->
+          <div id="charge-patient-search-results" class="hidden absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-2xl shadow-xl z-50 max-h-56 overflow-y-auto divide-y divide-slate-100">
+            <!-- Results rendered via AJAX -->
+          </div>
+
+          <!-- Synchronized hidden select for backward-compatibility with saveNewCharge() -->
+          <select id="charge-patient-select" required class="hidden"></select>
         </div>
 
         <div class="grid grid-cols-2 gap-3">
@@ -1492,13 +1513,15 @@
           <div>
             <label class="block font-bold text-slate-700 mb-1">Payment Method *</label>
             <select id="payment-method-select" onchange="onPaymentMethodChange(this.value)" required class="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-800">
-              <option value="Cash" selected>Cash</option>
-              <option value="Cashless Payment">Cashless Payment</option>
-              <option value="PayMaya">PayMaya</option>
+              <option value="Cash" selected>Cash (Over-the-Counter)</option>
+              <option value="Cashless Payment">Cashless Payment (POS / Digital Terminal)</option>
               <option value="GCash">GCash E-Wallet</option>
-              <option value="MedicalEMS">MedicalEMS</option>
+              <option value="PayMaya">PayMaya (Maya)</option>
+              <option value="MedicalEMS">MedicalEMS (Municipal Medical Assistance / Guarantee Voucher)</option>
               <option value="Credit Card">Credit Card</option>
-              <option value="Bank Transfer">Bank Transfer</option>
+              <option value="Debit Card">Debit Card</option>
+              <option value="QR Ph">QR Ph (Interoperable Dynamic QR)</option>
+              <option value="Bank Transfer">Bank Transfer (Manual Verification)</option>
             </select>
           </div>
 
@@ -1508,31 +1531,239 @@
           </div>
         </div>
 
-        <!-- Cashless / Card / Wallet Details Notice -->
-        <div id="payment-cashless-details" class="p-2.5 bg-emerald-50 border border-emerald-100 rounded-xl flex items-center justify-between text-[11px] text-emerald-800">
-          <div class="flex items-center gap-1.5">
-            <i data-lucide="check-circle" class="w-3.5 h-3.5 text-emerald-600"></i>
-            <span>Status: <strong class="font-bold">Completed (Verified Transaction)</strong></span>
+        <!-- Cash Payment Section: Tendered & Change -->
+        <div id="payment-cash-section" class="p-3 bg-emerald-50/60 rounded-xl border border-emerald-100 space-y-2">
+          <div class="flex items-center justify-between">
+            <label class="text-xs font-bold text-emerald-950">Cash Received / Tendered (₱)</label>
+            <span class="text-[10px] text-emerald-700 font-semibold">Immediate change calculation</span>
           </div>
-          <div>
-            <span>Recorded By: <strong id="payment-recorded-by" class="font-bold">Collecting Cashier</strong></span>
+          <div class="grid grid-cols-2 gap-3 items-center">
+            <input type="number" id="cash-tendered-input" step="0.01" min="0" placeholder="e.g. 2000" oninput="calculateCashChange()" class="w-full px-3 py-2 bg-white border border-emerald-200 rounded-xl text-sm font-black text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+            <div class="p-2 bg-white rounded-xl border border-emerald-200/80 text-right">
+              <span class="text-[10px] uppercase font-bold text-slate-400 block">Change:</span>
+              <strong id="cash-change-display" class="text-sm font-black text-emerald-700">₱0.00</strong>
+            </div>
           </div>
+        </div>
+
+        <!-- Bank Transfer Section -->
+        <div id="payment-bank-section" class="hidden p-3 bg-purple-50/60 rounded-xl border border-purple-100 space-y-2">
+          <div class="flex items-center gap-1.5 text-xs font-bold text-purple-950">
+            <i data-lucide="building-2" class="w-4 h-4 text-purple-700"></i>
+            <span>Bank Transfer Routing</span>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="text-[10px] font-bold uppercase text-slate-500 block mb-1">Bank Name *</label>
+              <select id="bank-name-select" class="w-full px-2.5 py-1.5 bg-white border border-purple-200 rounded-xl text-xs font-semibold text-slate-800">
+                <option value="Landbank of the Philippines">Landbank</option>
+                <option value="BDO Unibank">BDO Unibank</option>
+                <option value="Bank of the Philippine Islands (BPI)">BPI</option>
+                <option value="Metrobank">Metrobank</option>
+                <option value="UnionBank of the Philippines">UnionBank</option>
+                <option value="RCBC">RCBC</option>
+                <option value="Security Bank">Security Bank</option>
+                <option value="GCash Bank Transfer">GCash Bank</option>
+                <option value="Maya Bank">Maya Bank</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-[10px] font-bold uppercase text-slate-500 block mb-1">Bank Slip / Ref # *</label>
+              <input type="text" id="bank-ref-input" placeholder="e.g. BT-9921448" class="w-full px-2.5 py-1.5 bg-white border border-purple-200 rounded-xl text-xs font-medium text-slate-800">
+            </div>
+          </div>
+          <p class="text-[10px] text-purple-700 font-medium">⚠️ Bank transfers are placed in <strong class="text-purple-900">Pending Verification</strong> until authorized hospital staff verifies the deposit.</p>
+        </div>
+
+        <!-- MedicalEMS Assistance Notice -->
+        <div id="payment-ems-section" class="hidden p-3 bg-amber-50/60 rounded-xl border border-amber-200/80 text-xs text-amber-950 space-y-1">
+          <div class="flex items-center gap-1.5 font-bold text-amber-950">
+            <i data-lucide="shield-plus" class="w-4 h-4 text-amber-700"></i>
+            <span>Municipal Emergency Medical Services / Assistance Guarantee</span>
+          </div>
+          <p class="text-[11px] text-amber-900 leading-relaxed">MedicalEMS (LGU Medical Assistance to Indigent Patients) vouchers settle the bill directly through the Municipal Health Assistance Fund. Please record the Official Voucher Number for audit tracking.</p>
+        </div>
+
+        <!-- Cashless / POS Terminal Notice -->
+        <div id="payment-cashless-section" class="hidden p-3 bg-teal-50/60 rounded-xl border border-teal-200/80 text-xs text-teal-950 space-y-1">
+          <div class="flex items-center gap-1.5 font-bold text-teal-950">
+            <i data-lucide="credit-card" class="w-4 h-4 text-teal-700"></i>
+            <span>Cashless POS Terminal Settlement</span>
+          </div>
+          <p class="text-[11px] text-teal-900 leading-relaxed">Process customer card or digital contactless payment via the hospital's POS cashless terminal. Input the Terminal Trace / Approval Code.</p>
+        </div>
+
+        <!-- Electronic / E-Wallet Notice -->
+        <div id="payment-ewallet-section" class="hidden p-3 bg-blue-50/60 rounded-xl border border-blue-100 text-xs text-blue-900 space-y-1">
+          <div class="flex items-center gap-1.5 font-bold text-blue-950">
+            <i data-lucide="qr-code" class="w-4 h-4 text-blue-600"></i>
+            <span>Dynamic QR Ph Integration</span>
+          </div>
+          <p class="text-[11px] text-slate-600">A dynamic QR code interoperable with all Philippine banks and e-wallets will be generated. Payment status is only marked <strong class="text-emerald-700">PAID</strong> after gateway confirmation.</p>
         </div>
 
         <div>
           <label class="block font-bold text-slate-700 mb-1">Notes / Cashier Remarks</label>
-          <input type="text" id="payment-notes" placeholder="Full settlement or partial deposit" class="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-800">
+          <input type="text" id="payment-notes" placeholder="Full settlement, partial deposit, or official remark" class="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-800">
         </div>
 
         <div class="pt-3 border-t border-slate-100 flex items-center justify-end gap-2.5">
           <button type="button" onclick="closeModal('modal-create-payment')" class="btn-secondary px-4 py-2 rounded-xl font-bold">
             Cancel
           </button>
-          <button type="submit" class="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold transition-all shadow-sm">
-            Process Payment
+          <button type="submit" id="btn-process-payment-submit" class="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold transition-all shadow-sm flex items-center gap-1.5">
+            <i data-lucide="check" class="w-4 h-4"></i>
+            <span id="btn-process-payment-label">Confirm Cash Payment</span>
           </button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- ========================================================
+       MODAL 6B: DYNAMIC QR / ELECTRONIC PAYMENT (Prompt Section 7)
+       ======================================================== -->
+  <div id="modal-qr-payment" class="modal-wrapper hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+    <div class="modal-content bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 relative text-center space-y-4 animate-in fade-in zoom-in-95 duration-200">
+      
+      <!-- State 1: WAITING FOR PAYMENT -->
+      <div id="qr-state-waiting" class="space-y-4">
+        <div class="border-b border-slate-100 pb-3 flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping"></span>
+            <span class="text-xs font-black tracking-wider text-slate-500 uppercase">PAYMENT REQUIRED</span>
+          </div>
+          <button type="button" onclick="cancelElectronicPayment()" class="p-1 text-slate-400 hover:text-slate-600 rounded-lg">
+            <i data-lucide="x" class="w-4 h-4"></i>
+          </button>
+        </div>
+
+        <div class="bg-slate-50 p-3.5 rounded-2xl border border-slate-200/80 text-xs text-left space-y-1.5">
+          <div class="flex justify-between">
+            <span class="text-slate-500">Invoice No:</span>
+            <strong id="qr-invoice-no" class="font-mono text-slate-900">INV-2026-0001</strong>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-slate-500">Patient:</span>
+            <strong id="qr-patient-name" class="text-slate-900">Juan Dela Cruz</strong>
+          </div>
+          <div class="flex justify-between border-t border-slate-200/60 pt-1 text-emerald-700">
+            <span class="font-bold">Amount Due:</span>
+            <strong id="qr-amount-due" class="text-base font-black">₱2,500.00</strong>
+          </div>
+        </div>
+
+        <!-- Dynamic QR Container -->
+        <div class="p-4 bg-white rounded-2xl border-2 border-dashed border-slate-200 flex flex-col items-center justify-center min-h-[220px]">
+          <div id="qr-code-graphic" class="p-2 bg-white rounded-xl shadow-sm flex items-center justify-center">
+            <!-- Dynamic QR Code Graphic injected here -->
+          </div>
+          <p class="text-[11px] font-semibold text-slate-500 mt-2">
+            Scan using your supported <strong class="text-slate-800">bank or e-wallet application</strong> (GCash, Maya, BDO, BPI, QR Ph).
+          </p>
+        </div>
+
+        <!-- Status Indicator -->
+        <div class="p-3 bg-amber-50 rounded-2xl border border-amber-200 text-xs text-amber-900 flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="w-3 h-3 rounded-full bg-amber-500 animate-pulse"></span>
+            <span class="font-bold">Payment Status:</span>
+          </div>
+          <span id="qr-live-status" class="font-extrabold text-amber-800">● Waiting for Payment...</span>
+        </div>
+
+        <div class="text-[11px] text-slate-400 font-mono">
+          Reference: <span id="qr-txn-reference" class="font-bold text-slate-700">TXN-XXXXXXXX</span>
+        </div>
+
+        <!-- Sandbox Simulation Tool (Visible in sandbox mode) -->
+        <div class="p-2.5 bg-indigo-50/70 border border-indigo-200 rounded-xl text-[10px] space-y-1.5 text-left">
+          <div class="flex items-center justify-between font-bold text-indigo-900">
+            <span>⚡ SANDBOX SIMULATION</span>
+            <span class="px-1.5 py-0.5 rounded bg-indigo-200/60 text-indigo-800 font-mono text-[9px]">TEST MODE</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <button type="button" onclick="simulateProviderApproval()" class="flex-1 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold shadow-xs transition">
+              Simulate Customer Paid
+            </button>
+            <button type="button" onclick="simulateProviderFailure()" class="flex-1 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg font-bold shadow-xs transition">
+              Simulate Decline
+            </button>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+          <button type="button" onclick="checkCurrentPaymentStatus(true)" class="btn-secondary px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5">
+            <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+            <span>Refresh Status</span>
+          </button>
+          <button type="button" onclick="cancelElectronicPayment()" class="px-3.5 py-2 rounded-xl border border-rose-200 text-rose-700 hover:bg-rose-50 text-xs font-bold transition">
+            Cancel Payment
+          </button>
+        </div>
+      </div>
+
+      <!-- State 2: PAYMENT SUCCESSFUL (Prompt Section 7) -->
+      <div id="qr-state-success" class="hidden space-y-4">
+        <div class="w-14 h-14 rounded-full bg-emerald-100 text-emerald-600 mx-auto flex items-center justify-center shadow-md">
+          <i data-lucide="check" class="w-8 h-8 stroke-[3]"></i>
+        </div>
+        <div>
+          <h3 class="text-lg font-black text-slate-900 font-heading">✓ PAYMENT SUCCESSFUL</h3>
+          <p class="text-xs text-slate-500 mt-0.5">Transaction verified and confirmed by payment provider</p>
+        </div>
+
+        <div class="p-4 bg-emerald-50 rounded-2xl border border-emerald-200 text-xs text-left space-y-2">
+          <div class="flex justify-between">
+            <span class="text-slate-500">Amount Paid:</span>
+            <strong id="success-amount" class="text-sm font-black text-emerald-700">₱2,500.00</strong>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-slate-500">Payment Method:</span>
+            <strong id="success-method" class="text-slate-800">QR Ph / Maya</strong>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-slate-500">Reference:</span>
+            <span id="success-reference" class="font-mono font-bold text-slate-700">TXN-XXXXXXXX</span>
+          </div>
+          <div class="flex justify-between border-t border-emerald-200/60 pt-1.5">
+            <span class="text-slate-500">Provider Transaction ID:</span>
+            <span id="success-provider-id" class="font-mono text-[11px] font-bold text-slate-700">PROVIDER-ID</span>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-center gap-2.5 pt-2">
+          <button type="button" onclick="viewReceiptFromQrModal()" class="btn-secondary px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-1.5">
+            <i data-lucide="file-text" class="w-4 h-4"></i>
+            <span>View Receipt</span>
+          </button>
+          <button type="button" onclick="printReceiptFromQrModal()" class="btn-primary px-5 py-2.5 rounded-xl text-xs font-bold flex items-center gap-1.5">
+            <i data-lucide="printer" class="w-4 h-4"></i>
+            <span>Print Receipt</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- State 3: PAYMENT FAILED (Prompt Section 7) -->
+      <div id="qr-state-failed" class="hidden space-y-4">
+        <div class="w-14 h-14 rounded-full bg-rose-100 text-rose-600 mx-auto flex items-center justify-center shadow-md">
+          <i data-lucide="x" class="w-8 h-8 stroke-[3]"></i>
+        </div>
+        <div>
+          <h3 class="text-lg font-black text-rose-700 font-heading">✕ PAYMENT FAILED</h3>
+          <p id="qr-fail-reason" class="text-xs text-slate-500 mt-1">Payment was declined or could not be verified.</p>
+        </div>
+
+        <div class="flex items-center justify-center gap-2.5 pt-2">
+          <button type="button" onclick="retryElectronicPayment()" class="btn-primary px-4 py-2.5 rounded-xl text-xs font-bold">
+            Try Again
+          </button>
+          <button type="button" onclick="cancelElectronicPayment()" class="btn-secondary px-4 py-2.5 rounded-xl text-xs font-bold">
+            Choose Another Payment Method
+          </button>
+        </div>
+      </div>
+
     </div>
   </div>
 
@@ -1838,6 +2069,8 @@
   <script>
     window.SERVER_BILLING_DATA = <?= json_encode($billingData ?? [], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
   </script>
+  <!-- QRCode Generator for Dynamic EMVCo QR Ph -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <!-- Application Logic Scripts -->
   <script src="<?= asset('section/billing/assets/js/data.js') ?>"></script>
   <script src="<?= asset('section/billing/assets/js/app.js') ?>"></script>

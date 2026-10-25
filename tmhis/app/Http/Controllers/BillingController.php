@@ -14,10 +14,12 @@ require_once app_path('Helpers/legacy_bridge.php');
 class BillingController extends Controller
 {
     private \BillingManager $billingManager;
+    private \App\Services\Billing\PaymentGatewayService $paymentService;
 
     public function __construct()
     {
         $this->billingManager = new \BillingManager();
+        $this->paymentService = new \App\Services\Billing\PaymentGatewayService();
     }
 
     public function dashboard(Request $request)
@@ -80,8 +82,20 @@ class BillingController extends Controller
     public function processPayment(Request $request): JsonResponse
     {
         $patientId = (int)($request->input('PatientID') ?? $request->input('patient_id') ?? 0);
-        $amountPaid = (float)($request->input('AmountPaid') ?? $request->input('amount_paid') ?? 0);
+        $amountPaid = (float)($request->input('AmountPaid') ?? $request->input('amount_paid') ?? $request->input('amount') ?? 0);
         $invoiceId = (int)($request->input('InvoiceID') ?? $request->input('invoice_id') ?? 0);
+
+        if ($patientId <= 0 && ($request->filled('patient_code') || $request->filled('patient_id_str'))) {
+            $code = $request->input('patient_code') ?? $request->input('patient_id_str');
+            $pRow = DB::table('patients')->where('PatientCode', $code)->first();
+            if ($pRow) $patientId = (int)$pRow->PatientID;
+        }
+
+        if ($invoiceId <= 0 && $request->filled('invoice_number')) {
+            $invNum = $request->input('invoice_number');
+            $iRow = DB::table('billing_invoices')->where('InvoiceNumber', $invNum)->first();
+            if ($iRow) $invoiceId = (int)$iRow->InvoiceID;
+        }
 
         if ($patientId <= 0 || $amountPaid <= 0) {
             return response()->json([
@@ -119,12 +133,12 @@ class BillingController extends Controller
                 'BalanceDue'      => $totalPayable,
                 'PaymentStatus'   => 'Unpaid',
                 'DueDate'         => date('Y-m-d', strtotime('+30 days')),
-                'BilledBy'        => auth()->id() ?? 1,
+                'BilledBy'        => auth()->user() ? auth()->user()->FullName : 'Maria Santos (Cashier)',
             ]);
             $invoiceId = $inv->InvoiceID;
         }
 
-        // Mark any attached charge IDs as Billed
+        // Mark attached charge IDs as Billed
         if ($request->has('charge_ids')) {
             $cIds = (array)$request->input('charge_ids');
             \App\Models\BillingCharge::whereIn('ChargeID', $cIds)->update(['BillingStatus' => 'Billed']);
@@ -136,24 +150,80 @@ class BillingController extends Controller
         $params['AmountPaid'] = $amountPaid;
 
         try {
-            $result = $this->billingManager->processPayment($params);
+            $result = $this->paymentService->initiatePayment($params, auth()->id());
             $result['invoice_id'] = $invoiceId;
             $invObj = \App\Models\BillingInvoice::find($invoiceId);
             $result['invoice_number'] = $invObj ? $invObj->InvoiceNumber : null;
 
-            return response()->json([
-                'success'        => true,
-                'data'           => $result,
-                'receipt_number' => $result['receipt_number'] ?? null,
-                'invoice_number' => $result['invoice_number'] ?? null,
-                'message'        => 'Payment processed and Official Receipt generated.'
-            ], 200);
+            return response()->json($result, 200);
         } catch (\Throwable $e) {
             return response()->json([
                 'success' => false,
                 'message' => safe_error_message($e, 'Failed to process payment transaction.')
             ], 422);
         }
+    }
+
+    public function getPaymentStatus(int $id): JsonResponse
+    {
+        try {
+            $status = $this->paymentService->checkPaymentStatus($id);
+            return response()->json($status);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => safe_error_message($e, 'Failed to retrieve payment status.')
+            ], 500);
+        }
+    }
+
+    public function verifyBankPayment(Request $request, int $id): JsonResponse
+    {
+        $verifierId = auth()->id() ?? 1;
+        $bankRef = $request->input('bank_reference') ?? $request->input('reference_no');
+
+        try {
+            $result = $this->paymentService->verifyBankTransfer($id, $verifierId, $bankRef);
+            return response()->json($result);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => safe_error_message($e, 'Failed to verify bank transfer.')
+            ], 422);
+        }
+    }
+
+    public function simulateProviderCallback(Request $request, int $id): JsonResponse
+    {
+        // Sandbox feature: simulates customer authorizing Maya / GCash / QR Ph in mobile app
+        $payment = \App\Models\BillingPayment::find($id);
+        if (!$payment) {
+            return response()->json(['success' => false, 'message' => 'Payment not found.'], 404);
+        }
+
+        $outcome = $request->input('outcome', 'PAID');
+        $mockProviderId = strtoupper($payment->payment_provider) . '-TXN-' . strtoupper(bin2hex(random_bytes(6)));
+
+        $payload = [
+            'transaction_reference'   => $payment->transaction_reference,
+            'provider_transaction_id' => $mockProviderId,
+            'status'                  => $outcome,
+            'failure_reason'          => $outcome !== 'PAID' ? 'Insufficient customer balance in e-wallet.' : null,
+            'simulated_at'            => now()->toIso8601String()
+        ];
+
+        $res = $this->paymentService->processWebhook($payload, null, $payment->payment_provider);
+        return response()->json($res);
+    }
+
+    public function handleWebhook(Request $request, string $provider = 'maya'): JsonResponse
+    {
+        $payload = $request->all();
+        $signature = $request->header('X-Signature') ?? $request->header('X-PayMaya-Signature') ?? $request->header('Signature');
+
+        $result = $this->paymentService->processWebhook($payload, $signature, $provider);
+        $code = $result['code'] ?? ($result['success'] ? 200 : 400);
+        return response()->json($result, $code);
     }
 
     public function aggregateUnbilled(int $patientId): JsonResponse

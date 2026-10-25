@@ -51,21 +51,6 @@
 </head>
 <body class="bg-medical-mesh min-h-screen text-slate-800 flex flex-col justify-between selection:bg-blue-600 selection:text-white">
 
-  <!-- TOP EMERGENCY ADVISORY BAR (No Print) -->
-  <header class="no-print bg-slate-900 text-white text-xs py-2 px-4 border-b border-slate-800">
-    <div class="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
-      <div class="flex items-center gap-2">
-        <span class="inline-flex items-center justify-center w-4 h-4 rounded-full bg-rose-500 text-white font-bold text-[10px]">!</span>
-        <span class="font-medium text-slate-300">
-          <strong class="text-white">Emergency Warning:</strong> If you are experiencing chest pain, severe bleeding, or difficulty breathing, call <a href="tel:911" class="text-blue-400 font-bold underline">911</a> immediately.
-        </span>
-      </div>
-      <div class="flex items-center gap-4 text-slate-400 text-[11px]">
-        <span class="flex items-center gap-1"><i data-lucide="shield-check" class="w-3.5 h-3.5 text-emerald-400"></i> HIPAA Encrypted</span>
-        <span class="flex items-center gap-1"><i data-lucide="phone" class="w-3.5 h-3.5 text-blue-400"></i> Clinic Helpline: (800) 555-AURA</span>
-      </div>
-    </div>
-  </header>
 
   <!-- MAIN NAVIGATION & CLINIC BRAND (No Print) -->
   <nav class="no-print sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-slate-200/80 shadow-2xs">
@@ -96,17 +81,6 @@
           <span id="draft-status-indicator">Auto-Saved</span>
         </div>
 
-        <!-- Preset Cases Dropdown -->
-        <div class="hidden lg:flex items-center gap-2 pl-3 border-l border-slate-200">
-          <label for="header-demo-preset-select" class="text-xs font-bold text-slate-500">Quick Preset:</label>
-          <select id="header-demo-preset-select" class="text-xs bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-medium text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none">
-            <option value="">-- Test Scenario --</option>
-            <option value="gastritis">🩺 Gastritis / Stomach Pain</option>
-            <option value="migraine">🧠 Severe Migraine</option>
-            <option value="chest_palp">🫀 Chest Palpitations</option>
-            <option value="knee_sprain">🦴 Knee Joint Pain</option>
-          </select>
-        </div>
 
         <!-- Help / Support -->
         <button type="button" onclick="alert('Hospital Support:\n\nOur patient concierge team is available 24/7 at (800) 555-AURA to assist you with registration or urgent clinical triage.')" class="p-2 rounded-xl text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition" title="Intake Support">

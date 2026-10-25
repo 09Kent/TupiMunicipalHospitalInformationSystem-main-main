@@ -42,9 +42,15 @@
       </a>
 
       <a href="/print/registration/<?= $patient['PatientID'] ?>" target="_blank" 
-         class="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-md shadow-blue-600/20 transition flex items-center gap-1.5" title="Official Hospital Registration Intake Form">
-        <i data-lucide="file-text" class="w-4 h-4"></i>
+         class="px-3.5 py-2.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-2xs" title="Official Hospital Registration Intake Form">
+        <i data-lucide="file-text" class="w-4 h-4 text-blue-600"></i>
         <span>Print Reg. Form</span>
+      </a>
+
+      <a href="/print/comprehensive-record/<?= $patient['PatientID'] ?>?full=1" target="_blank" 
+         class="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-600/20 transition flex items-center gap-1.5" title="Print Whole Medical Certificate & Complete Record (All-in-One: Diagnosis, History, Consultations, Requirements, Prescriptions, Cost)">
+        <i data-lucide="award" class="w-4 h-4"></i>
+        <span>Print Full Med Cert & Record</span>
       </a>
     </div>
   </div>
@@ -99,6 +105,51 @@
             <div class="flex justify-between"><span class="text-slate-500">Email Address:</span> <span class="font-bold text-slate-800"><?= e($patient['Email']) ?></span></div>
             <div class="flex justify-between"><span class="text-slate-500">Civil Status:</span> <span class="font-semibold text-slate-800"><?= e($patient['CivilStatus']) ?></span></div>
             <div class="pt-1"><span class="text-slate-500 block mb-0.5">Street Address:</span> <span class="font-medium text-slate-800 leading-relaxed"><?= e($patient['Address']) ?></span></div>
+          </div>
+        </div>
+
+        <!-- PhilHealth Information Card -->
+        <div class="bg-emerald-50/50 p-5 rounded-2xl border border-emerald-200/80 space-y-3">
+          <div class="text-xs font-bold text-emerald-900 uppercase tracking-wider flex items-center justify-between pb-2 border-b border-emerald-200/60">
+            <div class="flex items-center gap-2">
+              <i data-lucide="shield-check" class="w-3.5 h-3.5 text-emerald-600"></i>
+              <span>PhilHealth Membership & Coverage</span>
+            </div>
+            <?php if (!empty($patient['PhilHealthNumber'])): ?>
+              <span class="px-2 py-0.5 bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-full text-[10px] font-extrabold uppercase">
+                NHIP Registered
+              </span>
+            <?php else: ?>
+              <span class="px-2 py-0.5 bg-slate-100 text-slate-600 rounded-full text-[10px] font-semibold">
+                Non-Member
+              </span>
+            <?php endif; ?>
+          </div>
+
+          <div class="space-y-2 text-xs">
+            <?php if (!empty($patient['PhilHealthNumber'])): ?>
+              <div class="flex items-center justify-between">
+                <span class="text-slate-500">PhilHealth PIN / ID:</span>
+                <span class="font-mono font-black text-sm text-emerald-800 tracking-wider bg-white px-2.5 py-0.5 rounded-lg border border-emerald-200">
+                  <?= e($patient['PhilHealthNumber']) ?>
+                </span>
+              </div>
+              <div class="flex items-center justify-between">
+                <span class="text-slate-500">Account Ownership:</span>
+                <span class="font-bold text-slate-800 inline-flex items-center gap-1">
+                  <i data-lucide="<?= ($patient['PhilHealthMemberType'] ?? '') === 'Parents' ? 'users' : 'user-check' ?>" class="w-3.5 h-3.5 text-emerald-600"></i>
+                  <?= ($patient['PhilHealthMemberType'] ?? '') === 'Parents' ? "Parents' Account (Child Dependent)" : "Personal (Principal Member / Self)" ?>
+                </span>
+              </div>
+              <?php if (($patient['PhilHealthMemberType'] ?? '') === 'Parents' && !empty($patient['PhilHealthMemberName'])): ?>
+                <div class="flex items-center justify-between pt-1 border-t border-emerald-100">
+                  <span class="text-slate-500">Parent / Principal Member:</span>
+                  <span class="font-bold text-slate-800"><?= e($patient['PhilHealthMemberName']) ?></span>
+                </div>
+              <?php endif; ?>
+            <?php else: ?>
+              <div class="text-slate-500 italic py-1">No PhilHealth ID recorded. Patient is registered under Direct Self-Pay.</div>
+            <?php endif; ?>
           </div>
         </div>
 

@@ -105,7 +105,7 @@ class SearchApiController extends Controller
                 'dept.DepartmentName',
                 's.SpecialtyName'
             )
-            ->where('d.Status', 'Active');
+            ->where('d.Status', '!=', 'Inactive');
 
         if ($deptId > 0) {
             $query->where('d.DepartmentID', $deptId);
@@ -187,10 +187,8 @@ class SearchApiController extends Controller
         $nurses = $query->orderBy('LastName')->get();
 
         $formatted = $nurses->map(function ($n) {
-            $name = $n->FullName ?: ('Nurse ' . trim($n->FirstName . ' ' . $n->LastName));
-            if (empty(trim($name)) || $name === 'Nurse') {
-                $name = 'Nurse ' . $n->Username;
-            }
+            $fullName = property_exists($n, 'FullName') ? $n->FullName : trim(($n->FirstName ?? '') . ' ' . ($n->LastName ?? ''));
+            $name = !empty($fullName) ? ('Nurse ' . $fullName) : ('Nurse ' . ($n->Username ?? 'Staff'));
 
             return [
                 'nurse_id'   => (int)$n->UserID,
@@ -269,6 +267,318 @@ class SearchApiController extends Controller
                     'follow_up_days'     => $days,
                     'follow_up_date'     => $targetDate,
                 ]
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'count'   => count($formatted),
+            'data'    => $formatted,
+        ]);
+    }
+
+    /**
+     * Search Medications in Pharmacy Inventory
+     */
+    public function searchMedications(Request $request): JsonResponse
+    {
+        $term = trim((string)$request->query('q', ''));
+        $limit = min(50, max(5, (int)$request->query('limit', 20)));
+
+        $query = DB::table('pharmacy_inventory')
+            ->whereIn('Status', ['In Stock', 'Low Stock', 'Active']);
+
+        if (mb_strlen($term) > 0) {
+            $like = "%{$term}%";
+            $query->where(function ($q) use ($like) {
+                $q->where('GenericName', 'like', $like)
+                    ->orWhere('BrandName', 'like', $like)
+                    ->orWhere('ItemCode', 'like', $like)
+                    ->orWhere('Category', 'like', $like);
+            });
+        }
+
+        $items = $query->orderBy('GenericName')->limit($limit)->get();
+
+        $formatted = $items->map(function ($m) {
+            return [
+                'id'            => (int)$m->InventoryID,
+                'item_code'     => $m->ItemCode,
+                'generic_name'  => $m->GenericName,
+                'brand_name'    => $m->BrandName ?: '',
+                'full_name'     => trim($m->GenericName . ($m->BrandName ? " ({$m->BrandName})" : '') . " {$m->Strength}"),
+                'dosage_form'   => $m->DosageForm,
+                'strength'      => $m->Strength,
+                'category'      => $m->Category,
+                'selling_price' => (float)$m->SellingPrice,
+                'current_stock' => (int)$m->CurrentStock,
+                'status'        => $m->Status,
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'count'   => count($formatted),
+            'data'    => $formatted,
+        ]);
+    }
+
+    /**
+     * Search Laboratory Tests Catalog
+     */
+    public function searchLaboratoryTests(Request $request): JsonResponse
+    {
+        $term = trim((string)$request->query('q', ''));
+        $limit = min(50, max(5, (int)$request->query('limit', 20)));
+
+        $query = DB::table('test_catalog')->where('Status', 'Active');
+
+        if (mb_strlen($term) > 0) {
+            $like = "%{$term}%";
+            $query->where(function ($q) use ($like) {
+                $q->where('TestName', 'like', $like)
+                    ->orWhere('TestCode', 'like', $like)
+                    ->orWhere('Category', 'like', $like)
+                    ->orWhere('SpecimenType', 'like', $like);
+            });
+        }
+
+        $items = $query->orderBy('TestName')->limit($limit)->get();
+
+        $formatted = $items->map(function ($t) {
+            return [
+                'id'              => (int)$t->CatalogID,
+                'test_code'       => $t->TestCode,
+                'test_name'       => $t->TestName,
+                'category'        => $t->Category,
+                'specimen_type'   => $t->SpecimenType,
+                'turnaround_time' => $t->TurnaroundTime,
+                'standard_price'  => (float)$t->StandardPrice,
+                'status'          => $t->Status,
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'count'   => count($formatted),
+            'data'    => $formatted,
+        ]);
+    }
+
+    /**
+     * Search Admissions (Inpatient Roster)
+     */
+    public function searchAdmissions(Request $request): JsonResponse
+    {
+        $term = trim((string)$request->query('q', ''));
+        $status = trim((string)$request->query('status', 'Admitted'));
+        $limit = min(50, max(5, (int)$request->query('limit', 20)));
+
+        $query = DB::table('admissions as a')
+            ->join('patients as p', 'a.PatientID', '=', 'p.PatientID')
+            ->leftJoin('doctors as d', 'a.DoctorID', '=', 'd.DoctorID')
+            ->select(
+                'a.*',
+                'p.FirstName as PatientFirst',
+                'p.LastName as PatientLast',
+                'p.PatientCode',
+                'p.Age',
+                'p.Gender',
+                'd.FirstName as DoctorFirst',
+                'd.LastName as DoctorLast'
+            );
+
+        if (!empty($status) && $status !== 'All') {
+            $query->where('a.Status', $status);
+        }
+
+        if (mb_strlen($term) > 0) {
+            $like = "%{$term}%";
+            $query->where(function ($q) use ($like) {
+                $q->where('a.AdmissionNumber', 'like', $like)
+                    ->orWhere('a.Ward', 'like', $like)
+                    ->orWhere('a.RoomNumber', 'like', $like)
+                    ->orWhere('a.BedNumber', 'like', $like)
+                    ->orWhere('p.FirstName', 'like', $like)
+                    ->orWhere('p.LastName', 'like', $like)
+                    ->orWhere('p.PatientCode', 'like', $like);
+            });
+        }
+
+        $items = $query->orderBy('a.AdmissionDate', 'desc')->limit($limit)->get();
+
+        $formatted = $items->map(function ($adm) {
+            return [
+                'admission_id'     => (int)$adm->AdmissionID,
+                'admission_number' => $adm->AdmissionNumber,
+                'patient_id'       => (int)$adm->PatientID,
+                'patient_name'     => trim("{$adm->PatientFirst} {$adm->PatientLast}"),
+                'patient_code'     => $adm->PatientCode,
+                'age'              => (int)$adm->Age,
+                'gender'           => $adm->Gender,
+                'doctor_name'      => 'Dr. ' . trim("{$adm->DoctorFirst} {$adm->DoctorLast}"),
+                'ward'             => $adm->Ward,
+                'room_number'      => $adm->RoomNumber,
+                'bed_number'       => $adm->BedNumber,
+                'admission_reason' => $adm->AdmissionReason,
+                'admission_date'   => $adm->AdmissionDate,
+                'status'           => $adm->Status,
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'count'   => count($formatted),
+            'data'    => $formatted,
+        ]);
+    }
+
+    /**
+     * Search Billing Invoices
+     */
+    public function searchBillingInvoices(Request $request): JsonResponse
+    {
+        $term = trim((string)$request->query('q', ''));
+        $status = trim((string)$request->query('status', ''));
+        $limit = min(50, max(5, (int)$request->query('limit', 20)));
+
+        $query = DB::table('billing_invoices as bi')
+            ->join('patients as p', 'bi.PatientID', '=', 'p.PatientID')
+            ->select('bi.*', 'p.FirstName', 'p.LastName', 'p.PatientCode', 'p.ContactNumber');
+
+        if (!empty($status) && $status !== 'All') {
+            $query->where('bi.PaymentStatus', $status);
+        }
+
+        if (mb_strlen($term) > 0) {
+            $like = "%{$term}%";
+            $query->where(function ($q) use ($like) {
+                $q->where('bi.InvoiceNumber', 'like', $like)
+                    ->orWhere('p.FirstName', 'like', $like)
+                    ->orWhere('p.LastName', 'like', $like)
+                    ->orWhere('p.PatientCode', 'like', $like);
+            });
+        }
+
+        $items = $query->orderBy('bi.CreatedAt', 'desc')->limit($limit)->get();
+
+        $formatted = $items->map(function ($inv) {
+            return [
+                'invoice_id'     => (int)$inv->InvoiceID,
+                'invoice_number' => $inv->InvoiceNumber,
+                'patient_id'     => (int)$inv->PatientID,
+                'patient_name'   => trim("{$inv->FirstName} {$inv->LastName}"),
+                'patient_code'   => $inv->PatientCode,
+                'gross_amount'   => (float)$inv->GrossAmount,
+                'total_payable'  => (float)$inv->TotalPayable,
+                'amount_paid'    => (float)$inv->AmountPaid,
+                'balance_due'    => (float)$inv->BalanceDue,
+                'payment_status' => $inv->PaymentStatus,
+                'created_at'     => $inv->CreatedAt,
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'count'   => count($formatted),
+            'data'    => $formatted,
+        ]);
+    }
+
+    /**
+     * Search Appointments
+     */
+    public function searchAppointments(Request $request): JsonResponse
+    {
+        $term = trim((string)$request->query('q', ''));
+        $date = trim((string)$request->query('date', ''));
+        $limit = min(50, max(5, (int)$request->query('limit', 20)));
+
+        $query = DB::table('appointments as app')
+            ->join('patients as p', 'app.PatientID', '=', 'p.PatientID')
+            ->leftJoin('doctors as d', 'app.DoctorID', '=', 'd.DoctorID')
+            ->select('app.*', 'p.FirstName as PatientFirst', 'p.LastName as PatientLast', 'p.PatientCode', 'd.FirstName as DoctorFirst', 'd.LastName as DoctorLast');
+
+        if (!empty($date)) {
+            $query->where('app.AppointmentDate', $date);
+        }
+
+        if (mb_strlen($term) > 0) {
+            $like = "%{$term}%";
+            $query->where(function ($q) use ($like) {
+                $q->where('p.FirstName', 'like', $like)
+                    ->orWhere('p.LastName', 'like', $like)
+                    ->orWhere('p.PatientCode', 'like', $like)
+                    ->orWhere('app.Reason', 'like', $like)
+                    ->orWhere('app.ConsultationType', 'like', $like);
+            });
+        }
+
+        $items = $query->orderBy('app.AppointmentDate', 'desc')->orderBy('app.AppointmentTime', 'asc')->limit($limit)->get();
+
+        $formatted = $items->map(function ($a) {
+            return [
+                'appointment_id'    => (int)$a->AppointmentID,
+                'patient_id'        => (int)$a->PatientID,
+                'patient_name'      => trim("{$a->PatientFirst} {$a->PatientLast}"),
+                'patient_code'      => $a->PatientCode,
+                'doctor_name'       => 'Dr. ' . trim("{$a->DoctorFirst} {$a->DoctorLast}"),
+                'appointment_date'  => $a->AppointmentDate,
+                'appointment_time'  => $a->AppointmentTime,
+                'consultation_type' => $a->ConsultationType,
+                'reason'            => $a->Reason,
+                'priority'          => $a->Priority,
+                'status'            => $a->Status,
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'count'   => count($formatted),
+            'data'    => $formatted,
+        ]);
+    }
+
+    /**
+     * Search Live Queue
+     */
+    public function searchQueue(Request $request): JsonResponse
+    {
+        $term = trim((string)$request->query('q', ''));
+        $date = trim((string)$request->query('date', date('Y-m-d')));
+        $limit = min(50, max(5, (int)$request->query('limit', 20)));
+
+        $query = DB::table('patient_queue as q')
+            ->join('patients as p', 'q.PatientID', '=', 'p.PatientID')
+            ->leftJoin('doctors as d', 'q.DoctorID', '=', 'd.DoctorID')
+            ->select('q.*', 'p.FirstName as PatientFirst', 'p.LastName as PatientLast', 'p.PatientCode', 'd.FirstName as DoctorFirst', 'd.LastName as DoctorLast')
+            ->where('q.QueueDate', $date);
+
+        if (mb_strlen($term) > 0) {
+            $like = "%{$term}%";
+            $query->where(function ($sq) use ($like) {
+                $sq->where('q.QueueNumber', 'like', $like)
+                    ->orWhere('p.FirstName', 'like', $like)
+                    ->orWhere('p.LastName', 'like', $like)
+                    ->orWhere('p.PatientCode', 'like', $like)
+                    ->orWhere('q.QueueStatus', 'like', $like);
+            });
+        }
+
+        $items = $query->orderBy('q.QueueID', 'asc')->limit($limit)->get();
+
+        $formatted = $items->map(function ($item) {
+            return [
+                'queue_id'      => (int)$item->QueueID,
+                'queue_number'  => $item->QueueNumber,
+                'patient_id'    => (int)$item->PatientID,
+                'patient_name'  => trim("{$item->PatientFirst} {$item->PatientLast}"),
+                'patient_code'  => $item->PatientCode,
+                'doctor_name'   => 'Dr. ' . trim("{$item->DoctorFirst} {$item->DoctorLast}"),
+                'queue_status'  => $item->QueueStatus,
+                'priority'      => $item->Priority,
+                'called_at'     => $item->CalledAt,
+                'queue_date'    => $item->QueueDate,
             ];
         });
 

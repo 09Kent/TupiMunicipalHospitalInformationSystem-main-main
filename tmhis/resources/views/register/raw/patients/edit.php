@@ -156,8 +156,8 @@ require_once __DIR__ . '/../../includes/navbar.php';
 
       <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div>
-          <label class="block text-xs font-bold text-slate-700 mb-1">Contact Number *</label>
-          <input type="text" name="ContactNumber" value="<?= e($patient['ContactNumber']) ?>" required class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800" />
+          <label class="block text-xs font-bold text-slate-700 mb-1">Contact Number * <span class="text-[10px] font-normal text-slate-400">(Numbers only)</span></label>
+          <input type="tel" name="ContactNumber" id="raw-edit-phone" value="<?= e($patient['ContactNumber']) ?>" required maxlength="11" inputmode="numeric" pattern="[0-9]*" placeholder="09123456789" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:ring-2 focus:ring-blue-500 focus:bg-white" />
         </div>
         <div>
           <label class="block text-xs font-bold text-slate-700 mb-1">Email Address *</label>
@@ -218,8 +218,8 @@ require_once __DIR__ . '/../../includes/navbar.php';
           <input type="text" name="Relationship" value="<?= e($emg['Relationship'] ?? 'Parent') ?>" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800" />
         </div>
         <div>
-          <label class="block text-xs font-bold text-slate-700 mb-1">Emergency Phone</label>
-          <input type="text" name="EmergencyPhone" value="<?= e($emg['ContactNumber'] ?? '') ?>" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800" />
+          <label class="block text-xs font-bold text-slate-700 mb-1">Emergency Phone <span class="text-[10px] font-normal text-slate-400">(Numbers only)</span></label>
+          <input type="tel" name="EmergencyPhone" id="raw-edit-emg-phone" value="<?= e($emg['ContactNumber'] ?? '') ?>" maxlength="11" inputmode="numeric" pattern="[0-9]*" placeholder="09987654321" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:ring-2 focus:ring-blue-500 focus:bg-white" />
         </div>
       </div>
     </div>
@@ -267,5 +267,45 @@ require_once __DIR__ . '/../../includes/navbar.php';
   </form>
 
 </main>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const bindStrict = (id, maxLen) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('keydown', (e) => {
+      if (e.ctrlKey || e.altKey || e.metaKey) return;
+      if (['Backspace','Delete','ArrowLeft','ArrowRight','Tab','Enter','Escape','Home','End'].includes(e.key)) return;
+      if (e.key.length === 1 && !/^[0-9]$/.test(e.key)) {
+        e.preventDefault();
+        e.stopPropagation();
+        return false;
+      }
+      if (maxLen && el.value.replace(/\D/g, '').length >= maxLen && el.selectionStart === el.selectionEnd) {
+        e.preventDefault();
+        return false;
+      }
+    });
+    el.addEventListener('beforeinput', (e) => {
+      if (e.data && !/^[0-9]+$/.test(e.data)) {
+        e.preventDefault();
+        return false;
+      }
+    });
+    el.addEventListener('paste', (e) => {
+      e.preventDefault();
+      const pasted = (e.clipboardData || window.clipboardData)?.getData('text') || '';
+      const clean = pasted.replace(/\D/g, '').slice(0, maxLen || undefined);
+      el.value = clean;
+    });
+    el.addEventListener('input', (e) => {
+      const clean = e.target.value.replace(/\D/g, '').slice(0, maxLen || undefined);
+      if (e.target.value !== clean) e.target.value = clean;
+    });
+  };
+  bindStrict('raw-edit-phone', 11);
+  bindStrict('raw-edit-emg-phone', 11);
+});
+</script>
 
 <?php require_once __DIR__ . '/../../includes/footer.php'; ?>

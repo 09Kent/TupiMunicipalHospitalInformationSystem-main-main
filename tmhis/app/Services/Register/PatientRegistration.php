@@ -62,31 +62,58 @@ class PatientRegistration
             $queueModel = new Queue($this->db);
             $historyModel = new PatientHistory($this->db);
 
+            $philhealthNumber = $data['philhealth']['philhealthNumber'] 
+                ?? $data['personal']['philhealthNumber'] 
+                ?? $data['personal']['philhealth'] 
+                ?? $data['philhealthNumber'] 
+                ?? $data['philhealth_number'] 
+                ?? $data['philhealth'] 
+                ?? null;
+
+            $philhealthType = $data['philhealth']['memberType'] 
+                ?? $data['personal']['philhealthMemberType'] 
+                ?? $data['philhealthMemberType'] 
+                ?? (!empty($philhealthNumber) ? 'Personal' : 'None');
+
+            $philhealthName = $data['philhealth']['memberName'] 
+                ?? $data['personal']['philhealthMemberName'] 
+                ?? $data['philhealthMemberName'] 
+                ?? null;
+
             // 1. Patient identity. A returning patient keeps the same PatientID;
             // the appointment and clinical records below represent the new visit.
             $isReturningPatient = $existingPatient !== null;
             if ($isReturningPatient) {
                 $patientId = (int)$existingPatient['PatientID'];
                 $patientCode = $existingPatient['PatientCode'];
+                if (!empty($philhealthNumber)) {
+                    $patientModel->update($patientId, [
+                        'PhilHealthNumber'     => $philhealthNumber,
+                        'PhilHealthMemberType' => $philhealthType,
+                        'PhilHealthMemberName' => $philhealthName,
+                    ]);
+                }
             } else {
                 $patientCode = $patientModel->generatePatientCode();
                 $patientId = $patientModel->create([
-                    'PatientCode'     => $patientCode,
-                    'FirstName'       => $data['personal']['firstName'] ?? $data['firstName'] ?? '',
-                    'MiddleName'      => $data['personal']['middleName'] ?? $data['middleName'] ?? null,
-                    'LastName'        => $data['personal']['lastName'] ?? $data['lastName'] ?? '',
-                    'DateOfBirth'     => $data['personal']['dob'] ?? $data['dob'] ?? date('Y-m-d'),
-                    'Age'             => $data['personal']['age'] ?? $data['age'] ?? 0,
-                    'Gender'          => $data['personal']['gender'] ?? $data['gender'] ?? 'Male',
-                    'CivilStatus'     => $data['personal']['civilStatus'] ?? $data['civilStatus'] ?? 'Single',
-                    'ContactNumber'   => $data['personal']['phone'] ?? $data['phone'] ?? '',
-                    'Email'           => $data['personal']['email'] ?? $data['email'] ?? '',
-                    'Address'         => $data['personal']['address'] ?? $data['address'] ?? '',
-                    'BloodType'        => $data['medical']['bloodType'] ?? $data['bloodType'] ?? 'Unknown',
-                    'PhilHealthNumber' => $data['personal']['philhealth'] ?? $data['personal']['philhealthNumber'] ?? $data['philhealthNumber'] ?? $data['philhealth'] ?? $data['philhealth_number'] ?? null,
-                    'PatientCategory'  => $data['patientCategory'] ?? $data['category'] ?? 'Outpatient',
-                    'Status'           => 'Active',
-                    'RegisteredBy'     => $userId
+                    'PatientCode'          => $patientCode,
+                    'FirstName'            => $data['personal']['firstName'] ?? $data['firstName'] ?? '',
+                    'MiddleName'           => $data['personal']['middleName'] ?? $data['middleName'] ?? null,
+                    'LastName'             => $data['personal']['lastName'] ?? $data['lastName'] ?? '',
+                    'DateOfBirth'          => $data['personal']['dob'] ?? $data['dob'] ?? date('Y-m-d'),
+                    'Age'                  => $data['personal']['age'] ?? $data['age'] ?? 0,
+                    'Gender'               => $data['personal']['gender'] ?? $data['gender'] ?? 'Male',
+                    'CivilStatus'          => $data['personal']['civilStatus'] ?? $data['civilStatus'] ?? 'Single',
+                    'ContactNumber'        => $data['personal']['phone'] ?? $data['phone'] ?? '',
+                    'Email'                => $data['personal']['email'] ?? $data['email'] ?? '',
+                    'Address'              => $data['personal']['address'] ?? $data['address'] ?? '',
+                    'BloodType'            => $data['medical']['bloodType'] ?? $data['bloodType'] ?? 'Unknown',
+                    'PhilHealthNumber'     => $philhealthNumber,
+                    'PhilHealthMemberType' => $philhealthType,
+                    'PhilHealthMemberName' => $philhealthName,
+                    'PatientCategory'      => $data['patientCategory'] ?? $data['category'] ?? 'Outpatient',
+                    'Status'               => 'Active',
+                    'RegisteredBy'         => $userId
                 ]);
 
                 // Demographic and emergency information belongs to the patient identity,

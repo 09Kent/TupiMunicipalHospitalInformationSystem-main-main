@@ -10,7 +10,41 @@ $pageTitle = 'Patients Directory | Nurse Portal • Tupi Municipal Hospital';
 $activeMenu = 'patients';
 
 $currentUser = Session::getCurrentUser();
-$patients = getDemoPatients();
+
+try {
+    $dbAdmissions = \App\Models\Admission::with(['patient', 'doctor'])
+        ->where('Status', 'Admitted')
+        ->orderBy('AdmissionDate', 'desc')
+        ->get();
+} catch (\Throwable $e) {
+    $dbAdmissions = collect();
+}
+
+$patients = [];
+foreach ($dbAdmissions as $adm) {
+    $p = $adm->patient;
+    $d = $adm->doctor;
+    $latestVital = \App\Models\PatientVital::where('PatientID', $adm->PatientID)->orderBy('VitalID', 'desc')->first();
+
+    $patients[] = [
+        'admission_id'        => $adm->AdmissionID,
+        'admission_number'    => $adm->AdmissionNumber,
+        'id'                  => $p ? $p->PatientCode : ('PT-' . $adm->PatientID),
+        'patient_id'          => $adm->PatientID,
+        'name'                => $p ? trim($p->FirstName . ' ' . $p->LastName) : 'Patient #' . $adm->PatientID,
+        'age'                 => $p ? (int)$p->Age : 'N/A',
+        'gender'              => $p ? $p->Gender : 'N/A',
+        'status'              => $adm->Status ?: 'Admitted',
+        'room'                => trim($adm->Ward . ' • ' . $adm->RoomNumber . ' (' . $adm->BedNumber . ')'),
+        'ward'                => $adm->Ward,
+        'bed'                 => $adm->BedNumber,
+        'attending_physician' => $d ? ('Dr. ' . trim($d->FirstName . ' ' . $d->LastName)) : ($adm->AdmittedByName ?: 'Attending Physician'),
+        'bp'                  => $latestVital ? ($latestVital->BloodPressure ?: '120/80') : '120/80',
+        'heart_rate'          => $latestVital ? ($latestVital->HeartRate ?: 75) : 75,
+        'spo2'                => $latestVital ? ($latestVital->OxygenSaturation ?: 98) : 98,
+        'last_update'         => date('M d, Y h:i A', strtotime($adm->AdmissionDate ?: 'now'))
+    ];
+}
 
 require_once __DIR__ . '/../includes/header.php';
 require_once __DIR__ . '/../includes/sidebar.php';
@@ -26,7 +60,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
     <section data-aos="fade-down" class="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
       <div>
         <div class="flex items-center gap-2 mb-1">
-          <span class="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-teal-100 text-teal-800 border border-teal-200">Patient Directory</span>
+          <span class="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-teal-100 text-teal-800 border border-teal-200">Inpatient Care</span>
         </div>
         <h1 class="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight font-display">Inpatient Roster</h1>
         <p class="text-sm text-slate-500 font-medium mt-1">Assigned ward occupants & medical telemetry oversight</p>
@@ -43,6 +77,17 @@ require_once __DIR__ . '/../includes/sidebar.php';
 
     <!-- Patient Grid -->
     <section class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6" id="patientCardsGrid" data-aos="fade-up">
+      <?php if (empty($patients)): ?>
+        <div class="col-span-full bg-white rounded-3xl p-12 text-center text-slate-400 border border-slate-200/80 shadow-card">
+          <div class="w-16 h-16 rounded-3xl bg-teal-50 text-teal-600 flex items-center justify-center mx-auto mb-3 shadow-sm">
+            <i data-lucide="bed" class="w-8 h-8"></i>
+          </div>
+          <h3 class="text-base font-bold text-slate-800">No Currently Admitted Inpatients</h3>
+          <p class="text-xs text-slate-400 mt-1 max-w-md mx-auto">
+            When consulting doctors select <strong>Admit Patient</strong>, the admitted patient will automatically appear here with their designated ward, room, and bed assignment.
+          </p>
+        </div>
+      <?php else: ?>
       <?php foreach ($patients as $idx => $p): ?>
       <div class="patient-card bg-white rounded-3xl p-6 border border-slate-200/80 shadow-card hover:shadow-card-hover hover:-translate-y-1 transition-all duration-200 space-y-5 flex flex-col justify-between"
            data-name="<?= strtolower($p['name']) ?>" data-room="<?= strtolower($p['room']) ?>" data-status="<?= strtolower($p['status']) ?>">
@@ -105,9 +150,9 @@ require_once __DIR__ . '/../includes/sidebar.php';
             <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
           </a>
         </div>
-
       </div>
       <?php endforeach; ?>
+      <?php endif; ?>
     </section>
 
   </main>

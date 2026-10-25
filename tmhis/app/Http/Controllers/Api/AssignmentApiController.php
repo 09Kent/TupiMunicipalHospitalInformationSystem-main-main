@@ -274,4 +274,44 @@ class AssignmentApiController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * Get Active Doctor and Nurse Assignments for a Patient
+     * Fulfills Requirement 7 & 8: View Patient Care Team
+     */
+    public function getAssignments(int $patientId): JsonResponse
+    {
+        $patient = Patient::find($patientId);
+        if (!$patient) {
+            return response()->json(['success' => false, 'message' => 'Patient record not found.'], 404);
+        }
+
+        $doctorAssignments = DB::table('doctor_assignments as da')
+            ->leftJoin('doctors as d', 'da.DoctorID', '=', 'd.DoctorID')
+            ->where('da.PatientID', $patientId)
+            ->select('da.*', 'd.FirstName as DocFirst', 'd.LastName as DocLast', 'd.Specialty', 'd.LicenseNumber')
+            ->orderBy('da.AssignmentID', 'desc')
+            ->get();
+
+        $nurseAssignments = DB::table('nurse_assignments as na')
+            ->leftJoin('users as u', 'na.NurseID', '=', 'u.UserID')
+            ->leftJoin('nurse_tasks as nt', 'na.TaskID', '=', 'nt.TaskID')
+            ->where('na.PatientID', $patientId)
+            ->select(
+                'na.*',
+                DB::raw("TRIM(CONCAT(COALESCE(u.FirstName, ''), ' ', COALESCE(u.LastName, ''))) as NurseName"),
+                'u.Username as NurseUsername',
+                'nt.TaskTitle', 'nt.Status as TaskStatus', 'nt.MedicationName', 'nt.Dosage', 'nt.DueTime'
+            )
+            ->orderBy('na.AssignmentID', 'desc')
+            ->get();
+
+        return response()->json([
+            'success'            => true,
+            'patient_id'         => $patientId,
+            'patient_name'       => trim($patient->FirstName . ' ' . $patient->LastName),
+            'doctor_assignments' => $doctorAssignments,
+            'nurse_assignments'  => $nurseAssignments,
+        ]);
+    }
 }

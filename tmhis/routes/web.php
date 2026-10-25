@@ -183,8 +183,15 @@ Route::middleware(['auth', 'role:Billing,Cashier,Accountant,Admin'])->prefix('bi
     Route::post('/charges', [BillingController::class, 'createCharge'])->name('charges.create');
     Route::post('/discounts/compute', [BillingController::class, 'computeDiscounts'])->name('discounts.compute');
     Route::post('/payments', [BillingController::class, 'processPayment'])->name('payments.process');
+    Route::get('/payments/{id}/status', [BillingController::class, 'getPaymentStatus'])->name('payments.status');
+    Route::post('/payments/{id}/verify-bank', [BillingController::class, 'verifyBankPayment'])->name('payments.verify-bank');
+    Route::post('/payments/{id}/simulate-provider-callback', [BillingController::class, 'simulateProviderCallback'])->name('payments.simulate-callback');
     Route::post('/aggregate/{patientId}', [BillingController::class, 'aggregateUnbilled'])->name('aggregate');
 });
+
+// External Payment Webhooks (No session CSRF required)
+Route::post('/api/webhooks/payment', [BillingController::class, 'handleWebhook'])->name('payment.webhook');
+Route::post('/billing/api/webhook/{provider}', [BillingController::class, 'handleWebhook'])->name('payment.webhook.provider');
 
 // Director / CMO API Routes (Protected, supports both /director/api/ and root /api/ prefixes)
 $registerDirectorApiRoutes = function ($prefix, $as) {
@@ -245,12 +252,18 @@ Route::match(['get', 'post'], '/api/vitals.php', [NurseController::class, 'creat
 // TMHIMS ENHANCED CORE MODULES (Search, Print, Assignments, Meds, Referrals)
 // =========================================================================
 
-// 1. Universal Search API (Patients, Doctors, Nurses)
+// 1. Universal Search API (Patients, Doctors, Nurses, ICD-10, Meds, Labs, Admissions, Invoices, Appts, Queue)
 Route::prefix('api/search')->name('api.search.')->group(function () {
     Route::get('/patients', [SearchApiController::class, 'searchPatients'])->name('patients');
     Route::get('/doctors', [SearchApiController::class, 'searchDoctors'])->name('doctors');
     Route::get('/nurses', [SearchApiController::class, 'searchNurses'])->name('nurses');
     Route::get('/diseases', [SearchApiController::class, 'searchDiseases'])->name('diseases');
+    Route::get('/medications', [SearchApiController::class, 'searchMedications'])->name('medications');
+    Route::get('/laboratory-tests', [SearchApiController::class, 'searchLaboratoryTests'])->name('laboratory-tests');
+    Route::get('/admissions', [SearchApiController::class, 'searchAdmissions'])->name('admissions');
+    Route::get('/billing-invoices', [SearchApiController::class, 'searchBillingInvoices'])->name('billing-invoices');
+    Route::get('/appointments', [SearchApiController::class, 'searchAppointments'])->name('appointments');
+    Route::get('/queue', [SearchApiController::class, 'searchQueue'])->name('queue');
 });
 
 // 2. Universal Print Engine & Logs
