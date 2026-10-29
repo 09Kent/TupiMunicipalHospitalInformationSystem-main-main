@@ -64,6 +64,15 @@ class Queue
             'prio'   => $data['Priority'] ?? 'Normal'
         ]);
 
+        try {
+            $stmtId = $this->db->prepare("SELECT QueueID FROM patient_queue WHERE PatientID = :pid ORDER BY QueueID DESC LIMIT 1");
+            $stmtId->execute([':pid' => $data['PatientID']]);
+            $fetchedId = (int)$stmtId->fetchColumn();
+            if ($fetchedId > 0) {
+                return $fetchedId;
+            }
+        } catch (\Throwable $e) {}
+
         return (int)$this->db->lastInsertId();
     }
 

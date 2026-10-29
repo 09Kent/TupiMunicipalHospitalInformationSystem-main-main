@@ -33,12 +33,21 @@ class Complaint
 
         $stmt->execute([
             'pid'  => $data['PatientID'],
-            'desc' => trim($data['ComplaintDescription']),
+            'desc' => trim((string)($data['ComplaintDescription'] ?? '')),
             'sev'  => (int)($data['Severity'] ?? 3),
             'dur'  => $data['Duration'] ?? '1–3 days ago',
-            'agg'  => !empty($data['AggravatingFactors']) ? trim($data['AggravatingFactors']) : null,
-            'rel'  => !empty($data['RelievingFactors']) ? trim($data['RelievingFactors']) : null
+            'agg'  => !empty($data['AggravatingFactors']) ? trim((string)$data['AggravatingFactors']) : null,
+            'rel'  => !empty($data['RelievingFactors']) ? trim((string)$data['RelievingFactors']) : null
         ]);
+
+        try {
+            $stmtId = $this->db->prepare("SELECT ComplaintID FROM complaints WHERE PatientID = :pid ORDER BY ComplaintID DESC LIMIT 1");
+            $stmtId->execute([':pid' => $data['PatientID']]);
+            $fetchedId = (int)$stmtId->fetchColumn();
+            if ($fetchedId > 0) {
+                return $fetchedId;
+            }
+        } catch (\Throwable $e) {}
 
         return (int)$this->db->lastInsertId();
     }
