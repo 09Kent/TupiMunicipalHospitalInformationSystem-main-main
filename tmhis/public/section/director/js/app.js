@@ -549,7 +549,50 @@ function exportReport(format) {
 }
 
 function printReport() {
-  window.print();
+  const body = document.getElementById('reportModalBody');
+  const title = document.getElementById('reportModalTitle')?.textContent || 'Hospital Operations Report';
+  if (!body) {
+    window.print();
+    return;
+  }
+  const printWin = window.open('', '_blank', 'width=1024,height=800');
+  if (!printWin) {
+    window.print();
+    return;
+  }
+  printWin.document.write(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>${escHtml(title)} - Tupi Municipal Hospital</title>
+  <link rel="stylesheet" href="/section/director/css/style.css">
+  <style>
+    body { background: #fff !important; color: #0f172a !important; padding: 24px !important; font-family: system-ui, -apple-system, sans-serif; }
+    .card { box-shadow: none !important; border: 1px solid #cbd5e1 !important; break-inside: avoid; }
+    .tbl th, .tbl td { border-bottom: 1px solid #e2e8f0; padding: 8px 10px; font-size: 12px; text-align: left; }
+    @media print {
+      body { padding: 0 !important; }
+      .no-print { display: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="no-print" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid #e2e8f0;">
+    <strong style="font-size:14px;color:#0f172a;">${escHtml(title)}</strong>
+    <div style="display:flex;gap:8px;">
+      <button onclick="window.print()" style="padding:8px 16px;background:#0284c7;color:#fff;border:none;border-radius:8px;font-weight:700;cursor:pointer;">Print Document</button>
+      <button onclick="window.close()" style="padding:8px 14px;background:#e2e8f0;color:#334155;border:none;border-radius:8px;font-weight:600;cursor:pointer;">Close</button>
+    </div>
+  </div>
+  ${body.innerHTML}
+  <script>
+    window.addEventListener('load', function() {
+      setTimeout(function() { window.print(); }, 250);
+    });
+  <\/script>
+</body>
+</html>`);
+  printWin.document.close();
 }
 
 // ===== STAFF ACTIVITY =====
@@ -1055,7 +1098,22 @@ function populateSelect(id, options, currentVal) {
 
 function closeModal(id) {
   document.getElementById(id)?.classList.remove('show');
+  document.getElementById('exportMenu')?.classList.remove('show');
 }
+
+function closeReportModal() {
+  closeModal('reportModal');
+}
+
+window.closeModal = closeModal;
+window.closeReportModal = closeReportModal;
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    document.querySelectorAll('.modal-overlay.show').forEach(el => el.classList.remove('show'));
+    document.getElementById('exportMenu')?.classList.remove('show');
+  }
+});
 
 function showToast(message, type = 'info') {
   const box = document.getElementById('toastBox');

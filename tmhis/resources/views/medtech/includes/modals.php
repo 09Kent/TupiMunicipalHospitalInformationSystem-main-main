@@ -799,7 +799,7 @@ $requests = getDemoLabRequests();
       </button>
 
       <div class="flex items-center gap-3">
-        <button onclick="showToast('Diagnostic report exported to PDF', 'success')" class="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl transition text-xs flex items-center gap-1.5">
+        <button onclick="triggerPrintLabReport()" class="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl transition text-xs flex items-center gap-1.5">
           <i data-lucide="download" class="w-4 h-4 text-indigo-600"></i>
           <span>Export PDF</span>
         </button>
@@ -1356,7 +1356,8 @@ $requests = getDemoLabRequests();
     openModal('updateResultModal');
   }
 
-  function openGenerateReportModal() {
+  function openGenerateReportModal(reportId = 1) {
+    window.currentLabReportId = reportId || 1;
     // Populate report modal with CBC demo
     const repTable = document.getElementById('repTableBody');
     if (repTable) {

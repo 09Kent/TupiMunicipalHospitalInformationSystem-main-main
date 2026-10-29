@@ -857,7 +857,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <button class="btn btn-primary btn-sm" onclick="window.openGenerateSummaryModal('${patient.id}')">
               <i data-lucide="file-text"></i> Generate Summary
             </button>
-            <button class="btn btn-success btn-sm" style="background:#0f766e; border-color:#0f766e; color:#fff;" onclick="window.open('/print/comprehensive-record/' + (patient.patient_id || patient.id) + '?full=1', '_blank')" title="Print Whole Medical Certificate & Complete Record (All-in-One: Diagnosis, History, Consultations, Requirements, Prescriptions, Cost)">
+            <button class="btn btn-success btn-sm" style="background:#0f766e; border-color:#0f766e; color:#fff;" onclick="window.open('/print/comprehensive-record/${patient.patient_id || patient.id}?full=1', '_blank')" title="Print Whole Medical Certificate & Complete Record (All-in-One: Diagnosis, History, Consultations, Requirements, Prescriptions, Cost)">
               <i data-lucide="printer"></i> Print All-in-One Record & Cert
             </button>
           </div>
@@ -1190,7 +1190,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <button class="btn btn-primary btn-xs" onclick="window.printSummaryDocument('${s.summaryId}')" title="Print Summary">
                           <i data-lucide="printer" style="width:13px;height:13px;"></i> Print
                         </button>
-                        <button class="btn btn-success btn-xs" style="background:#0f766e; border-color:#0f766e; color:#fff;" onclick="window.open('/print/comprehensive-record/' + (s.patientId) + '?full=1', '_blank')" title="Print Full All-in-One Medical Certificate & Record">
+                        <button class="btn btn-success btn-xs" style="background:#0f766e; border-color:#0f766e; color:#fff;" onclick="window.open('/print/comprehensive-record/${s.patientId}?full=1', '_blank')" title="Print Full All-in-One Medical Certificate & Record">
                           <i data-lucide="printer" style="width:13px;height:13px;"></i> All-in-One
                         </button>
                       </div>
@@ -1693,7 +1693,7 @@ document.addEventListener('DOMContentLoaded', () => {
       </div>
 
       <div style="display:flex; flex-direction:column; gap:0.5rem; margin-top:0.5rem;">
-        <button class="btn btn-primary" style="background:#0f766e; border-color:#0f766e; color:#fff;" onclick="window.open('/print/comprehensive-record/' + (patient.patient_id || patient.id) + '?full=1', '_blank');">
+        <button class="btn btn-primary" style="background:#0f766e; border-color:#0f766e; color:#fff;" onclick="window.open('/print/comprehensive-record/${patient.patient_id || patient.id}?full=1', '_blank');">
           <i data-lucide="printer"></i> Print Full Medical Record & Certificate (All-in-One)
         </button>
         <button class="btn btn-primary" onclick="window.editPatientRecord('${patient.id}'); document.getElementById('viewPatientDrawer').classList.remove('show');">

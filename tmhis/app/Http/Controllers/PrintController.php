@@ -129,6 +129,9 @@ class PrintController extends Controller
             case 'full-medical-certificate':
             case 'all-in-one':
                 $patient = Patient::where('PatientID', $id)->orWhere('PatientCode', $id)->first();
+                if (!$patient && !empty($id) && preg_match('/-(\d+)$/', (string)$id, $m)) {
+                    $patient = Patient::find((int)$m[1]);
+                }
                 if (!$patient) {
                     $patient = Patient::orderBy('PatientID', 'desc')->first();
                 }

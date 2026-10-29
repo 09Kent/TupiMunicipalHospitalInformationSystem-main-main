@@ -14,106 +14,106 @@ $pageTitle = 'Laboratory Requests & Diagnostics | Doctor Portal • Tupi Municip
 $activeMenu = 'laboratory';
 
 $currentUser = Session::getCurrentUser();
-$doctorId = $currentUser['doctor_id'] ?? (int)session('doctor_id', 1);
+$doctorId = $currentUser['doctor_id'] ?? (int) session('doctor_id', 1);
 
 $labModel = new LaboratoryRequest();
 $resultModel = new LaboratoryResult();
 $patientModel = new Patient();
 
 $filterStatus = $_GET['status'] ?? '';
-$selectedPatientId = (int)($_GET['patient_id'] ?? 0);
-$viewRequestId = (int)($_GET['view_req'] ?? 0);
+$selectedPatientId = (int) ($_GET['patient_id'] ?? 0);
+$viewRequestId = (int) ($_GET['view_req'] ?? 0);
 
 $doctorPatients = $patientModel->getDoctorPatients($doctorId, 50, 0);
 
 // Handle POST actions
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $action = $_POST['action'] ?? '';
-    $csrf = $_POST['csrf_token'] ?? '';
+  $action = $_POST['action'] ?? '';
+  $csrf = $_POST['csrf_token'] ?? '';
 
-    if (!validate_csrf($csrf)) {
-        Session::setFlash('error', 'Invalid security token.');
-    } elseif ($action === 'create_lab_request') {
-        $pId = (int)($_POST['patient_id'] ?? 0);
-        $testType = trim($_POST['test_type'] ?? '');
-        $priority = $_POST['priority'] ?? 'Routine';
-        $notes = trim($_POST['clinical_notes'] ?? '');
+  if (!validate_csrf($csrf)) {
+    Session::setFlash('error', 'Invalid security token.');
+  } elseif ($action === 'create_lab_request') {
+    $pId = (int) ($_POST['patient_id'] ?? 0);
+    $testType = trim($_POST['test_type'] ?? '');
+    $priority = $_POST['priority'] ?? 'Routine';
+    $notes = trim($_POST['clinical_notes'] ?? '');
 
-        if ($pId && !empty($testType)) {
-            if (!$patientModel->hasDoctorAccess($doctorId, $pId)) {
-                Session::setFlash('error', 'Access Denied: You are not authorized to order laboratory tests for this patient.');
-                header("Location: " . doctor_url("views/laboratory/index.php"));
-                exit;
-            }
+    if ($pId && !empty($testType)) {
+      if (!$patientModel->hasDoctorAccess($doctorId, $pId)) {
+        Session::setFlash('error', 'Access Denied: You are not authorized to order laboratory tests for this patient.');
+        header("Location: " . doctor_url("views/laboratory/index.php"));
+        exit;
+      }
 
-            $reqId = $labModel->create([
-                'patient_id'     => $pId,
-                'doctor_id'      => $doctorId,
-                'test_type'      => $testType,
-                'priority'       => $priority,
-                'clinical_notes' => $notes,
-                'status'         => 'Pending'
-            ]);
+      $reqId = $labModel->create([
+        'patient_id' => $pId,
+        'doctor_id' => $doctorId,
+        'test_type' => $testType,
+        'priority' => $priority,
+        'clinical_notes' => $notes,
+        'status' => 'Pending'
+      ]);
 
-            Session::setFlash('success', "Laboratory order for $testType registered successfully.");
-            header("Location: " . doctor_url("views/laboratory/index.php"));
-            exit;
-        } else {
-            Session::setFlash('error', 'Please select a patient and diagnostic test type.');
-        }
-    } elseif ($action === 'add_lab_result') {
-        $reqId = (int)($_POST['request_id'] ?? 0);
-        $pId = (int)($_POST['patient_id'] ?? 0);
-        $testName = trim($_POST['test_name'] ?? '');
-        $resultVal = trim($_POST['result_value'] ?? '');
-        $normalRange = trim($_POST['normal_range'] ?? '');
-        $units = trim($_POST['units'] ?? '');
-        $interpretation = $_POST['interpretation'] ?? 'Normal';
-        $notes = trim($_POST['notes'] ?? '');
-
-        if ($reqId && $pId && !empty($testName) && !empty($resultVal)) {
-            $req = $labModel->findById($reqId);
-            if (!$req || ((int)$req['DoctorID'] !== $doctorId && !$patientModel->hasDoctorAccess($doctorId, $pId))) {
-                Session::setFlash('error', 'Access Denied: You are not authorized to record results for this laboratory request.');
-                header("Location: " . doctor_url("views/laboratory/index.php"));
-                exit;
-            }
-
-            $resultModel->create([
-                'request_id'     => $reqId,
-                'patient_id'     => $pId,
-                'doctor_id'      => $doctorId,
-                'test_name'      => $testName,
-                'result_value'   => $resultVal,
-                'normal_range'   => $normalRange,
-                'units'          => $units,
-                'interpretation' => $interpretation,
-                'notes'          => $notes
-            ]);
-
-            Session::setFlash('success', "Diagnostic result recorded for $testName.");
-            header("Location: " . doctor_url("views/laboratory/index.php?view_req=$reqId"));
-            exit;
-        }
-    } elseif ($action === 'update_status') {
-        $reqId = (int)($_POST['request_id'] ?? 0);
-        $newStatus = $_POST['status'] ?? 'Pending';
-        if ($reqId) {
-            $req = $labModel->findById($reqId);
-            if ($req && (int)$req['DoctorID'] === $doctorId) {
-                $labModel->updateStatus($reqId, $newStatus);
-                Session::setFlash('success', "Laboratory request status updated to $newStatus.");
-            } else {
-                Session::setFlash('error', 'Access Denied: You can only update status for your own laboratory orders.');
-            }
-            header("Location: " . doctor_url("views/laboratory/index.php"));
-            exit;
-        }
+      Session::setFlash('success', "Laboratory order for $testType registered successfully.");
+      header("Location: " . doctor_url("views/laboratory/index.php"));
+      exit;
+    } else {
+      Session::setFlash('error', 'Please select a patient and diagnostic test type.');
     }
+  } elseif ($action === 'add_lab_result') {
+    $reqId = (int) ($_POST['request_id'] ?? 0);
+    $pId = (int) ($_POST['patient_id'] ?? 0);
+    $testName = trim($_POST['test_name'] ?? '');
+    $resultVal = trim($_POST['result_value'] ?? '');
+    $normalRange = trim($_POST['normal_range'] ?? '');
+    $units = trim($_POST['units'] ?? '');
+    $interpretation = $_POST['interpretation'] ?? 'Normal';
+    $notes = trim($_POST['notes'] ?? '');
+
+    if ($reqId && $pId && !empty($testName) && !empty($resultVal)) {
+      $req = $labModel->findById($reqId);
+      if (!$req || ((int) $req['DoctorID'] !== $doctorId && !$patientModel->hasDoctorAccess($doctorId, $pId))) {
+        Session::setFlash('error', 'Access Denied: You are not authorized to record results for this laboratory request.');
+        header("Location: " . doctor_url("views/laboratory/index.php"));
+        exit;
+      }
+
+      $resultModel->create([
+        'request_id' => $reqId,
+        'patient_id' => $pId,
+        'doctor_id' => $doctorId,
+        'test_name' => $testName,
+        'result_value' => $resultVal,
+        'normal_range' => $normalRange,
+        'units' => $units,
+        'interpretation' => $interpretation,
+        'notes' => $notes
+      ]);
+
+      Session::setFlash('success', "Diagnostic result recorded for $testName.");
+      header("Location: " . doctor_url("views/laboratory/index.php?view_req=$reqId"));
+      exit;
+    }
+  } elseif ($action === 'update_status') {
+    $reqId = (int) ($_POST['request_id'] ?? 0);
+    $newStatus = $_POST['status'] ?? 'Pending';
+    if ($reqId) {
+      $req = $labModel->findById($reqId);
+      if ($req && (int) $req['DoctorID'] === $doctorId) {
+        $labModel->updateStatus($reqId, $newStatus);
+        Session::setFlash('success', "Laboratory request status updated to $newStatus.");
+      } else {
+        Session::setFlash('error', 'Access Denied: You can only update status for your own laboratory orders.');
+      }
+      header("Location: " . doctor_url("views/laboratory/index.php"));
+      exit;
+    }
+  }
 }
 require_once __DIR__ . '/../includes/Paginator.php';
 
-$page = max(1, (int)($_GET['page'] ?? 1));
+$page = max(1, (int) ($_GET['page'] ?? 1));
 $allRequests = $labModel->getAll($doctorId, 200, $filterStatus);
 $totalReq = count($allRequests);
 $paginator = new Paginator($totalReq, 10, $page, ['status' => $filterStatus]);
@@ -121,9 +121,9 @@ $requests = array_slice($allRequests, $paginator->offset, $paginator->recordsPer
 
 // If viewing a specific request's results
 $activeRequest = $viewRequestId ? $labModel->findById($viewRequestId) : null;
-if ($activeRequest && (int)$activeRequest['DoctorID'] !== $doctorId && !$patientModel->hasDoctorAccess($doctorId, (int)$activeRequest['PatientID'])) {
-    $activeRequest = null;
-    $viewRequestId = 0;
+if ($activeRequest && (int) $activeRequest['DoctorID'] !== $doctorId && !$patientModel->hasDoctorAccess($doctorId, (int) $activeRequest['PatientID'])) {
+  $activeRequest = null;
+  $viewRequestId = 0;
 }
 $activeResults = ($viewRequestId && $activeRequest) ? $resultModel->findByRequest($viewRequestId) : [];
 
@@ -132,7 +132,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
 ?>
 
 <div class="flex-1 flex flex-col min-w-0 overflow-y-auto h-screen">
-  
+
   <?php require_once __DIR__ . '/../includes/topbar.php'; ?>
 
   <main class="p-6 sm:p-8 space-y-6 flex-1">
@@ -141,11 +141,12 @@ require_once __DIR__ . '/../includes/sidebar.php';
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4" data-aos="fade-down">
       <div>
         <h1 class="text-2xl font-black text-slate-900 tracking-tight font-display">Laboratory & Diagnostic Requests</h1>
-        <p class="text-xs text-slate-500 font-medium mt-1">Order diagnostic investigations, monitor lab specimens, and evaluate clinical result ranges.</p>
+        <p class="text-xs text-slate-500 font-medium mt-1">Order diagnostic investigations, monitor lab specimens, and
+          evaluate clinical result ranges.</p>
       </div>
 
       <button onclick="document.getElementById('newLabModal').classList.remove('hidden')"
-              class="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs shadow-md shadow-blue-600/25 transition flex items-center gap-2">
+        class="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs shadow-md shadow-blue-600/25 transition flex items-center gap-2">
         <i data-lucide="plus" class="w-4 h-4"></i>
         <span>Create Laboratory Request</span>
       </button>
@@ -153,7 +154,8 @@ require_once __DIR__ . '/../includes/sidebar.php';
 
     <!-- Active Results Viewer Box (If viewing request) -->
     <?php if ($activeRequest): ?>
-      <div class="bg-white rounded-3xl p-6 sm:p-8 border border-blue-200 shadow-xl space-y-6 animate-in fade-in" data-aos="fade-up">
+      <div class="bg-white rounded-3xl p-6 sm:p-8 border border-blue-200 shadow-xl space-y-6 animate-in fade-in"
+        data-aos="fade-up">
         <div class="flex items-center justify-between border-b border-slate-100 pb-4">
           <div class="flex items-center gap-3">
             <div class="w-11 h-11 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center">
@@ -162,24 +164,29 @@ require_once __DIR__ . '/../includes/sidebar.php';
             <div>
               <div class="flex items-center gap-2">
                 <h3 class="text-base font-extrabold text-slate-900 font-display"><?= e($activeRequest['TestType']) ?></h3>
-                <span class="px-2 py-0.5 rounded-full text-xs font-mono font-bold bg-blue-100 text-blue-800"><?= e($activeRequest['RequestCode']) ?></span>
-                <span class="px-2 py-0.5 rounded-full text-xs font-bold border <?= get_priority_badge($activeRequest['Priority']) ?>">
+                <span
+                  class="px-2 py-0.5 rounded-full text-xs font-mono font-bold bg-blue-100 text-blue-800"><?= e($activeRequest['RequestCode']) ?></span>
+                <span
+                  class="px-2 py-0.5 rounded-full text-xs font-bold border <?= get_priority_badge($activeRequest['Priority']) ?>">
                   <?= e($activeRequest['Priority']) ?>
                 </span>
               </div>
               <p class="text-xs text-slate-400 mt-0.5">
-                Patient: <strong class="text-slate-700"><?= e($activeRequest['PatientFirstName'] . ' ' . $activeRequest['PatientLastName']) ?></strong> (<?= e($activeRequest['PatientCode']) ?>) • Ordered: <?= format_date($activeRequest['RequestedDate']) ?>
+                Patient: <strong
+                  class="text-slate-700"><?= e($activeRequest['PatientFirstName'] . ' ' . $activeRequest['PatientLastName']) ?></strong>
+                (<?= e($activeRequest['PatientCode']) ?>) • Ordered: <?= format_date($activeRequest['RequestedDate']) ?>
               </p>
             </div>
           </div>
 
           <div class="flex items-center gap-2">
-            <button onclick="document.getElementById('addResultModal').classList.remove('hidden')" 
-                    class="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs shadow-xs transition flex items-center gap-1.5">
+            <button onclick="document.getElementById('addResultModal').classList.remove('hidden')"
+              class="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs shadow-xs transition flex items-center gap-1.5">
               <i data-lucide="plus" class="w-3.5 h-3.5"></i>
               <span>Add Result Value</span>
             </button>
-            <a href="<?= doctor_url('views/laboratory/index.php') ?>" class="p-2 text-slate-400 hover:text-slate-600 bg-slate-100 rounded-xl transition">
+            <a href="<?= doctor_url('views/laboratory/index.php') ?>"
+              class="p-2 text-slate-400 hover:text-slate-600 bg-slate-100 rounded-xl transition">
               <i data-lucide="x" class="w-4 h-4"></i>
             </a>
           </div>
@@ -189,7 +196,8 @@ require_once __DIR__ . '/../includes/sidebar.php';
         <div class="overflow-x-auto">
           <table class="w-full text-left text-xs border-collapse">
             <thead>
-              <tr class="bg-slate-50 border-b border-slate-100 text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
+              <tr
+                class="bg-slate-50 border-b border-slate-100 text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
                 <th class="py-3 px-4">Test Parameter</th>
                 <th class="py-3 px-4">Recorded Value</th>
                 <th class="py-3 px-4">Normal Reference Range</th>
@@ -214,11 +222,11 @@ require_once __DIR__ . '/../includes/sidebar.php';
                     <td class="py-3 px-4 text-slate-500"><?= e($res['Units'] ?: '—') ?></td>
                     <td class="py-3 px-4">
                       <?php
-                        $interpClass = match($res['Interpretation']) {
-                            'High', 'Critical' => 'bg-rose-100 text-rose-800 border-rose-200',
-                            'Low' => 'bg-amber-100 text-amber-800 border-amber-200',
-                            default => 'bg-emerald-100 text-emerald-800 border-emerald-200'
-                        };
+                      $interpClass = match ($res['Interpretation']) {
+                        'High', 'Critical' => 'bg-rose-100 text-rose-800 border-rose-200',
+                        'Low' => 'bg-amber-100 text-amber-800 border-amber-200',
+                        default => 'bg-emerald-100 text-emerald-800 border-emerald-200'
+                      };
                       ?>
                       <span class="px-2 py-0.5 rounded-full text-[10px] font-bold border <?= $interpClass ?>">
                         <?= e($res['Interpretation']) ?>
@@ -236,24 +244,24 @@ require_once __DIR__ . '/../includes/sidebar.php';
 
     <!-- Lab Requests Directory Table -->
     <div class="bg-white rounded-3xl border border-slate-200/80 shadow-card overflow-hidden" data-aos="fade-up">
-      
+
       <!-- Filter Tabs -->
       <div class="p-4 bg-slate-50/60 border-b border-slate-100 flex items-center justify-between gap-4 flex-wrap">
         <div class="flex items-center gap-2">
-          <a href="?status=" 
-             class="px-3 py-1.5 rounded-xl text-xs font-bold transition <?= empty($filterStatus) ? 'bg-blue-600 text-white shadow-xs' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50' ?>">
+          <a href="?status="
+            class="px-3 py-1.5 rounded-xl text-xs font-bold transition <?= empty($filterStatus) ? 'bg-blue-600 text-white shadow-xs' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50' ?>">
             All Orders
           </a>
-          <a href="?status=Pending" 
-             class="px-3 py-1.5 rounded-xl text-xs font-bold transition <?= $filterStatus === 'Pending' ? 'bg-blue-600 text-white shadow-xs' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50' ?>">
+          <a href="?status=Pending"
+            class="px-3 py-1.5 rounded-xl text-xs font-bold transition <?= $filterStatus === 'Pending' ? 'bg-blue-600 text-white shadow-xs' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50' ?>">
             Pending
           </a>
-          <a href="?status=In Progress" 
-             class="px-3 py-1.5 rounded-xl text-xs font-bold transition <?= $filterStatus === 'In Progress' ? 'bg-blue-600 text-white shadow-xs' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50' ?>">
+          <a href="?status=In Progress"
+            class="px-3 py-1.5 rounded-xl text-xs font-bold transition <?= $filterStatus === 'In Progress' ? 'bg-blue-600 text-white shadow-xs' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50' ?>">
             In Progress
           </a>
-          <a href="?status=Completed" 
-             class="px-3 py-1.5 rounded-xl text-xs font-bold transition <?= $filterStatus === 'Completed' ? 'bg-blue-600 text-white shadow-xs' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50' ?>">
+          <a href="?status=Completed"
+            class="px-3 py-1.5 rounded-xl text-xs font-bold transition <?= $filterStatus === 'Completed' ? 'bg-blue-600 text-white shadow-xs' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50' ?>">
             Completed
           </a>
         </div>
@@ -263,7 +271,8 @@ require_once __DIR__ . '/../includes/sidebar.php';
       <div class="overflow-x-auto">
         <table class="w-full text-left border-collapse">
           <thead>
-            <tr class="bg-slate-50/80 border-b border-slate-100 text-[11px] font-extrabold uppercase tracking-wider text-slate-400">
+            <tr
+              class="bg-slate-50/80 border-b border-slate-100 text-[11px] font-extrabold uppercase tracking-wider text-slate-400">
               <th class="py-4 px-5">Order Code</th>
               <th class="py-4 px-5">Patient Details</th>
               <th class="py-4 px-5">Diagnostic Test Type</th>
@@ -279,7 +288,8 @@ require_once __DIR__ . '/../includes/sidebar.php';
                 <td colspan="7" class="py-12 text-center text-slate-400">
                   <i data-lucide="flask-conical" class="w-10 h-10 mx-auto mb-2 text-slate-300"></i>
                   <p class="font-bold text-slate-600 text-sm">No laboratory requests found</p>
-                  <p class="text-xs text-slate-400">Click "Create Laboratory Request" to order tests for assigned patients.</p>
+                  <p class="text-xs text-slate-400">Click "Create Laboratory Request" to order tests for assigned
+                    patients.</p>
                 </td>
               </tr>
             <?php else: ?>
@@ -289,15 +299,17 @@ require_once __DIR__ . '/../includes/sidebar.php';
                     <?= e($req['RequestCode']) ?>
                   </td>
                   <td class="py-4 px-5">
-                    <a href="<?= doctor_url('views/patients/view.php?id=' . $req['PatientID']) ?>" 
-                       class="font-extrabold text-slate-900 group-hover:text-blue-600 transition block">
+                    <a href="<?= doctor_url('views/patients/view.php?id=' . $req['PatientID']) ?>"
+                      class="font-extrabold text-slate-900 group-hover:text-blue-600 transition block">
                       <?= e($req['PatientFirstName'] . ' ' . $req['PatientLastName']) ?>
                     </a>
-                    <span class="text-[11px] text-slate-400 font-mono"><?= e($req['PatientCode']) ?> • <?= e($req['Age']) ?>y, <?= e($req['Gender']) ?></span>
+                    <span class="text-[11px] text-slate-400 font-mono"><?= e($req['PatientCode']) ?> •
+                      <?= e($req['Age']) ?>y, <?= e($req['Gender']) ?></span>
                   </td>
                   <td class="py-4 px-5">
                     <div class="font-extrabold text-slate-800 text-sm"><?= e($req['TestType']) ?></div>
-                    <span class="text-[11px] text-slate-400 line-clamp-1"><?= e($req['ClinicalNotes'] ?: 'Routine diagnostic audit') ?></span>
+                    <span
+                      class="text-[11px] text-slate-400 line-clamp-1"><?= e($req['ClinicalNotes'] ?: 'Routine diagnostic audit') ?></span>
                   </td>
                   <td class="py-4 px-5">
                     <span class="px-2.5 py-1 text-[10px] rounded-full border <?= get_priority_badge($req['Priority']) ?>">
@@ -313,8 +325,8 @@ require_once __DIR__ . '/../includes/sidebar.php';
                     </span>
                   </td>
                   <td class="py-4 px-5 text-right space-x-1.5">
-                    <a href="?view_req=<?= $req['RequestID'] ?>" 
-                       class="px-3 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 font-bold rounded-xl text-[11px] inline-flex items-center gap-1 shadow-xs transition">
+                    <a href="?view_req=<?= $req['RequestID'] ?>"
+                      class="px-3 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 font-bold rounded-xl text-[11px] inline-flex items-center gap-1 shadow-xs transition">
                       <i data-lucide="eye" class="w-3.5 h-3.5"></i>
                       <span>Results (<?= $req['ResultsCount'] ?>)</span>
                     </a>
@@ -336,9 +348,11 @@ require_once __DIR__ . '/../includes/sidebar.php';
 </div>
 
 <!-- Modal: Create Lab Request -->
-<div id="newLabModal" class="<?= isset($_GET['new']) ? '' : 'hidden' ?> fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-  <div class="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 border border-slate-200 shadow-2xl space-y-5 animate-in fade-in zoom-in-95">
-    
+<div id="newLabModal"
+  class="<?= isset($_GET['new']) ? '' : 'hidden' ?> fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+  <div
+    class="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 border border-slate-200 shadow-2xl space-y-5 animate-in fade-in zoom-in-95">
+
     <div class="flex items-center justify-between border-b border-slate-100 pb-3">
       <div class="flex items-center gap-2.5">
         <div class="w-10 h-10 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
@@ -350,7 +364,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
         </div>
       </div>
       <button type="button" onclick="document.getElementById('newLabModal').classList.add('hidden')"
-              class="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition">
+        class="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition">
         <i data-lucide="x" class="w-5 h-5"></i>
       </button>
     </div>
@@ -359,18 +373,34 @@ require_once __DIR__ . '/../includes/sidebar.php';
       <input type="hidden" name="csrf_token" value="<?= csrf_token() ?>" />
       <input type="hidden" name="action" value="create_lab_request" />
 
-      <!-- Patient Select -->
+      <!-- Patient Search Bar -->
+      <?php
+      $preselectedLabPatient = null;
+      if ($selectedPatientId) {
+        foreach ($doctorPatients as $dp) {
+          if ((int) $dp['PatientID'] === $selectedPatientId) {
+            $preselectedLabPatient = $dp;
+            break;
+          }
+        }
+      }
+      ?>
       <div>
         <label class="block font-bold text-slate-700 mb-1">Select Patient *</label>
-        <select name="patient_id" required 
-                class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500">
-          <option value="">-- Choose Assigned Patient --</option>
-          <?php foreach ($doctorPatients as $dp): ?>
-            <option value="<?= $dp['PatientID'] ?>" <?= ($selectedPatientId === (int)$dp['PatientID']) ? 'selected' : '' ?>>
-              <?= e($dp['FirstName'] . ' ' . $dp['LastName']) ?> (<?= e($dp['PatientCode']) ?>)
-            </option>
-          <?php endforeach; ?>
-        </select>
+        <input type="hidden" name="patient_id" id="labSelectedPatientId"
+          value="<?= $preselectedLabPatient ? (int) $preselectedLabPatient['PatientID'] : '' ?>" required>
+        <div class="relative">
+          <input type="search" id="labPatientSearch" autocomplete="off" required
+            value="<?= $preselectedLabPatient ? e($preselectedLabPatient['FirstName'] . ' ' . $preselectedLabPatient['LastName'] . ' (' . $preselectedLabPatient['PatientCode'] . ')') : '' ?>"
+            placeholder="Search patient name, code, or ID..."
+            class="w-full px-3.5 pl-9 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 top-3 pointer-events-none"></i>
+          <div id="labPatientResults"
+            class="hidden absolute z-30 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-xl max-h-56 overflow-y-auto divide-y divide-slate-100">
+          </div>
+        </div>
+        <p id="labPatientStatus" class="text-[11px] text-slate-400 mt-1">Search by patient name or ID, or click to
+          browse assigned patients.</p>
       </div>
 
       <!-- Searchable Test Type -->
@@ -379,17 +409,21 @@ require_once __DIR__ . '/../includes/sidebar.php';
         <input type="hidden" name="test_type" id="selectedLabTest" required>
         <div class="relative">
           <input type="search" id="labTestSearch" autocomplete="off" required
-                 placeholder="Search test name, code, or category..."
-                 class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500">
-          <div id="labTestResults" class="hidden absolute z-20 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden"></div>
+            placeholder="Search test name, code, or category..."
+            class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <div id="labTestResults"
+            class="hidden absolute z-20 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden">
+          </div>
         </div>
-        <p id="labTestStatus" class="text-[11px] text-slate-400 mt-1" aria-live="polite">Type at least 2 characters to search the active laboratory catalog.</p>
+        <p id="labTestStatus" class="text-[11px] text-slate-400 mt-1" aria-live="polite">Type at least 2 characters to
+          search the active laboratory catalog.</p>
       </div>
 
       <!-- Priority -->
       <div>
         <label class="block font-bold text-slate-700 mb-1">Priority / Urgency *</label>
-        <select name="priority" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800">
+        <select name="priority"
+          class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800">
           <option value="Routine" selected>Routine (Standard 24-48h)</option>
           <option value="Urgent">Urgent (Within 4-6h)</option>
           <option value="STAT">STAT (Immediate Emergency Triage)</option>
@@ -399,17 +433,18 @@ require_once __DIR__ . '/../includes/sidebar.php';
       <!-- Clinical Notes -->
       <div>
         <label class="block font-bold text-slate-700 mb-1">Clinical Indication & Specimen Notes</label>
-        <textarea name="clinical_notes" rows="2" placeholder="e.g. Rule out ischemic ST changes, evaluate sinus tachycardia..." 
-                  class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+        <textarea name="clinical_notes" rows="2"
+          placeholder="e.g. Rule out ischemic ST changes, evaluate sinus tachycardia..."
+          class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
       </div>
 
       <div class="pt-3 border-t border-slate-100 flex items-center justify-end gap-3">
         <button type="button" onclick="document.getElementById('newLabModal').classList.add('hidden')"
-                class="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition">
+          class="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition">
           Cancel
         </button>
-        <button type="submit" 
-                class="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-md shadow-blue-600/20 transition flex items-center gap-1.5">
+        <button type="submit"
+          class="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-md shadow-blue-600/20 transition flex items-center gap-1.5">
           <i data-lucide="check" class="w-4 h-4"></i>
           <span>Issue Lab Request</span>
         </button>
@@ -421,143 +456,237 @@ require_once __DIR__ . '/../includes/sidebar.php';
 
 <!-- Modal: Add Diagnostic Result Value -->
 <?php if ($activeRequest): ?>
-<div id="addResultModal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-  <div class="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 border border-slate-200 shadow-2xl space-y-5 animate-in fade-in zoom-in-95">
-    
-    <div class="flex items-center justify-between border-b border-slate-100 pb-3">
-      <div class="flex items-center gap-2">
-        <div class="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
-          <i data-lucide="check-circle" class="w-5 h-5"></i>
-        </div>
-        <div>
-          <h3 class="text-base font-extrabold text-slate-900 font-display">Record Diagnostic Result</h3>
-          <p class="text-xs text-slate-400"><?= e($activeRequest['TestType']) ?></p>
-        </div>
-      </div>
-      <button type="button" onclick="document.getElementById('addResultModal').classList.add('hidden')"
-              class="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition">
-        <i data-lucide="x" class="w-5 h-5"></i>
-      </button>
-    </div>
+  <div id="addResultModal"
+    class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div
+      class="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 border border-slate-200 shadow-2xl space-y-5 animate-in fade-in zoom-in-95">
 
-    <form method="POST" action="" class="space-y-3 text-xs">
-      <input type="hidden" name="csrf_token" value="<?= csrf_token() ?>" />
-      <input type="hidden" name="action" value="add_lab_result" />
-      <input type="hidden" name="request_id" value="<?= $activeRequest['RequestID'] ?>" />
-      <input type="hidden" name="patient_id" value="<?= $activeRequest['PatientID'] ?>" />
-
-      <div>
-        <label class="block font-bold text-slate-700 mb-1">Parameter / Test Name *</label>
-        <input type="text" name="test_name" value="<?= e($activeRequest['TestType']) ?>" required 
-               class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800" />
-      </div>
-
-      <div class="grid grid-cols-2 gap-3">
-        <div>
-          <label class="block font-bold text-slate-700 mb-1">Result Value *</label>
-          <input type="text" name="result_value" required placeholder="e.g. 14.8, Normal Sinus..." 
-                 class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800" />
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div class="flex items-center gap-2">
+          <div class="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+            <i data-lucide="check-circle" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h3 class="text-base font-extrabold text-slate-900 font-display">Record Diagnostic Result</h3>
+            <p class="text-xs text-slate-400"><?= e($activeRequest['TestType']) ?></p>
+          </div>
         </div>
-        <div>
-          <label class="block font-bold text-slate-700 mb-1">Units</label>
-          <input type="text" name="units" placeholder="e.g. g/dL, mg/dL, bpm..." 
-                 class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-800" />
-        </div>
-      </div>
-
-      <div class="grid grid-cols-2 gap-3">
-        <div>
-          <label class="block font-bold text-slate-700 mb-1">Normal Reference Range</label>
-          <input type="text" name="normal_range" placeholder="e.g. 13.5 - 17.5" value="Within normal limits" 
-                 class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-800" />
-        </div>
-        <div>
-          <label class="block font-bold text-slate-700 mb-1">Interpretation *</label>
-          <select name="interpretation" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800">
-            <option value="Normal" selected>Normal</option>
-            <option value="High">High</option>
-            <option value="Low">Low</option>
-            <option value="Critical">Critical</option>
-            <option value="Abnormal">Abnormal</option>
-          </select>
-        </div>
-      </div>
-
-      <div class="pt-3 border-t border-slate-100 flex items-center justify-end gap-3">
         <button type="button" onclick="document.getElementById('addResultModal').classList.add('hidden')"
-                class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition">
-          Cancel
-        </button>
-        <button type="submit" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-xs transition">
-          Save Result
+          class="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition">
+          <i data-lucide="x" class="w-5 h-5"></i>
         </button>
       </div>
-    </form>
 
+      <form method="POST" action="" class="space-y-3 text-xs">
+        <input type="hidden" name="csrf_token" value="<?= csrf_token() ?>" />
+        <input type="hidden" name="action" value="add_lab_result" />
+        <input type="hidden" name="request_id" value="<?= $activeRequest['RequestID'] ?>" />
+        <input type="hidden" name="patient_id" value="<?= $activeRequest['PatientID'] ?>" />
+
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">Parameter / Test Name *</label>
+          <input type="text" name="test_name" value="<?= e($activeRequest['TestType']) ?>" required
+            class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800" />
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">Result Value *</label>
+            <input type="text" name="result_value" required placeholder="e.g. 14.8, Normal Sinus..."
+              class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800" />
+          </div>
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">Units</label>
+            <input type="text" name="units" placeholder="e.g. g/dL, mg/dL, bpm..."
+              class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-800" />
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">Normal Reference Range</label>
+            <input type="text" name="normal_range" placeholder="e.g. 13.5 - 17.5" value="Within normal limits"
+              class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-800" />
+          </div>
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">Interpretation *</label>
+            <select name="interpretation"
+              class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800">
+              <option value="Normal" selected>Normal</option>
+              <option value="High">High</option>
+              <option value="Low">Low</option>
+              <option value="Critical">Critical</option>
+              <option value="Abnormal">Abnormal</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="pt-3 border-t border-slate-100 flex items-center justify-end gap-3">
+          <button type="button" onclick="document.getElementById('addResultModal').classList.add('hidden')"
+            class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition">
+            Cancel
+          </button>
+          <button type="submit"
+            class="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-xs transition">
+            Save Result
+          </button>
+        </div>
+      </form>
+
+    </div>
   </div>
-</div>
 <?php endif; ?>
 
 <script>
-(() => {
-  const search = document.getElementById('labTestSearch');
-  const hidden = document.getElementById('selectedLabTest');
-  const results = document.getElementById('labTestResults');
-  const status = document.getElementById('labTestStatus');
-  if (!search || !hidden || !results || !status) return;
+  (() => {
+    const assignedLabPatients = <?= json_encode(array_map(function ($p) {
+      return [
+        'PatientID' => (int) $p['PatientID'],
+        'FirstName' => $p['FirstName'] ?? '',
+        'LastName' => $p['LastName'] ?? '',
+        'PatientCode' => $p['PatientCode'] ?? ('TMH-' . $p['PatientID']),
+        'Age' => $p['Age'] ?? '',
+        'Gender' => $p['Gender'] ?? '',
+      ];
+    }, $doctorPatients)) ?>;
 
-  let timer;
-  let controller;
-  search.addEventListener('input', () => {
-    clearTimeout(timer);
-    hidden.value = '';
-    const term = search.value.trim();
-    results.innerHTML = '';
-    results.classList.add('hidden');
-    if (term.length < 2) {
-      status.textContent = 'Type at least 2 characters to search the active laboratory catalog.';
-      return;
-    }
+    const pSearch = document.getElementById('labPatientSearch');
+    const pHidden = document.getElementById('labSelectedPatientId');
+    const pResults = document.getElementById('labPatientResults');
+    const pStatus = document.getElementById('labPatientStatus');
 
-    status.textContent = 'Searching laboratory catalog...';
-    timer = setTimeout(async () => {
-      controller?.abort();
-      controller = new AbortController();
-      try {
-        const response = await fetch('<?= url('/doctor/api/laboratory-tests') ?>?q=' + encodeURIComponent(term), { signal: controller.signal, headers: { Accept: 'application/json' } });
-        const payload = await response.json();
-        if (!response.ok || !payload.success) throw new Error('Search failed');
-        if (!payload.data.length) {
-          status.textContent = 'No matching active laboratory tests found.';
+    if (pSearch && pHidden && pResults) {
+      let pTimer;
+      function renderPatients(items) {
+        pResults.innerHTML = '';
+        if (!items || !items.length) {
+          pResults.innerHTML = '<div class="px-3.5 py-2.5 text-xs text-slate-400 text-center font-medium">No matching patients found.</div>';
+          pResults.classList.remove('hidden');
           return;
         }
-        payload.data.forEach(test => {
-          const option = document.createElement('button');
-          option.type = 'button';
-          option.className = 'w-full text-left px-3.5 py-2.5 hover:bg-blue-50 border-b border-slate-100 last:border-b-0';
-          option.innerHTML = '<span class="block font-bold text-slate-800"></span><span class="block text-[10px] text-slate-400"></span>';
-          option.children[0].textContent = test.TestName;
-          option.children[1].textContent = [test.TestCode, test.Category, test.SpecimenType].filter(Boolean).join(' • ');
-          option.addEventListener('click', () => {
-            search.value = test.TestName;
-            hidden.value = test.TestName;
-            results.classList.add('hidden');
-            status.textContent = 'Selected from the active laboratory catalog.';
+        items.slice(0, 10).forEach(p => {
+          const id = p.PatientID || p.id;
+          const fullName = p.FirstName ? `${p.FirstName} ${p.LastName}` : (p.name || 'Patient');
+          const code = p.PatientCode || p.patient_code || p.code || `TMH-${id}`;
+          const meta = [code, p.Age ? `${p.Age}y` : '', p.Gender || p.gender || ''].filter(Boolean).join(' • ');
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'w-full text-left px-3.5 py-2.5 hover:bg-blue-50 flex items-center justify-between transition';
+          btn.innerHTML = `
+          <div>
+            <span class="block font-bold text-slate-800 text-xs">${fullName}</span>
+            <span class="block text-[10px] text-slate-400 font-mono">${meta}</span>
+          </div>
+          <span class="text-[10px] font-bold text-blue-600">Select →</span>
+        `;
+          btn.addEventListener('click', () => {
+            pSearch.value = `${fullName} (${code})`;
+            pHidden.value = id;
+            pResults.classList.add('hidden');
+            if (pStatus) pStatus.textContent = `Selected patient: ${fullName} (${code})`;
           });
-          results.appendChild(option);
+          pResults.appendChild(btn);
         });
-        results.classList.remove('hidden');
-        status.textContent = 'Select a matching laboratory test.';
-      } catch (error) {
-        if (error.name !== 'AbortError') status.textContent = 'Laboratory catalog search is temporarily unavailable.';
+        pResults.classList.remove('hidden');
       }
-    }, 250);
-  });
 
-  document.addEventListener('click', event => {
-    if (!search.contains(event.target) && !results.contains(event.target)) results.classList.add('hidden');
-  });
-})();
+      pSearch.addEventListener('focus', () => {
+        if (!pSearch.value.trim()) renderPatients(assignedLabPatients);
+      });
+
+      pSearch.addEventListener('input', () => {
+        clearTimeout(pTimer);
+        pHidden.value = '';
+        const q = pSearch.value.trim().toLowerCase();
+        if (!q) {
+          renderPatients(assignedLabPatients);
+          return;
+        }
+        const localMatches = assignedLabPatients.filter(p =>
+          (`${p.FirstName} ${p.LastName}`).toLowerCase().includes(q) ||
+          String(p.PatientCode).toLowerCase().includes(q) ||
+          String(p.PatientID).includes(q)
+        );
+        if (localMatches.length > 0) renderPatients(localMatches);
+
+        pTimer = setTimeout(async () => {
+          try {
+            const res = await fetch('<?= url('/doctor/api/prescription-patients') ?>?q=' + encodeURIComponent(q), { headers: { Accept: 'application/json' } });
+            const payload = await res.json();
+            if (res.ok && payload.success && payload.data && payload.data.length > 0) {
+              renderPatients(payload.data);
+            } else if (localMatches.length === 0) {
+              renderPatients([]);
+            }
+          } catch (e) {
+            if (localMatches.length === 0) renderPatients([]);
+          }
+        }, 220);
+      });
+
+      document.addEventListener('click', (e) => {
+        if (!pSearch.contains(e.target) && !pResults.contains(e.target)) pResults.classList.add('hidden');
+      });
+    }
+
+    const search = document.getElementById('labTestSearch');
+    const hidden = document.getElementById('selectedLabTest');
+    const results = document.getElementById('labTestResults');
+    const status = document.getElementById('labTestStatus');
+    if (!search || !hidden || !results || !status) return;
+
+    let timer;
+    let controller;
+    search.addEventListener('input', () => {
+      clearTimeout(timer);
+      hidden.value = '';
+      const term = search.value.trim();
+      results.innerHTML = '';
+      results.classList.add('hidden');
+      if (term.length < 2) {
+        status.textContent = 'Type at least 2 characters to search the active laboratory catalog.';
+        return;
+      }
+
+      status.textContent = 'Searching laboratory catalog...';
+      timer = setTimeout(async () => {
+        controller?.abort();
+        controller = new AbortController();
+        try {
+          const response = await fetch('<?= url('/doctor/api/laboratory-tests') ?>?q=' + encodeURIComponent(term), { signal: controller.signal, headers: { Accept: 'application/json' } });
+          const payload = await response.json();
+          if (!response.ok || !payload.success) throw new Error('Search failed');
+          if (!payload.data.length) {
+            status.textContent = 'No matching active laboratory tests found.';
+            return;
+          }
+          payload.data.forEach(test => {
+            const option = document.createElement('button');
+            option.type = 'button';
+            option.className = 'w-full text-left px-3.5 py-2.5 hover:bg-blue-50 border-b border-slate-100 last:border-b-0';
+            option.innerHTML = '<span class="block font-bold text-slate-800"></span><span class="block text-[10px] text-slate-400"></span>';
+            option.children[0].textContent = test.TestName;
+            option.children[1].textContent = [test.TestCode, test.Category, test.SpecimenType].filter(Boolean).join(' • ');
+            option.addEventListener('click', () => {
+              search.value = test.TestName;
+              hidden.value = test.TestName;
+              results.classList.add('hidden');
+              status.textContent = 'Selected from the active laboratory catalog.';
+            });
+            results.appendChild(option);
+          });
+          results.classList.remove('hidden');
+          status.textContent = 'Select a matching laboratory test.';
+        } catch (error) {
+          if (error.name !== 'AbortError') status.textContent = 'Laboratory catalog search is temporarily unavailable.';
+        }
+      }, 250);
+    });
+
+    document.addEventListener('click', event => {
+      if (!search.contains(event.target) && !results.contains(event.target)) results.classList.add('hidden');
+    });
+  })();
 </script>
 
 <?php require_once __DIR__ . '/../includes/footer.php'; ?>

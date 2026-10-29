@@ -749,7 +749,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
 
             <div class="pt-4 mt-4 border-t border-slate-100 flex items-center justify-between text-xs">
               <span class="text-slate-400 font-mono text-[11px]"><?= format_date($res['date']) ?></span>
-              <button onclick="openGenerateReportModal()" class="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl transition shadow-xs flex items-center gap-1.5">
+              <button onclick="openGenerateReportModal('<?= e($res['result_id']) ?>')" class="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl transition shadow-xs flex items-center gap-1.5">
                 <i data-lucide="printer" class="w-3.5 h-3.5"></i>
                 <span>Print Report</span>
               </button>

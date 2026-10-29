@@ -344,18 +344,30 @@ require_once __DIR__ . '/../includes/sidebar.php';
       <input type="hidden" name="csrf_token" value="<?= csrf_token() ?>" />
       <input type="hidden" name="action" value="create_certificate" />
 
-      <!-- Patient Select -->
+      <!-- Patient Search Bar -->
+      <?php
+        $preselectedCertPatient = null;
+        if ($selectedPatientId) {
+            foreach ($doctorPatients as $dp) {
+                if ((int)$dp['PatientID'] === $selectedPatientId) {
+                    $preselectedCertPatient = $dp;
+                    break;
+                }
+            }
+        }
+      ?>
       <div>
         <label class="block font-bold text-slate-700 mb-1">Select Patient *</label>
-        <select name="patient_id" required 
-                class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500">
-          <option value="">-- Choose Assigned Patient --</option>
-          <?php foreach ($doctorPatients as $dp): ?>
-            <option value="<?= $dp['PatientID'] ?>" <?= ($selectedPatientId === (int)$dp['PatientID']) ? 'selected' : '' ?>>
-              <?= e($dp['FirstName'] . ' ' . $dp['LastName']) ?> (<?= e($dp['PatientCode']) ?>)
-            </option>
-          <?php endforeach; ?>
-        </select>
+        <input type="hidden" name="patient_id" id="certSelectedPatientId" value="<?= $preselectedCertPatient ? (int)$preselectedCertPatient['PatientID'] : '' ?>" required>
+        <div class="relative">
+          <input type="search" id="certPatientSearch" autocomplete="off" required
+                 value="<?= $preselectedCertPatient ? e($preselectedCertPatient['FirstName'] . ' ' . $preselectedCertPatient['LastName'] . ' (' . $preselectedCertPatient['PatientCode'] . ')') : '' ?>"
+                 placeholder="Search patient name, code, or ID..."
+                 class="w-full px-3.5 pl-9 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 top-3 pointer-events-none"></i>
+          <div id="certPatientResults" class="hidden absolute z-30 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-xl max-h-56 overflow-y-auto divide-y divide-slate-100"></div>
+        </div>
+        <p id="certPatientStatus" class="text-[11px] text-slate-400 mt-1">Search by patient name or ID, or click to browse assigned patients.</p>
       </div>
 
       <!-- Certificate Type -->
@@ -460,18 +472,18 @@ require_once __DIR__ . '/../includes/sidebar.php';
       <input type="hidden" name="csrf_token" value="<?= csrf_token() ?>" />
       <input type="hidden" name="action" value="create_allergy" />
 
-      <!-- Patient Select -->
+      <!-- Patient Search Bar -->
       <div>
-        <label class="block font-bold text-slate-700 mb-1">Patient *</label>
-        <select name="patient_id" required 
-                class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800">
-          <option value="">-- Choose Patient --</option>
-          <?php foreach ($doctorPatients as $dp): ?>
-            <option value="<?= $dp['PatientID'] ?>" <?= ($selectedPatientId === (int)$dp['PatientID']) ? 'selected' : '' ?>>
-              <?= e($dp['FirstName'] . ' ' . $dp['LastName']) ?> (<?= e($dp['PatientCode']) ?>)
-            </option>
-          <?php endforeach; ?>
-        </select>
+        <label class="block font-bold text-slate-700 mb-1">Select Patient *</label>
+        <input type="hidden" name="patient_id" id="allergySelectedPatientId" value="<?= $preselectedCertPatient ? (int)$preselectedCertPatient['PatientID'] : '' ?>" required>
+        <div class="relative">
+          <input type="search" id="allergyPatientSearch" autocomplete="off" required
+                 value="<?= $preselectedCertPatient ? e($preselectedCertPatient['FirstName'] . ' ' . $preselectedCertPatient['LastName'] . ' (' . $preselectedCertPatient['PatientCode'] . ')') : '' ?>"
+                 placeholder="Search patient name, code, or ID..."
+                 class="w-full px-3.5 pl-9 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 top-3 pointer-events-none"></i>
+          <div id="allergyPatientResults" class="hidden absolute z-30 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-xl max-h-56 overflow-y-auto divide-y divide-slate-100"></div>
+        </div>
       </div>
 
       <!-- Allergen -->
@@ -527,6 +539,109 @@ require_once __DIR__ . '/../includes/sidebar.php';
 </div>
 
 <script>
+const ASSIGNED_CERT_PATIENTS = <?= json_encode(array_map(function($p) {
+    return [
+        'PatientID' => (int)$p['PatientID'],
+        'FirstName' => $p['FirstName'] ?? '',
+        'LastName' => $p['LastName'] ?? '',
+        'PatientCode' => $p['PatientCode'] ?? ('TMH-' . $p['PatientID']),
+        'Age' => $p['Age'] ?? '',
+        'Gender' => $p['Gender'] ?? '',
+    ];
+}, $doctorPatients)) ?>;
+
+function initPatientSearchWidget(searchId, hiddenId, resultsId, statusId) {
+  const search = document.getElementById(searchId);
+  const hidden = document.getElementById(hiddenId);
+  const results = document.getElementById(resultsId);
+  const status = statusId ? document.getElementById(statusId) : null;
+  if (!search || !hidden || !results) return;
+
+  let timer = null;
+
+  function renderItems(items) {
+    results.innerHTML = '';
+    if (!items || !items.length) {
+      results.innerHTML = '<div class="px-3.5 py-2.5 text-xs text-slate-400 text-center font-medium">No matching patients found.</div>';
+      results.classList.remove('hidden');
+      return;
+    }
+    items.slice(0, 10).forEach(p => {
+      const id = p.PatientID || p.id;
+      const fullName = p.FirstName ? `${p.FirstName} ${p.LastName}` : (p.name || 'Patient');
+      const code = p.PatientCode || p.patient_code || p.code || `TMH-${id}`;
+      const meta = [code, p.Age ? `${p.Age}y` : '', p.Gender || p.gender || ''].filter(Boolean).join(' • ');
+
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'w-full text-left px-3.5 py-2.5 hover:bg-blue-50 flex items-center justify-between transition';
+      btn.innerHTML = `
+        <div>
+          <span class="block font-bold text-slate-800 text-xs">${fullName}</span>
+          <span class="block text-[10px] text-slate-400 font-mono">${meta}</span>
+        </div>
+        <span class="text-[10px] font-bold text-blue-600">Select →</span>
+      `;
+      btn.addEventListener('click', () => {
+        search.value = `${fullName} (${code})`;
+        hidden.value = id;
+        results.classList.add('hidden');
+        if (status) status.textContent = `Selected patient: ${fullName} (${code})`;
+      });
+      results.appendChild(btn);
+    });
+    results.classList.remove('hidden');
+  }
+
+  search.addEventListener('focus', () => {
+    const q = search.value.trim().toLowerCase();
+    if (!q) {
+      renderItems(ASSIGNED_CERT_PATIENTS);
+    }
+  });
+
+  search.addEventListener('input', () => {
+    clearTimeout(timer);
+    hidden.value = '';
+    const q = search.value.trim().toLowerCase();
+    if (!q) {
+      renderItems(ASSIGNED_CERT_PATIENTS);
+      return;
+    }
+
+    const localMatches = ASSIGNED_CERT_PATIENTS.filter(p =>
+      (`${p.FirstName} ${p.LastName}`).toLowerCase().includes(q) ||
+      String(p.PatientCode).toLowerCase().includes(q) ||
+      String(p.PatientID).includes(q)
+    );
+    if (localMatches.length > 0) {
+      renderItems(localMatches);
+    }
+
+    timer = setTimeout(async () => {
+      try {
+        const res = await fetch('<?= url('/doctor/api/prescription-patients') ?>?q=' + encodeURIComponent(q), {
+          headers: { 'Accept': 'application/json' }
+        });
+        const payload = await res.json();
+        if (res.ok && payload.success && payload.data && payload.data.length > 0) {
+          renderItems(payload.data);
+        } else if (localMatches.length === 0) {
+          renderItems([]);
+        }
+      } catch (e) {
+        if (localMatches.length === 0) renderItems([]);
+      }
+    }, 220);
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!search.contains(e.target) && !results.contains(e.target)) {
+      results.classList.add('hidden');
+    }
+  });
+}
+
 function setCertDiagnosis(val) {
   const input = document.getElementById('cert-diagnosis-input');
   if (input) input.value = val;
@@ -535,6 +650,9 @@ function setCertDiagnosis(val) {
 }
 
 document.addEventListener('DOMContentLoaded', function() {
+  initPatientSearchWidget('certPatientSearch', 'certSelectedPatientId', 'certPatientResults', 'certPatientStatus');
+  initPatientSearchWidget('allergyPatientSearch', 'allergySelectedPatientId', 'allergyPatientResults', null);
+
   const certDiagInput = document.getElementById('cert-diagnosis-input');
   const certDiagBox = document.getElementById('cert-diagnosis-results');
   let certTimer = null;

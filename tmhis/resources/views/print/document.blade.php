@@ -1695,5 +1695,13 @@
     </div>
   </div>
 
+  <script>
+    window.addEventListener('load', function() {
+      var params = new URLSearchParams(window.location.search);
+      if (params.get('autoprint') === '1' || params.get('print') === '1' || params.get('full') === '1') {
+        setTimeout(function() { window.print(); }, 350);
+      }
+    });
+  </script>
 </body>
 </html>
