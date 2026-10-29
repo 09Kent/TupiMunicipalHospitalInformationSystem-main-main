@@ -46,7 +46,8 @@ class PossibleCondition
 
     public function saveComplaintConditions(int $complaintId, array $conditionIdsOrNames): void
     {
-        if (empty($conditionIdsOrNames)) return;
+        if (empty($conditionIdsOrNames))
+            return;
 
         // Clear existing
         $stmtDel = $this->db->prepare("DELETE FROM complaint_conditions WHERE ComplaintID = :cid");
@@ -55,10 +56,13 @@ class PossibleCondition
         $ids = [];
         $names = [];
         foreach ($conditionIdsOrNames as $item) {
+            if (is_array($item)) {
+                $item = $item['ConditionID'] ?? $item['id'] ?? $item['ConditionName'] ?? $item['name'] ?? reset($item);
+            }
             if (is_numeric($item)) {
-                $ids[] = (int)$item;
-            } else {
-                $trimmed = trim((string)$item);
+                $ids[] = (int) $item;
+            } elseif (is_scalar($item)) {
+                $trimmed = trim((string) $item);
                 if ($trimmed !== '') {
                     $names[] = $trimmed;
                 }
@@ -71,7 +75,7 @@ class PossibleCondition
             $stmtFind->execute($names);
             $foundIds = $stmtFind->fetchAll(PDO::FETCH_COLUMN);
             foreach ($foundIds as $fId) {
-                $ids[] = (int)$fId;
+                $ids[] = (int) $fId;
             }
         }
 

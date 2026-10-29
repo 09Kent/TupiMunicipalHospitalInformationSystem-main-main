@@ -34,7 +34,7 @@ class Appointment
         }
         $stmt = $this->db->prepare($sql);
         $params = [
-            ':doc_id'   => $doctorId,
+            ':doc_id' => $doctorId,
             ':app_date' => $date,
             ':app_time' => $time
         ];
@@ -42,14 +42,14 @@ class Appointment
             $params[':exclude_id'] = $excludeAppId;
         }
         $stmt->execute($params);
-        return (int)$stmt->fetchColumn() > 0;
+        return (int) $stmt->fetchColumn() > 0;
     }
 
     public function create(array $data): int
     {
-        $doctorId = (int)($data['DoctorID'] ?? 0);
-        $appDate  = $data['AppointmentDate'] ?? date('Y-m-d');
-        $appTime  = $data['AppointmentTime'] ?? '02:30 PM';
+        $doctorId = (int) ($data['DoctorID'] ?? 0);
+        $appDate = $data['AppointmentDate'] ?? date('Y-m-d');
+        $appTime = $data['AppointmentTime'] ?? '02:30 PM';
 
         if ($doctorId && $this->checkConflict($doctorId, $appDate, $appTime)) {
             // Auto-advance slot to next available 15-minute interval
@@ -76,29 +76,35 @@ class Appointment
         ");
 
         $stmt->execute([
-            'pid'        => $data['PatientID'],
-            'doc_id'     => $data['DoctorID'],
-            'app_date'   => $data['AppointmentDate'] ?? date('Y-m-d'),
-            'app_time'   => $data['AppointmentTime'] ?? '02:30 PM',
-            'type'       => $data['ConsultationType'] ?? 'In-Person Consultation',
-            'reason'     => trim($data['Reason'] ?? 'General Consultation'),
-            'prio'       => $data['Priority'] ?? 'Normal',
-            'notes'      => !empty($data['Notes']) ? trim($data['Notes']) : null,
-            'status'     => $data['Status'] ?? 'Scheduled',
+            'pid' => $data['PatientID'],
+            'doc_id' => $data['DoctorID'],
+            'app_date' => $data['AppointmentDate'] ?? date('Y-m-d'),
+            'app_time' => $data['AppointmentTime'] ?? '02:30 PM',
+            'type' => $data['ConsultationType'] ?? 'In-Person Consultation',
+            'reason' => trim($data['Reason'] ?? 'General Consultation'),
+            'prio' => $data['Priority'] ?? 'Normal',
+            'notes' => !empty($data['Notes']) ? trim($data['Notes']) : null,
+            'status' => $data['Status'] ?? 'Scheduled',
             'created_by' => $data['CreatedBy'] ?? 1
         ]);
 
-        $appId = (int)$this->db->lastInsertId();
+        $appId = (int) $this->db->lastInsertId();
 
-        $this->createConsultationCharge($appId, (int)$data['PatientID'], $doctorId);
+        try {
+            $this->createConsultationCharge($appId, (int) $data['PatientID'], $doctorId);
+        } catch (\Throwable $ce) {
+        }
 
         // Log to Patient History
-        $this->historyModel->log(
-            (int)$data['PatientID'],
-            'Consultation Scheduled',
-            "Consultation appointment #{$appId} booked for {$data['AppointmentDate']} at {$data['AppointmentTime']}.",
-            $data['CreatedBy'] ?? 1
-        );
+        try {
+            $this->historyModel->log(
+                (int) $data['PatientID'],
+                'Consultation Scheduled',
+                "Consultation appointment #{$appId} booked for {$data['AppointmentDate']} at {$data['AppointmentTime']}.",
+                $data['CreatedBy'] ?? 1
+            );
+        } catch (\Throwable $he) {
+        }
 
         return $appId;
     }
@@ -118,7 +124,7 @@ class Appointment
             return;
         }
 
-        $feeCode = ((int)($doctorRecord['SpecialtyID'] ?? 0) === 1) ? 'FEE-CON-GP' : 'FEE-CON-SP';
+        $feeCode = ((int) ($doctorRecord['SpecialtyID'] ?? 0) === 1) ? 'FEE-CON-GP' : 'FEE-CON-SP';
         $fee = $this->db->prepare("SELECT FeeID, ServiceName, StandardRate FROM service_fees WHERE ServiceCode = :code AND Category = 'Consultation' AND Status = 'Active' LIMIT 1");
         $fee->execute([':code' => $feeCode]);
         $feeRecord = $fee->fetch(PDO::FETCH_ASSOC);
@@ -126,7 +132,7 @@ class Appointment
             return;
         }
 
-        $rate = (float)$feeRecord['StandardRate'];
+        $rate = (float) $feeRecord['StandardRate'];
         $charge = $this->db->prepare("
             INSERT INTO billing_charges (PatientID, AppointmentID, FeeID, ChargeCategory, ItemDescription, Quantity, UnitPrice, SubTotal, DiscountAmount, NetAmount, BillingStatus, source_type, source_id, CreatedBy, CreatedAt)
             VALUES (:patient_id, :appointment_id, :fee_id, 'Consultation', :description, 1, :unit_price, :subtotal, 0, :net_amount, 'Unbilled', 'consultation', :source_id, 'Registration', NOW())
@@ -134,7 +140,7 @@ class Appointment
         $charge->execute([
             ':patient_id' => $patientId,
             ':appointment_id' => $appointmentId,
-            ':fee_id' => (int)$feeRecord['FeeID'],
+            ':fee_id' => (int) $feeRecord['FeeID'],
             ':description' => $feeRecord['ServiceName'] . ' - Dr. ' . $doctorRecord['FirstName'] . ' ' . $doctorRecord['LastName'],
             ':unit_price' => $rate,
             ':subtotal' => $rate,
@@ -243,13 +249,14 @@ class Appointment
 
         $stmt = $this->db->prepare($sql);
         $stmt->execute($params);
-        return (int)$stmt->fetchColumn();
+        return (int) $stmt->fetchColumn();
     }
 
     public function reschedule(int $id, string $newDate, string $newTime, ?int $newDoctorId = null, string $reason = '', ?int $userId = 1): bool
     {
         $app = $this->getById($id);
-        if (!$app) return false;
+        if (!$app)
+            return false;
 
         $docId = $newDoctorId ?: $app['DoctorID'];
 
@@ -264,16 +271,16 @@ class Appointment
         ");
 
         $success = $stmt->execute([
-            'id'     => $id,
-            'date'   => $newDate,
-            'time'   => $newTime,
-            'doc'    => $docId,
+            'id' => $id,
+            'date' => $newDate,
+            'time' => $newTime,
+            'doc' => $docId,
             'reason' => $reason
         ]);
 
         if ($success) {
             $this->historyModel->log(
-                (int)$app['PatientID'],
+                (int) $app['PatientID'],
                 'Consultation Rescheduled',
                 "Appointment #{$id} rescheduled to {$newDate} at {$newTime}. Reason: {$reason}",
                 $userId
@@ -286,14 +293,15 @@ class Appointment
     public function updateStatus(int $id, string $status, ?int $userId = 1): bool
     {
         $app = $this->getById($id);
-        if (!$app) return false;
+        if (!$app)
+            return false;
 
         $stmt = $this->db->prepare("UPDATE appointments SET Status = :status, UpdatedAt = NOW() WHERE AppointmentID = :id");
         $success = $stmt->execute(['id' => $id, 'status' => $status]);
 
         if ($success) {
             $this->historyModel->log(
-                (int)$app['PatientID'],
+                (int) $app['PatientID'],
                 'Appointment Status Updated',
                 "Consultation appointment #{$id} status changed to '{$status}'.",
                 $userId
@@ -306,7 +314,8 @@ class Appointment
     public function cancel(int $id, string $reason = '', ?int $userId = 1): bool
     {
         $app = $this->getById($id);
-        if (!$app) return false;
+        if (!$app)
+            return false;
 
         $stmt = $this->db->prepare("
             UPDATE appointments SET 
@@ -319,7 +328,7 @@ class Appointment
 
         if ($success) {
             $this->historyModel->log(
-                (int)$app['PatientID'],
+                (int) $app['PatientID'],
                 'Consultation Cancelled',
                 "Appointment #{$id} was cancelled. Reason: {$reason}",
                 $userId
@@ -331,7 +340,7 @@ class Appointment
 
     public function getAppointments(string $date = '', string $status = '', int $doctorId = 0): array
     {
-        $docParam = $doctorId > 0 ? (string)$doctorId : '';
+        $docParam = $doctorId > 0 ? (string) $doctorId : '';
         return $this->getPaginated(100, 0, $date, $docParam, $status);
     }
 
@@ -347,10 +356,10 @@ class Appointment
         $stmt->execute([':d' => $d]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
         return [
-            'total' => (int)($row['total'] ?? 0),
-            'scheduled' => (int)($row['scheduled'] ?? 0),
-            'completed' => (int)($row['completed'] ?? 0),
-            'cancelled' => (int)($row['cancelled'] ?? 0),
+            'total' => (int) ($row['total'] ?? 0),
+            'scheduled' => (int) ($row['scheduled'] ?? 0),
+            'completed' => (int) ($row['completed'] ?? 0),
+            'cancelled' => (int) ($row['cancelled'] ?? 0),
         ];
     }
 }

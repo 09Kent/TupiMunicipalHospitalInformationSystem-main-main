@@ -36,13 +36,22 @@ class Patient
         $last = $stmt->fetchColumn();
 
         if ($last) {
-            $num = (int)substr($last, strlen($prefix));
-            $nextNum = str_pad((string)($num + 1), 4, '0', STR_PAD_LEFT);
+            $num = (int) substr($last, strlen($prefix));
+            $nextNum = str_pad((string) ($num + 1), 4, '0', STR_PAD_LEFT);
         } else {
             $nextNum = '0001';
         }
 
         return "{$prefix}{$nextNum}";
+    }
+
+    private function str(mixed $val): string
+    {
+        if (is_array($val)) {
+            $scalars = array_filter($val, 'is_scalar');
+            return $scalars ? trim(implode(', ', array_map('strval', $scalars))) : '';
+        }
+        return is_scalar($val) ? trim((string) $val) : '';
     }
 
     /**
@@ -51,65 +60,106 @@ class Patient
     public function create(array $data): int
     {
         $patientCode = $data['PatientCode'] ?? $this->generatePatientCode();
-        
+
         // Auto compute age if not supplied
         $age = $data['Age'] ?? 0;
-        if (!empty($data['DateOfBirth'])) {
-            $dob = new DateTime($data['DateOfBirth']);
-            $today = new DateTime();
-            $age = $today->diff($dob)->y;
+        if (!empty($data['DateOfBirth']) && is_string($data['DateOfBirth'])) {
+            try {
+                $dob = new DateTime($data['DateOfBirth']);
+                $today = new DateTime();
+                $age = $today->diff($dob)->y;
+            } catch (\Throwable $e) {
+            }
         }
 
-        $philhealth = !empty($data['PhilHealthNumber']) 
-            ? trim($data['PhilHealthNumber']) 
-            : (!empty($data['philhealth_number']) ? trim($data['philhealth_number']) : null);
+        $philhealthRaw = $data['PhilHealthNumber'] ?? $data['philhealth_number'] ?? null;
+        $philhealth = $this->str($philhealthRaw) ?: null;
 
-        $philhealthType = !empty($data['PhilHealthMemberType'])
-            ? trim($data['PhilHealthMemberType'])
-            : (!empty($data['philhealth_type']) ? trim($data['philhealth_type']) : (!empty($philhealth) ? 'Personal' : 'None'));
+        $philhealthTypeRaw = $data['PhilHealthMemberType'] ?? $data['philhealth_type'] ?? null;
+        $philhealthType = $this->str($philhealthTypeRaw) ?: (!empty($philhealth) ? 'Personal' : 'None');
 
-        $philhealthName = !empty($data['PhilHealthMemberName'])
-            ? trim($data['PhilHealthMemberName'])
-            : (!empty($data['philhealth_name']) ? trim($data['philhealth_name']) : null);
+        $philhealthNameRaw = $data['PhilHealthMemberName'] ?? $data['philhealth_name'] ?? null;
+        $philhealthName = $this->str($philhealthNameRaw) ?: null;
 
-        $stmt = $this->db->prepare("
-            INSERT INTO patients (
-                PatientCode, FirstName, MiddleName, LastName, 
-                DateOfBirth, Age, Gender, CivilStatus, 
-                ContactNumber, Email, Address, BloodType, 
-                PhilHealthNumber, PhilHealthMemberType, PhilHealthMemberName,
-                PatientCategory, Status, RegisteredBy, CreatedAt
-            ) VALUES (
-                :code, :first, :middle, :last, 
-                :dob, :age, :gender, :civil, 
-                :phone, :email, :address, :blood, 
-                :philhealth, :philhealth_type, :philhealth_name,
-                :category, :status, :reg_by, NOW()
-            )
-        ");
+        $baseParams = [
+            'code' => $patientCode,
+            'first' => $this->str($data['FirstName'] ?? ''),
+            'middle' => $this->str($data['MiddleName'] ?? '') ?: null,
+            'last' => $this->str($data['LastName'] ?? ''),
+            'dob' => $this->str($data['DateOfBirth'] ?? '') ?: date('Y-m-d'),
+            'age' => (int) $age,
+            'gender' => $this->str($data['Gender'] ?? 'Male') ?: 'Male',
+            'civil' => $this->str($data['CivilStatus'] ?? 'Single') ?: 'Single',
+            'phone' => $this->str($data['ContactNumber'] ?? ''),
+            'email' => $this->str($data['Email'] ?? ''),
+            'address' => $this->str($data['Address'] ?? ''),
+            'blood' => $this->str($data['BloodType'] ?? 'Unknown') ?: 'Unknown',
+            'category' => $this->str($data['PatientCategory'] ?? 'Outpatient') ?: 'Outpatient',
+            'status' => $this->str($data['Status'] ?? 'Active') ?: 'Active',
+            'reg_by' => $data['RegisteredBy'] ?? 1
+        ];
 
-        $stmt->execute([
-            'code'            => $patientCode,
-            'first'           => trim($data['FirstName']),
-            'middle'          => !empty($data['MiddleName']) ? trim($data['MiddleName']) : null,
-            'last'            => trim($data['LastName']),
-            'dob'             => $data['DateOfBirth'],
-            'age'             => $age,
-            'gender'          => $data['Gender'],
-            'civil'           => $data['CivilStatus'] ?? 'Single',
-            'phone'           => trim($data['ContactNumber']),
-            'email'           => trim($data['Email']),
-            'address'         => trim($data['Address']),
-            'blood'           => $data['BloodType'] ?? 'Unknown',
-            'philhealth'      => $philhealth,
-            'philhealth_type' => $philhealthType,
-            'philhealth_name' => $philhealthName,
-            'category'        => $data['PatientCategory'] ?? 'Outpatient',
-            'status'          => $data['Status'] ?? 'Active',
-            'reg_by'          => $data['RegisteredBy'] ?? 1
-        ]);
+        try {
+            $stmt = $this->db->prepare("
+                INSERT INTO patients (
+                    PatientCode, FirstName, MiddleName, LastName, 
+                    DateOfBirth, Age, Gender, CivilStatus, 
+                    ContactNumber, Email, Address, BloodType, 
+                    PhilHealthNumber, PhilHealthMemberType, PhilHealthMemberName,
+                    PatientCategory, Status, RegisteredBy, CreatedAt
+                ) VALUES (
+                    :code, :first, :middle, :last, 
+                    :dob, :age, :gender, :civil, 
+                    :phone, :email, :address, :blood, 
+                    :philhealth, :philhealth_type, :philhealth_name,
+                    :category, :status, :reg_by, NOW()
+                )
+            ");
 
-        return (int)$this->db->lastInsertId();
+            $stmt->execute(array_merge($baseParams, [
+                'philhealth' => $philhealth,
+                'philhealth_type' => $philhealthType,
+                'philhealth_name' => $philhealthName,
+            ]));
+        } catch (\Throwable $e) {
+            try {
+                $stmt = $this->db->prepare("
+                    INSERT INTO patients (
+                        PatientCode, FirstName, MiddleName, LastName, 
+                        DateOfBirth, Age, Gender, CivilStatus, 
+                        ContactNumber, Email, Address, BloodType, 
+                        PhilHealthNumber,
+                        PatientCategory, Status, RegisteredBy, CreatedAt
+                    ) VALUES (
+                        :code, :first, :middle, :last, 
+                        :dob, :age, :gender, :civil, 
+                        :phone, :email, :address, :blood, 
+                        :philhealth,
+                        :category, :status, :reg_by, NOW()
+                    )
+                ");
+                $stmt->execute(array_merge($baseParams, [
+                    'philhealth' => $philhealth,
+                ]));
+            } catch (\Throwable $e2) {
+                $stmt = $this->db->prepare("
+                    INSERT INTO patients (
+                        PatientCode, FirstName, MiddleName, LastName, 
+                        DateOfBirth, Age, Gender, CivilStatus, 
+                        ContactNumber, Email, Address, BloodType, 
+                        PatientCategory, Status, RegisteredBy, CreatedAt
+                    ) VALUES (
+                        :code, :first, :middle, :last, 
+                        :dob, :age, :gender, :civil, 
+                        :phone, :email, :address, :blood, 
+                        :category, :status, :reg_by, NOW()
+                    )
+                ");
+                $stmt->execute($baseParams);
+            }
+        }
+
+        return (int) $this->db->lastInsertId();
     }
 
     /**
@@ -162,59 +212,75 @@ class Patient
             }
         }
 
-        $stmt = $this->db->prepare("
-            UPDATE patients SET
-                FirstName            = :first,
-                MiddleName           = :middle,
-                LastName             = :last,
-                DateOfBirth          = :dob,
-                Age                  = :age,
-                Gender               = :gender,
-                CivilStatus          = :civil,
-                ContactNumber        = :phone,
-                Email                = :email,
-                Address              = :address,
-                BloodType            = :blood,
-                PhilHealthNumber     = :philhealth,
-                PhilHealthMemberType = :philhealth_type,
-                PhilHealthMemberName = :philhealth_name,
-                PatientCategory      = :category,
-                Status               = :status,
-                UpdatedAt            = NOW()
-            WHERE PatientID = :id
-        ");
+        $philhealth = $this->str($merged['PhilHealthNumber'] ?? $merged['philhealth_number'] ?? null) ?: null;
+        $philhealthType = $this->str($merged['PhilHealthMemberType'] ?? $merged['philhealth_type'] ?? ($existing['PhilHealthMemberType'] ?? 'None')) ?: 'None';
+        $philhealthName = $this->str($merged['PhilHealthMemberName'] ?? $merged['philhealth_name'] ?? ($existing['PhilHealthMemberName'] ?? null)) ?: null;
 
-        $philhealth = !empty($merged['PhilHealthNumber']) 
-            ? trim($merged['PhilHealthNumber']) 
-            : (!empty($merged['philhealth_number']) ? trim($merged['philhealth_number']) : null);
+        $baseParams = [
+            'id' => $id,
+            'first' => $this->str($merged['FirstName'] ?? ''),
+            'middle' => $this->str($merged['MiddleName'] ?? '') ?: null,
+            'last' => $this->str($merged['LastName'] ?? ''),
+            'dob' => $this->str($merged['DateOfBirth'] ?? '') ?: date('Y-m-d'),
+            'age' => $age,
+            'gender' => $this->str($merged['Gender'] ?? 'Other') ?: 'Other',
+            'civil' => $this->str($merged['CivilStatus'] ?? 'Single') ?: 'Single',
+            'phone' => $this->str($merged['ContactNumber'] ?? ''),
+            'email' => $this->str($merged['Email'] ?? ''),
+            'address' => $this->str($merged['Address'] ?? ''),
+            'blood' => $this->str($merged['BloodType'] ?? 'Unknown') ?: 'Unknown',
+            'category' => $this->str($merged['PatientCategory'] ?? 'Outpatient') ?: 'Outpatient',
+            'status' => $this->str($merged['Status'] ?? 'Active') ?: 'Active',
+        ];
 
-        $philhealthType = !empty($merged['PhilHealthMemberType']) 
-            ? trim($merged['PhilHealthMemberType']) 
-            : (!empty($merged['philhealth_type']) ? trim($merged['philhealth_type']) : ($existing['PhilHealthMemberType'] ?? 'None'));
-
-        $philhealthName = !empty($merged['PhilHealthMemberName']) 
-            ? trim($merged['PhilHealthMemberName']) 
-            : (!empty($merged['philhealth_name']) ? trim($merged['philhealth_name']) : ($existing['PhilHealthMemberName'] ?? null));
-
-        return $stmt->execute([
-            'id'              => $id,
-            'first'           => trim((string)($merged['FirstName'] ?? '')),
-            'middle'          => !empty($merged['MiddleName']) ? trim((string)$merged['MiddleName']) : null,
-            'last'            => trim((string)($merged['LastName'] ?? '')),
-            'dob'             => $merged['DateOfBirth'] ?? date('Y-m-d'),
-            'age'             => $age,
-            'gender'          => $merged['Gender'] ?? 'Other',
-            'civil'           => $merged['CivilStatus'] ?? 'Single',
-            'phone'           => trim((string)($merged['ContactNumber'] ?? '')),
-            'email'           => trim((string)($merged['Email'] ?? '')),
-            'address'         => trim((string)($merged['Address'] ?? '')),
-            'blood'           => $merged['BloodType'] ?? 'Unknown',
-            'philhealth'      => $philhealth,
-            'philhealth_type' => $philhealthType,
-            'philhealth_name' => $philhealthName,
-            'category'        => $merged['PatientCategory'] ?? 'Outpatient',
-            'status'          => $merged['Status'] ?? 'Active'
-        ]);
+        try {
+            $stmt = $this->db->prepare("
+                UPDATE patients SET
+                    FirstName            = :first,
+                    MiddleName           = :middle,
+                    LastName             = :last,
+                    DateOfBirth          = :dob,
+                    Age                  = :age,
+                    Gender               = :gender,
+                    CivilStatus          = :civil,
+                    ContactNumber        = :phone,
+                    Email                = :email,
+                    Address              = :address,
+                    BloodType            = :blood,
+                    PhilHealthNumber     = :philhealth,
+                    PhilHealthMemberType = :philhealth_type,
+                    PhilHealthMemberName = :philhealth_name,
+                    PatientCategory      = :category,
+                    Status               = :status,
+                    UpdatedAt            = NOW()
+                WHERE PatientID = :id
+            ");
+            return $stmt->execute(array_merge($baseParams, [
+                'philhealth' => $philhealth,
+                'philhealth_type' => $philhealthType,
+                'philhealth_name' => $philhealthName,
+            ]));
+        } catch (\Throwable $e) {
+            $stmt = $this->db->prepare("
+                UPDATE patients SET
+                    FirstName       = :first,
+                    MiddleName      = :middle,
+                    LastName        = :last,
+                    DateOfBirth     = :dob,
+                    Age             = :age,
+                    Gender          = :gender,
+                    CivilStatus     = :civil,
+                    ContactNumber   = :phone,
+                    Email           = :email,
+                    Address         = :address,
+                    BloodType       = :blood,
+                    PatientCategory = :category,
+                    Status          = :status,
+                    UpdatedAt       = NOW()
+                WHERE PatientID = :id
+            ");
+            return $stmt->execute($baseParams);
+        }
     }
 
     /**
@@ -319,7 +385,7 @@ class Patient
 
         $stmt = $this->db->prepare($sql);
         $stmt->execute($params);
-        return (int)$stmt->fetchColumn();
+        return (int) $stmt->fetchColumn();
     }
 
     /**
@@ -328,7 +394,8 @@ class Patient
     public function getFullProfile(int $id): ?array
     {
         $patient = $this->findById($id);
-        if (!$patient) return null;
+        if (!$patient)
+            return null;
 
         // Emergency Contact
         $stmtEmg = $this->db->prepare("SELECT * FROM emergency_contacts WHERE PatientID = :id LIMIT 1");

@@ -55,9 +55,12 @@ class Symptom
         $ids = [];
         $names = [];
         foreach ($symptomIdsOrNames as $item) {
+            if (is_array($item)) {
+                $item = $item['SymptomID'] ?? $item['id'] ?? $item['SymptomName'] ?? $item['name'] ?? reset($item);
+            }
             if (is_numeric($item)) {
                 $ids[] = (int)$item;
-            } else {
+            } elseif (is_scalar($item)) {
                 $trimmed = trim((string)$item);
                 if ($trimmed !== '') {
                     $names[] = $trimmed;

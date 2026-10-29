@@ -32,20 +32,37 @@ class PatientRegistration
         $this->db = $db ?? \Database::getConnection();
     }
 
+    private function str(mixed $val, string $default = ''): string
+    {
+        if (is_array($val)) {
+            $scalars = array_filter($val, 'is_scalar');
+            return $scalars ? trim(implode(', ', array_map('strval', $scalars))) : $default;
+        }
+        return is_scalar($val) ? trim((string)$val) : $default;
+    }
+
     /**
      * Process full multi-step Patient Registration & Pre-Consultation Intake atomically
      */
     public function registerCompletePatient(array $data, ?int $userId = 1): array
     {
-        $ownsTransaction = !$this->db->inTransaction();
+        $isPgsql = $this->db instanceof \PgsqlCompatPdo;
+        $ownsTransaction = !$isPgsql && !$this->db->inTransaction();
         if ($ownsTransaction) {
             $this->db->beginTransaction();
         }
 
         try {
-            $firstName = trim($data['personal']['firstName'] ?? $data['firstName'] ?? '');
-            $lastName  = trim($data['personal']['lastName'] ?? $data['lastName'] ?? '');
-            $dob       = trim($data['personal']['dob'] ?? $data['dob'] ?? date('Y-m-d'));
+            $firstName = $this->str($data['personal']['firstName'] ?? $data['firstName'] ?? '');
+            $lastName  = $this->str($data['personal']['lastName'] ?? $data['lastName'] ?? '');
+            $dob       = $this->str($data['personal']['dob'] ?? $data['dob'] ?? date('Y-m-d'), date('Y-m-d'));
+
+            // Validate doctor availability upfront before creating records
+            $requestedDoctorId = (int)($data['doctorId'] ?? ($data['selectedDoctor']['DoctorID'] ?? $data['selectedDoctor']['id'] ?? 0));
+            $doctorId = $this->resolveDoctorId($requestedDoctorId);
+            if ($doctorId <= 0) {
+                throw new Exception('No active doctor is available for this consultation.');
+            }
 
             $existingPatient = $this->identifyExistingPatient($data, $firstName, $lastName, $dob);
 
@@ -62,23 +79,36 @@ class PatientRegistration
             $queueModel = new Queue($this->db);
             $historyModel = new PatientHistory($this->db);
 
-            $philhealthNumber = $data['philhealth']['philhealthNumber'] 
-                ?? $data['personal']['philhealthNumber'] 
-                ?? $data['personal']['philhealth'] 
-                ?? $data['philhealthNumber'] 
-                ?? $data['philhealth_number'] 
-                ?? $data['philhealth'] 
-                ?? null;
+            $philArr = is_array($data['philhealth'] ?? null) ? $data['philhealth'] : [];
+            $hasCoverage = ($philArr['hasCoverage'] ?? 'Yes') !== 'No';
 
-            $philhealthType = $data['philhealth']['memberType'] 
-                ?? $data['personal']['philhealthMemberType'] 
-                ?? $data['philhealthMemberType'] 
-                ?? (!empty($philhealthNumber) ? 'Personal' : 'None');
+            $rawPhilNumber = $hasCoverage ? (
+                $philArr['philhealthNumber']
+                ?? $data['personal']['philhealthNumber']
+                ?? $data['personal']['philhealth']
+                ?? $data['philhealthNumber']
+                ?? $data['philhealth_number']
+                ?? (is_scalar($data['philhealth'] ?? null) ? $data['philhealth'] : null)
+            ) : null;
+            $philhealthNumber = $this->str($rawPhilNumber);
+            $philhealthNumber = $philhealthNumber !== '' ? $philhealthNumber : null;
 
-            $philhealthName = $data['philhealth']['memberName'] 
-                ?? $data['personal']['philhealthMemberName'] 
-                ?? $data['philhealthMemberName'] 
-                ?? null;
+            $rawPhilType = $hasCoverage ? (
+                $philArr['memberType']
+                ?? $data['personal']['philhealthMemberType']
+                ?? $data['philhealthMemberType']
+                ?? (!empty($philhealthNumber) ? 'Personal' : 'None')
+            ) : 'None';
+            $philhealthType = $this->str($rawPhilType, !empty($philhealthNumber) ? 'Personal' : 'None');
+
+            $rawPhilName = $hasCoverage ? (
+                $philArr['memberName']
+                ?? $data['personal']['philhealthMemberName']
+                ?? $data['philhealthMemberName']
+                ?? null
+            ) : null;
+            $philhealthName = $this->str($rawPhilName);
+            $philhealthName = $philhealthName !== '' ? $philhealthName : null;
 
             // 1. Patient identity. A returning patient keeps the same PatientID;
             // the appointment and clinical records below represent the new visit.
@@ -87,31 +117,34 @@ class PatientRegistration
                 $patientId = (int)$existingPatient['PatientID'];
                 $patientCode = $existingPatient['PatientCode'];
                 if (!empty($philhealthNumber)) {
-                    $patientModel->update($patientId, [
-                        'PhilHealthNumber'     => $philhealthNumber,
-                        'PhilHealthMemberType' => $philhealthType,
-                        'PhilHealthMemberName' => $philhealthName,
-                    ]);
+                    try {
+                        $patientModel->update($patientId, [
+                            'PhilHealthNumber'     => $philhealthNumber,
+                            'PhilHealthMemberType' => $philhealthType,
+                            'PhilHealthMemberName' => $philhealthName,
+                        ]);
+                    } catch (\Throwable $pe) {}
                 }
             } else {
                 $patientCode = $patientModel->generatePatientCode();
+                $middleName = $this->str($data['personal']['middleName'] ?? $data['middleName'] ?? '');
                 $patientId = $patientModel->create([
                     'PatientCode'          => $patientCode,
-                    'FirstName'            => $data['personal']['firstName'] ?? $data['firstName'] ?? '',
-                    'MiddleName'           => $data['personal']['middleName'] ?? $data['middleName'] ?? null,
-                    'LastName'             => $data['personal']['lastName'] ?? $data['lastName'] ?? '',
-                    'DateOfBirth'          => $data['personal']['dob'] ?? $data['dob'] ?? date('Y-m-d'),
-                    'Age'                  => $data['personal']['age'] ?? $data['age'] ?? 0,
-                    'Gender'               => $data['personal']['gender'] ?? $data['gender'] ?? 'Male',
-                    'CivilStatus'          => $data['personal']['civilStatus'] ?? $data['civilStatus'] ?? 'Single',
-                    'ContactNumber'        => $data['personal']['phone'] ?? $data['phone'] ?? '',
-                    'Email'                => $data['personal']['email'] ?? $data['email'] ?? '',
-                    'Address'              => $data['personal']['address'] ?? $data['address'] ?? '',
-                    'BloodType'            => $data['medical']['bloodType'] ?? $data['bloodType'] ?? 'Unknown',
+                    'FirstName'            => $firstName,
+                    'MiddleName'           => $middleName !== '' ? $middleName : null,
+                    'LastName'             => $lastName,
+                    'DateOfBirth'          => $dob,
+                    'Age'                  => (int)($data['personal']['age'] ?? $data['age'] ?? 0),
+                    'Gender'               => $this->str($data['personal']['gender'] ?? $data['gender'] ?? 'Male', 'Male'),
+                    'CivilStatus'          => $this->str($data['personal']['civilStatus'] ?? $data['civilStatus'] ?? 'Single', 'Single'),
+                    'ContactNumber'        => $this->str($data['personal']['phone'] ?? $data['phone'] ?? ''),
+                    'Email'                => $this->str($data['personal']['email'] ?? $data['email'] ?? ''),
+                    'Address'              => $this->str($data['personal']['address'] ?? $data['address'] ?? ''),
+                    'BloodType'            => $this->str($data['medical']['bloodType'] ?? $data['bloodType'] ?? 'Unknown', 'Unknown'),
                     'PhilHealthNumber'     => $philhealthNumber,
                     'PhilHealthMemberType' => $philhealthType,
                     'PhilHealthMemberName' => $philhealthName,
-                    'PatientCategory'      => $data['patientCategory'] ?? $data['category'] ?? 'Outpatient',
+                    'PatientCategory'      => $this->str($data['patientCategory'] ?? $data['category'] ?? 'Outpatient', 'Outpatient'),
                     'Status'               => 'Active',
                     'RegisteredBy'         => $userId
                 ]);
@@ -120,33 +153,41 @@ class PatientRegistration
                 // so it is only created during the first registration.
                 $emgModel->create([
                     'PatientID'     => $patientId,
-                    'ContactName'   => $data['emergency']['name'] ?? $data['emgName'] ?? '',
-                    'Relationship'  => $data['emergency']['relationship'] ?? $data['emgRelationship'] ?? 'Parent',
-                    'ContactNumber' => $data['emergency']['phone'] ?? $data['emgPhone'] ?? ''
+                    'ContactName'   => $this->str($data['emergency']['name'] ?? $data['emgName'] ?? ''),
+                    'Relationship'  => $this->str($data['emergency']['relationship'] ?? $data['emgRelationship'] ?? 'Parent', 'Parent'),
+                    'ContactNumber' => $this->str($data['emergency']['phone'] ?? $data['emgPhone'] ?? '')
                 ]);
 
                 $medModel->create([
                     'PatientID'               => $patientId,
-                    'Allergies'               => $data['medical']['allergies'] ?? $data['allergies'] ?? 'None',
-                    'ExistingConditions'      => $data['medical']['conditions'] ?? $data['conditions'] ?? 'None',
-                    'CurrentMedications'      => $data['medical']['medications'] ?? $data['medications'] ?? 'None',
-                    'PreviousHospitalization' => $data['medical']['hospitalization'] ?? $data['hospitalization'] ?? 'None'
+                    'Allergies'               => $this->str($data['medical']['allergies'] ?? $data['allergies'] ?? 'None', 'None'),
+                    'ExistingConditions'      => $this->str($data['medical']['conditions'] ?? $data['conditions'] ?? 'None', 'None'),
+                    'CurrentMedications'      => $this->str($data['medical']['medications'] ?? $data['medications'] ?? 'None', 'None'),
+                    'PreviousHospitalization' => $this->str($data['medical']['hospitalization'] ?? $data['hospitalization'] ?? 'None', 'None')
                 ]);
             }
 
             // 4. Chief Complaint
-            $complaintText = $data['complaint'] ?? 'General Consultation';
+            $rawComplaint = $data['complaint'] ?? 'General Consultation';
+            if (is_array($rawComplaint)) {
+                $complaintText = $this->str($rawComplaint['description'] ?? $rawComplaint['text'] ?? $rawComplaint, 'General Consultation');
+            } else {
+                $complaintText = $this->str($rawComplaint, 'General Consultation');
+            }
+            $aggravating = $this->str($data['aggravating'] ?? '');
+            $relieving = $this->str($data['relieving'] ?? '');
+
             $complaintId = $complaintModel->create([
                 'PatientID'            => $patientId,
                 'ComplaintDescription' => $complaintText,
                 'Severity'             => (int)($data['severity'] ?? 3),
-                'Duration'             => $data['duration'] ?? '1–3 days ago',
-                'AggravatingFactors'   => $data['aggravating'] ?? null,
-                'RelievingFactors'     => $data['relieving'] ?? null
+                'Duration'             => $this->str($data['duration'] ?? '1–3 days ago', '1–3 days ago'),
+                'AggravatingFactors'   => $aggravating !== '' ? $aggravating : null,
+                'RelievingFactors'     => $relieving !== '' ? $relieving : null
             ]);
 
             // 5. Symptoms Junction
-            $symptoms = $data['symptoms'] ?? [];
+            $symptoms = is_array($data['symptoms'] ?? null) ? $data['symptoms'] : [];
             if (!empty($symptoms)) {
                 $symptomModel->saveComplaintSymptoms($complaintId, $symptoms);
             }
@@ -165,7 +206,7 @@ class PatientRegistration
                 $bodySystemId = $defSys ? (int)$defSys : 1;
             }
 
-            $bodyLocationCode = $data['bodyLocation'] ?? 'abdomen';
+            $bodyLocationCode = $this->str($data['bodyLocation'] ?? 'abdomen', 'abdomen') ?: 'abdomen';
             $locRecord = $bodyLocationModel->getByCode($bodyLocationCode);
             if ($locRecord && !empty($locRecord['BodyLocationID'])) {
                 $bodyLocationId = (int)$locRecord['BodyLocationID'];
@@ -189,7 +230,7 @@ class PatientRegistration
             ]);
 
             // 8. Possible Conditions Junction
-            $conditions = $data['possibleConditions'] ?? [];
+            $conditions = is_array($data['possibleConditions'] ?? null) ? $data['possibleConditions'] : [];
             if (!empty($conditions)) {
                 $conditionModel->saveComplaintConditions($complaintId, $conditions);
             } else {
@@ -202,22 +243,17 @@ class PatientRegistration
             }
 
             // 9. Doctor Selection & Appointment Scheduling
-            $requestedDoctorId = (int)($data['doctorId'] ?? ($data['selectedDoctor']['DoctorID'] ?? $data['selectedDoctor']['id'] ?? 0));
-            $doctorId = $this->resolveDoctorId($requestedDoctorId);
-            if ($doctorId <= 0) {
-                throw new Exception('No active doctor is available for this consultation.');
-            }
-
-            $appDate = $data['appointmentDate'] ?? date('Y-m-d');
-            $appTime = $data['selectedSlot'] ?? '02:30 PM';
+            $appDate = $this->str($data['appointmentDate'] ?? date('Y-m-d'), date('Y-m-d'));
+            $appTime = $this->str($data['selectedSlot'] ?? '02:30 PM', '02:30 PM');
             $allowedConsultationTypes = [
                 'In-Person Consultation',
                 'Secure Telehealth Video',
                 'Follow-up Review',
                 'Emergency Triage'
             ];
-            $consType = in_array($data['consultationType'] ?? '', $allowedConsultationTypes)
-                ? $data['consultationType']
+            $rawConsType = $this->str($data['consultationType'] ?? '');
+            $consType = in_array($rawConsType, $allowedConsultationTypes, true)
+                ? $rawConsType
                 : 'In-Person Consultation';
 
             $appId = $appointmentModel->create([
@@ -245,14 +281,16 @@ class PatientRegistration
             ]);
 
             // 11. Comprehensive Audit Trail (Registration History)
-            $fullName = trim(($data['personal']['firstName'] ?? '') . ' ' . ($data['personal']['lastName'] ?? ''));
-            $historyModel->logMultiple([
-                ['PatientID' => $patientId, 'Action' => $isReturningPatient ? 'Returning Patient Visit' : 'Patient Registered', 'Description' => $isReturningPatient ? "Returning patient {$fullName} identified as {$patientCode}; new encounter created." : "Patient {$fullName} registered with Digital Code {$patientCode}.", 'UserID' => $userId],
-                ['PatientID' => $patientId, 'Action' => 'Complaint Recorded', 'Description' => "Chief complaint recorded: " . substr($complaintText, 0, 100), 'UserID' => $userId],
-                ['PatientID' => $patientId, 'Action' => 'Symptom Classification', 'Description' => "Pre-consultation analysis matched to {$relevanceLevel}% relevance.", 'UserID' => $userId],
-                ['PatientID' => $patientId, 'Action' => 'Doctor Assigned', 'Description' => "Consultation booked with Doctor ID #{$doctorId} for {$appDate} {$appTime}.", 'UserID' => $userId],
-                ['PatientID' => $patientId, 'Action' => 'Queue Generated', 'Description' => "Assigned Daily Queue Ticket #{$queueNum}.", 'UserID' => $userId],
-            ]);
+            $fullName = trim($firstName . ' ' . $lastName);
+            try {
+                $historyModel->logMultiple([
+                    ['PatientID' => $patientId, 'Action' => $isReturningPatient ? 'Returning Patient Visit' : 'Patient Registered', 'Description' => $isReturningPatient ? "Returning patient {$fullName} identified as {$patientCode}; new encounter created." : "Patient {$fullName} registered with Digital Code {$patientCode}.", 'UserID' => $userId],
+                    ['PatientID' => $patientId, 'Action' => 'Complaint Recorded', 'Description' => "Chief complaint recorded: " . substr($complaintText, 0, 100), 'UserID' => $userId],
+                    ['PatientID' => $patientId, 'Action' => 'Symptom Classification', 'Description' => "Pre-consultation analysis matched to {$relevanceLevel}% relevance.", 'UserID' => $userId],
+                    ['PatientID' => $patientId, 'Action' => 'Doctor Assigned', 'Description' => "Consultation booked with Doctor ID #{$doctorId} for {$appDate} {$appTime}.", 'UserID' => $userId],
+                    ['PatientID' => $patientId, 'Action' => 'Queue Generated', 'Description' => "Assigned Daily Queue Ticket #{$queueNum}.", 'UserID' => $userId],
+                ]);
+            } catch (\Throwable $he) {}
 
             // Fetch Doctor details for response
             $doctorModel = new Doctor($this->db);

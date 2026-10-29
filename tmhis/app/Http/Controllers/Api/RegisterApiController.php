@@ -17,13 +17,22 @@ use Illuminate\Support\Facades\Auth;
 
 class RegisterApiController extends Controller
 {
+    private function asTrimmedString(mixed $val): string
+    {
+        if (is_array($val)) {
+            $first = reset($val);
+            return is_scalar($first) ? trim((string) $first) : '';
+        }
+        return is_scalar($val) ? trim((string) $val) : '';
+    }
+
     public function classify(Request $request)
     {
-        $complaint = $request->input('complaint', '');
+        $complaint = $this->asTrimmedString($request->input('complaint', ''));
         $symptoms = $request->input('symptoms', []);
-        $locationCode = $request->input('bodyLocation');
+        $locationCode = $this->asTrimmedString($request->input('bodyLocation')) ?: null;
 
-        if (empty(trim($complaint)) && empty($symptoms)) {
+        if ($complaint === '' && empty($symptoms)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Complaint description or symptoms are required.'
@@ -32,7 +41,7 @@ class RegisterApiController extends Controller
 
         try {
             $classifier = new SymptomClassifier();
-            $result = $classifier->classifyComplaint($complaint, (array)$symptoms, $locationCode);
+            $result = $classifier->classifyComplaint($complaint, (array) $symptoms, $locationCode);
             return response()->json($result);
         } catch (\Throwable $e) {
             return response()->json([
@@ -46,29 +55,38 @@ class RegisterApiController extends Controller
     {
         $data = $request->isJson() ? $request->json()->all() : $request->all();
 
-        $firstName = $data['personal']['firstName'] ?? $data['firstName'] ?? '';
-        $lastName  = $data['personal']['lastName'] ?? $data['lastName'] ?? '';
-        $dob       = $data['personal']['dob'] ?? $data['dob'] ?? '';
-        $gender    = $data['personal']['gender'] ?? $data['gender'] ?? '';
-        $phone     = $data['personal']['phone'] ?? $data['phone'] ?? '';
-        $email     = $data['personal']['email'] ?? $data['email'] ?? '';
-        $address   = $data['personal']['address'] ?? $data['address'] ?? '';
-        $complaint = $data['complaint'] ?? '';
+        $firstName = $this->asTrimmedString($data['personal']['firstName'] ?? $data['firstName'] ?? '');
+        $lastName = $this->asTrimmedString($data['personal']['lastName'] ?? $data['lastName'] ?? '');
+        $dob = $this->asTrimmedString($data['personal']['dob'] ?? $data['dob'] ?? '');
+        $gender = $this->asTrimmedString($data['personal']['gender'] ?? $data['gender'] ?? '');
+        $phone = $this->asTrimmedString($data['personal']['phone'] ?? $data['phone'] ?? '');
+        $email = $this->asTrimmedString($data['personal']['email'] ?? $data['email'] ?? '');
+        $address = $this->asTrimmedString($data['personal']['address'] ?? $data['address'] ?? '');
+        $complaint = is_array($data['complaint'] ?? null)
+            ? $this->asTrimmedString($data['complaint']['description'] ?? $data['complaint']['text'] ?? '')
+            : $this->asTrimmedString($data['complaint'] ?? '');
 
         $errors = [];
-        if (empty(trim($firstName))) $errors['firstName'] = 'First name is required.';
-        if (empty(trim($lastName))) $errors['lastName'] = 'Last name is required.';
-        if (empty($dob)) $errors['dob'] = 'Date of birth is required.';
-        if (empty($gender)) $errors['gender'] = 'Gender is required.';
-        if (empty(trim($phone))) $errors['phone'] = 'Contact number is required.';
-        if (empty(trim($address))) $errors['address'] = 'Address is required.';
-        if (empty(trim($complaint))) $errors['complaint'] = 'Chief complaint description is required.';
+        if ($firstName === '')
+            $errors['firstName'] = 'First name is required.';
+        if ($lastName === '')
+            $errors['lastName'] = 'Last name is required.';
+        if ($dob === '')
+            $errors['dob'] = 'Date of birth is required.';
+        if ($gender === '')
+            $errors['gender'] = 'Gender is required.';
+        if ($phone === '')
+            $errors['phone'] = 'Contact number is required.';
+        if ($address === '')
+            $errors['address'] = 'Address is required.';
+        if ($complaint === '')
+            $errors['complaint'] = 'Chief complaint description is required.';
 
         if (!empty($errors)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Validation failed on server.',
-                'errors'  => $errors
+                'errors' => $errors
             ], 422);
         }
 
@@ -76,7 +94,7 @@ class RegisterApiController extends Controller
 
         try {
             $regService = new PatientRegistration();
-            $result = $regService->registerCompletePatient($data, (int)$userId);
+            $result = $regService->registerCompletePatient($data, (int) $userId);
             $status = $result['success'] ? 201 : (!empty($result['duplicate_warning']) ? 409 : 400);
             return response()->json($result, $status);
         } catch (\Throwable $e) {
@@ -99,11 +117,11 @@ class RegisterApiController extends Controller
             $locations = $bodyLocationService->getAll();
 
             return response()->json([
-                'success'   => true,
-                'symptoms'  => $symptoms,
-                'systems'   => $systems,
+                'success' => true,
+                'symptoms' => $symptoms,
+                'systems' => $systems,
                 'locations' => $locations,
-                'data'      => $symptoms
+                'data' => $symptoms
             ]);
         } catch (\Throwable $e) {
             return response()->json([
@@ -115,7 +133,7 @@ class RegisterApiController extends Controller
 
     public function getDoctors(Request $request)
     {
-        $specialtyId = (int)$request->query('specialty_id', 0);
+        $specialtyId = (int) $request->query('specialty_id', 0);
         $doctorService = new Doctor();
         $doctors = $specialtyId > 0 ? $doctorService->getBySpecialty($specialtyId) : $doctorService->getAll();
 
@@ -150,7 +168,7 @@ class RegisterApiController extends Controller
 
     public function callQueueNext(Request $request)
     {
-        $queueId = (int)$request->input('queue_id');
+        $queueId = (int) $request->input('queue_id');
         $queueService = new Queue();
         $result = $queueService->updateStatus($queueId, 'In Consultation');
 
