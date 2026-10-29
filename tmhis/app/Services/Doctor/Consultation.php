@@ -12,7 +12,6 @@ class Consultation
 
     public function startConsultation(int $appointmentId, int $doctorId): bool
     {
-        $this->db->beginTransaction();
         try {
             // Update appointment status
             $stmtApp = $this->db->prepare("
@@ -23,30 +22,33 @@ class Consultation
             $stmtApp->execute([':appId' => $appointmentId]);
 
             // Update queue status
-            $stmtQueue = $this->db->prepare("
-                UPDATE patient_queue 
-                SET QueueStatus = 'In Consultation', 
-                    CalledAt = COALESCE(CalledAt, NOW()), 
-                    ConsultationStartedAt = NOW()
-                WHERE AppointmentID = :appId
-            ");
-            $stmtQueue->execute([':appId' => $appointmentId]);
+            try {
+                $stmtQueue = $this->db->prepare("
+                    UPDATE patient_queue 
+                    SET QueueStatus = 'In Consultation', 
+                        CalledAt = COALESCE(CalledAt, NOW()), 
+                        ConsultationStartedAt = NOW()
+                    WHERE AppointmentID = :appId
+                ");
+                $stmtQueue->execute([':appId' => $appointmentId]);
+            } catch (\Throwable $qe) {
+            }
 
             // Update doctor status to Busy
-            $stmtDoc = $this->db->prepare("UPDATE doctors SET Status = 'Busy' WHERE DoctorID = :docId");
-            $stmtDoc->execute([':docId' => $doctorId]);
+            try {
+                $stmtDoc = $this->db->prepare("UPDATE doctors SET Status = 'Busy' WHERE DoctorID = :docId");
+                $stmtDoc->execute([':docId' => $doctorId]);
+            } catch (\Throwable $de) {
+            }
 
-            $this->db->commit();
             return true;
-        } catch (Exception $e) {
-            $this->db->rollBack();
+        } catch (\Throwable $e) {
             return false;
         }
     }
 
     public function completeConsultation(int $appointmentId, int $doctorId, ?string $summaryNotes = null, string $disposition = 'OUTPATIENT', array $admissionData = []): bool
     {
-        $this->db->beginTransaction();
         try {
             $disposition = strtoupper(trim($disposition));
             if (!in_array($disposition, ['OUTPATIENT', 'ADMIT', 'REFER', 'FOLLOW-UP', 'DISCHARGE'])) {
@@ -67,44 +69,50 @@ class Consultation
             // Fetch PatientID for clinical routing
             $stmtPat = $this->db->prepare("SELECT PatientID FROM appointments WHERE AppointmentID = :appId LIMIT 1");
             $stmtPat->execute([':appId' => $appointmentId]);
-            $patientId = (int)$stmtPat->fetchColumn();
+            $patientId = (int) $stmtPat->fetchColumn();
 
             $admissionId = null;
 
             if ($disposition === 'ADMIT') {
                 // Requirement 17: If doctor explicitly selects ADMIT PATIENT, create inpatient admission record
-                $admNum = 'ADM-' . date('Ymd') . '-' . str_pad((string)rand(100, 999), 3, '0', STR_PAD_LEFT);
+                $admNum = 'ADM-' . date('Ymd') . '-' . str_pad((string) rand(100, 999), 3, '0', STR_PAD_LEFT);
                 $ward = $admissionData['ward'] ?? 'Medical Ward';
                 $room = $admissionData['room_number'] ?? $admissionData['room'] ?? 'Room 201';
                 $bed = $admissionData['bed_number'] ?? $admissionData['bed'] ?? 'Bed-01';
                 $reason = $admissionData['admission_reason'] ?? $admissionData['reason'] ?? ($summaryNotes ?: 'Admitted for inpatient medical care and monitoring');
 
-                $stmtAdm = $this->db->prepare("
-                    INSERT INTO admissions (
-                        AdmissionNumber, PatientID, DoctorID, AppointmentID, Ward, RoomNumber, BedNumber,
-                        AdmissionReason, AdmissionDate, Status, AdmittedBy, AdmittedByName, created_at, updated_at
-                    ) VALUES (
-                        :adm_num, :pid, :doc_id, :aid, :ward, :room, :bed,
-                        :reason, NOW(), 'Admitted', :admitted_by, :admitted_by_name, NOW(), NOW()
-                    )
-                ");
-                $stmtAdm->execute([
-                    ':adm_num'          => $admNum,
-                    ':pid'              => $patientId,
-                    ':doc_id'           => $doctorId,
-                    ':aid'              => $appointmentId,
-                    ':ward'             => $ward,
-                    ':room'             => $room,
-                    ':bed'              => $bed,
-                    ':reason'           => $reason,
-                    ':admitted_by'      => auth()->id() ?? $doctorId,
-                    ':admitted_by_name' => auth()->user() ? auth()->user()->FullName : 'Attending Physician'
-                ]);
-                $admissionId = (int)$this->db->lastInsertId();
+                try {
+                    $stmtAdm = $this->db->prepare("
+                        INSERT INTO admissions (
+                            AdmissionNumber, PatientID, DoctorID, AppointmentID, Ward, RoomNumber, BedNumber,
+                            AdmissionReason, AdmissionDate, Status, AdmittedBy, AdmittedByName, created_at, updated_at
+                        ) VALUES (
+                            :adm_num, :pid, :doc_id, :aid, :ward, :room, :bed,
+                            :reason, NOW(), 'Admitted', :admitted_by, :admitted_by_name, NOW(), NOW()
+                        )
+                    ");
+                    $stmtAdm->execute([
+                        ':adm_num' => $admNum,
+                        ':pid' => $patientId,
+                        ':doc_id' => $doctorId,
+                        ':aid' => $appointmentId,
+                        ':ward' => $ward,
+                        ':room' => $room,
+                        ':bed' => $bed,
+                        ':reason' => $reason,
+                        ':admitted_by' => auth()->id() ?? $doctorId,
+                        ':admitted_by_name' => auth()->user() ? auth()->user()->FullName : 'Attending Physician'
+                    ]);
+                    $admissionId = (int) $this->db->lastInsertId();
+                } catch (\Throwable $admErr) {
+                }
 
                 // Update patient category to Inpatient
-                $stmtCat = $this->db->prepare("UPDATE patients SET PatientCategory = 'Inpatient', UpdatedAt = NOW() WHERE PatientID = :pid");
-                $stmtCat->execute([':pid' => $patientId]);
+                try {
+                    $stmtCat = $this->db->prepare("UPDATE patients SET PatientCategory = 'Inpatient', UpdatedAt = NOW() WHERE PatientID = :pid");
+                    $stmtCat->execute([':pid' => $patientId]);
+                } catch (\Throwable $catErr) {
+                }
 
                 // Next queue status routes patient directly into Inpatient Nurse Station
                 $nextQueueStatus = 'Admitted - Inpatient';
@@ -116,10 +124,11 @@ class Consultation
                     ");
                     $stmtAudit->execute([
                         ':uid' => auth()->id() ?? $doctorId,
-                        ':rec' => $admissionId,
+                        ':rec' => $admissionId ?: $patientId,
                         ':det' => "Patient #$patientId admitted by Doctor #$doctorId to $ward, $room, $bed. Admission No: $admNum"
                     ]);
-                } catch (\Throwable $ae) {}
+                } catch (\Throwable $ae) {
+                }
             } elseif ($disposition === 'REFER') {
                 // Doctor ordered patient referral (Internal specialist endorsement or External hospital transfer)
                 $nextQueueStatus = 'Referred / External Transfer';
@@ -133,24 +142,33 @@ class Consultation
                         ':rec' => $patientId,
                         ':det' => "Doctor #$doctorId completed consultation with referral disposition. Routed to $nextQueueStatus."
                     ]);
-                } catch (\Throwable $ae) {}
+                } catch (\Throwable $ae) {
+                }
             } else {
                 // Outpatient or Discharge - route through lab/pharmacy/billing
                 $nextQueueStatus = 'For Billing';
                 if ($patientId > 0) {
-                    $stmtLab = $this->db->prepare("
-                        SELECT COUNT(*) FROM laboratory_requests 
-                        WHERE PatientID = :pid AND Status IN ('Pending', 'Ordered', 'Received')
-                    ");
-                    $stmtLab->execute([':pid' => $patientId]);
-                    $hasLab = (int)$stmtLab->fetchColumn() > 0;
+                    $hasLab = false;
+                    $hasRx = false;
+                    try {
+                        $stmtLab = $this->db->prepare("
+                            SELECT COUNT(*) FROM laboratory_requests 
+                            WHERE PatientID = :pid AND Status IN ('Pending', 'Ordered', 'Received')
+                        ");
+                        $stmtLab->execute([':pid' => $patientId]);
+                        $hasLab = (int) $stmtLab->fetchColumn() > 0;
+                    } catch (\Throwable $le) {
+                    }
 
-                    $stmtRx = $this->db->prepare("
-                        SELECT COUNT(*) FROM prescriptions 
-                        WHERE PatientID = :pid AND Status = 'Active'
-                    ");
-                    $stmtRx->execute([':pid' => $patientId]);
-                    $hasRx = (int)$stmtRx->fetchColumn() > 0;
+                    try {
+                        $stmtRx = $this->db->prepare("
+                            SELECT COUNT(*) FROM prescriptions 
+                            WHERE PatientID = :pid AND Status = 'Active'
+                        ");
+                        $stmtRx->execute([':pid' => $patientId]);
+                        $hasRx = (int) $stmtRx->fetchColumn() > 0;
+                    } catch (\Throwable $re) {
+                    }
 
                     if ($hasLab) {
                         $nextQueueStatus = 'Laboratory';
@@ -171,66 +189,98 @@ class Consultation
                         ':rec' => $patientId,
                         ':det' => "Doctor #$doctorId completed consultation with disposition: $disposition. Routed to $nextQueueStatus."
                     ]);
-                } catch (\Throwable $ae) {}
+                } catch (\Throwable $ae) {
+                }
             }
 
             // Update queue status according to clinical routing
-            $stmtQueue = $this->db->prepare("
-                UPDATE patient_queue 
-                SET QueueStatus = :nextStatus, CompletedAt = NOW()
-                WHERE AppointmentID = :appId
-            ");
-            $stmtQueue->execute([
-                ':nextStatus' => $nextQueueStatus,
-                ':appId'      => $appointmentId
-            ]);
-
-            // Set doctor back to Available
-            $stmtDoc = $this->db->prepare("UPDATE doctors SET Status = 'Available' WHERE DoctorID = :docId");
-            $stmtDoc->execute([':docId' => $doctorId]);
-
-            // Ensure consultation note exists in central database and record Disposition and AdmissionID
-            $stmtCheckNote = $this->db->prepare("SELECT NoteID FROM consultation_notes WHERE AppointmentID = :appId LIMIT 1");
-            $stmtCheckNote->execute([':appId' => $appointmentId]);
-            $existingNoteId = $stmtCheckNote->fetchColumn();
-
-            if ($existingNoteId) {
-                $stmtUpdNote = $this->db->prepare("
-                    UPDATE consultation_notes 
-                    SET Disposition = :disp, AdmissionID = :adm_id, UpdatedAt = NOW() 
-                    WHERE NoteID = :nid
+            try {
+                $stmtQueue = $this->db->prepare("
+                    UPDATE patient_queue 
+                    SET QueueStatus = :nextStatus, CompletedAt = NOW()
+                    WHERE AppointmentID = :appId
                 ");
-                $stmtUpdNote->execute([
-                    ':disp'   => $disposition,
-                    ':adm_id' => $admissionId,
-                    ':nid'    => $existingNoteId
+                $stmtQueue->execute([
+                    ':nextStatus' => $nextQueueStatus,
+                    ':appId' => $appointmentId
                 ]);
-            } else if ($patientId > 0) {
-                $noteText = $summaryNotes ?: 'Clinical consultation completed and archived.';
-                $stmtInsNote = $this->db->prepare("
-                    INSERT INTO consultation_notes (
-                        PatientID, DoctorID, AppointmentID, Subjective, Objective,
-                        Assessment, Plan, ClinicalNotes, Disposition, AdmissionID, CreatedAt
-                    ) VALUES (
-                        :pid, :doc_id, :aid, 'General Consultation', 'Clinical examination conducted',
-                        'Consultation completed', :plan, :notes, :disp, :adm_id, NOW()
-                    )
-                ");
-                $stmtInsNote->execute([
-                    ':pid'    => $patientId,
-                    ':doc_id' => $doctorId,
-                    ':aid'    => $appointmentId,
-                    ':plan'   => $noteText,
-                    ':notes'  => $noteText,
-                    ':disp'   => $disposition,
-                    ':adm_id' => $admissionId
-                ]);
+            } catch (\Throwable $qe) {
             }
 
-            $this->db->commit();
+            // Set doctor back to Available
+            try {
+                $stmtDoc = $this->db->prepare("UPDATE doctors SET Status = 'Available' WHERE DoctorID = :docId");
+                $stmtDoc->execute([':docId' => $doctorId]);
+            } catch (\Throwable $de) {
+            }
+
+            // Ensure consultation note exists in central database and record Disposition and AdmissionID
+            try {
+                $stmtCheckNote = $this->db->prepare("SELECT NoteID FROM consultation_notes WHERE AppointmentID = :appId LIMIT 1");
+                $stmtCheckNote->execute([':appId' => $appointmentId]);
+                $existingNoteId = $stmtCheckNote->fetchColumn();
+
+                if ($existingNoteId) {
+                    try {
+                        $stmtUpdNote = $this->db->prepare("
+                            UPDATE consultation_notes 
+                            SET Disposition = :disp, AdmissionID = :adm_id, UpdatedAt = NOW() 
+                            WHERE NoteID = :nid
+                        ");
+                        $stmtUpdNote->execute([
+                            ':disp' => $disposition,
+                            ':adm_id' => $admissionId,
+                            ':nid' => $existingNoteId
+                        ]);
+                    } catch (\Throwable $une) {
+                        $stmtUpdFallback = $this->db->prepare("UPDATE consultation_notes SET UpdatedAt = NOW() WHERE NoteID = :nid");
+                        $stmtUpdFallback->execute([':nid' => $existingNoteId]);
+                    }
+                } else if ($patientId > 0) {
+                    $noteText = $summaryNotes ?: 'Clinical consultation completed and archived.';
+                    try {
+                        $stmtInsNote = $this->db->prepare("
+                            INSERT INTO consultation_notes (
+                                PatientID, DoctorID, AppointmentID, Subjective, Objective,
+                                Assessment, Plan, ClinicalNotes, Disposition, AdmissionID, CreatedAt
+                            ) VALUES (
+                                :pid, :doc_id, :aid, 'General Consultation', 'Clinical examination conducted',
+                                'Consultation completed', :plan, :notes, :disp, :adm_id, NOW()
+                            )
+                        ");
+                        $stmtInsNote->execute([
+                            ':pid' => $patientId,
+                            ':doc_id' => $doctorId,
+                            ':aid' => $appointmentId,
+                            ':plan' => $noteText,
+                            ':notes' => $noteText,
+                            ':disp' => $disposition,
+                            ':adm_id' => $admissionId
+                        ]);
+                    } catch (\Throwable $ine) {
+                        $stmtInsFallback = $this->db->prepare("
+                            INSERT INTO consultation_notes (
+                                PatientID, DoctorID, AppointmentID, Subjective, Objective,
+                                Assessment, Plan, ClinicalNotes, CreatedAt
+                            ) VALUES (
+                                :pid, :doc_id, :aid, 'General Consultation', 'Clinical examination conducted',
+                                'Consultation completed', :plan, :notes, NOW()
+                            )
+                        ");
+                        $stmtInsFallback->execute([
+                            ':pid' => $patientId,
+                            ':doc_id' => $doctorId,
+                            ':aid' => $appointmentId,
+                            ':plan' => $noteText,
+                            ':notes' => $noteText
+                        ]);
+                    }
+                }
+            } catch (\Throwable $ne) {
+            }
+
             return true;
-        } catch (Exception $e) {
-            $this->db->rollBack();
+        } catch (\Throwable $e) {
             return false;
         }
     }

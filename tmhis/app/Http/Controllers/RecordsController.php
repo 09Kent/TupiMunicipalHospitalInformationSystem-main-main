@@ -328,11 +328,34 @@ class RecordsController extends Controller
         ], 201);
     }
 
+    private function resolvePatientByIdOrCode($id): ?Patient
+    {
+        if (is_numeric($id)) {
+            $patient = Patient::where('PatientID', (int)$id)->orWhere('PatientCode', (string)$id)->first();
+            if ($patient) {
+                return $patient;
+            }
+        } elseif (!empty($id)) {
+            $patient = Patient::where('PatientCode', (string)$id)->first();
+            if ($patient) {
+                return $patient;
+            }
+            if (preg_match('/-(\d+)$/', (string)$id, $matches)) {
+                $numId = (int)$matches[1];
+                if ($numId > 0) {
+                    $patient = Patient::where('PatientID', $numId)->first();
+                    if ($patient) {
+                        return $patient;
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
     public function updatePatient(Request $request, $id): JsonResponse
     {
-        $patient = Patient::where('PatientID', $id)
-            ->orWhere('PatientCode', $id)
-            ->firstOrFail();
+        $patient = $this->resolvePatientByIdOrCode($id) ?? abort(404, 'Patient record not found.');
 
         $patient->update($request->only([
             'FirstName', 'LastName', 'MiddleName', 'DateOfBirth',
@@ -351,9 +374,7 @@ class RecordsController extends Controller
 
     public function archivePatient(Request $request, $id): JsonResponse
     {
-        $patient = Patient::where('PatientID', $id)
-            ->orWhere('PatientCode', $id)
-            ->firstOrFail();
+        $patient = $this->resolvePatientByIdOrCode($id) ?? abort(404, 'Patient record not found.');
 
         $patient->update(['Status' => 'Archived']);
 
@@ -367,14 +388,7 @@ class RecordsController extends Controller
 
     public function verifyPatient(Request $request, $id): JsonResponse
     {
-        $patient = Patient::where('PatientID', $id)
-            ->orWhere('PatientCode', $id)
-            ->first();
-
-        if (!$patient && is_string($id) && preg_match('/PAT-\d{4}-(\d+)/', $id, $matches)) {
-            $numId = (int)$matches[1];
-            $patient = Patient::where('PatientID', $numId)->first();
-        }
+        $patient = $this->resolvePatientByIdOrCode($id);
 
         if (!$patient) {
             return response()->json([
@@ -456,14 +470,7 @@ class RecordsController extends Controller
 
     public function patientHistory($id): JsonResponse
     {
-        $patient = Patient::where('PatientID', $id)
-            ->orWhere('PatientCode', $id)
-            ->first();
-
-        if (!$patient && is_string($id) && preg_match('/PAT-\d{4}-(\d+)/', $id, $matches)) {
-            $numId = (int)$matches[1];
-            $patient = Patient::where('PatientID', $numId)->first();
-        }
+        $patient = $this->resolvePatientByIdOrCode($id);
 
         if (!$patient) {
             return response()->json([
@@ -608,14 +615,7 @@ class RecordsController extends Controller
 
     public function summary($id)
     {
-        $patient = Patient::where('PatientID', $id)
-            ->orWhere('PatientCode', $id)
-            ->first();
-
-        if (!$patient && is_string($id) && preg_match('/PAT-\d{4}-(\d+)/', $id, $matches)) {
-            $numId = (int)$matches[1];
-            $patient = Patient::where('PatientID', $numId)->first();
-        }
+        $patient = $this->resolvePatientByIdOrCode($id) ?? Patient::orderBy('PatientID', 'desc')->first();
 
         if (!$patient) {
             abort(404, 'Patient not found');

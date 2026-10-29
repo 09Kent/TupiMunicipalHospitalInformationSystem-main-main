@@ -49,14 +49,12 @@ class PrintController extends Controller
         $patient = null;
         $data = [];
         $isSpecificId = !empty($id) && $id !== 'latest' && $id !== 'preview';
+        $numId = $this->extractNumericId($id);
 
         switch ($type) {
             case 'patient':
             case 'patient-info':
-                $patient = Patient::where('PatientID', $id)->orWhere('PatientCode', $id)->first();
-                if (!$patient) {
-                    $patient = Patient::orderBy('PatientID', 'desc')->first();
-                }
+                $patient = $this->resolvePatient($id, true);
                 $docTitle = 'MASTER PATIENT INFORMATION RECORD';
                 $docTracking = 'PIR-' . ($patient ? $patient->PatientCode : '000000');
                 $data['patient'] = $patient;
@@ -67,10 +65,7 @@ class PrintController extends Controller
 
             case 'registration':
             case 'registration-form':
-                $patient = Patient::where('PatientID', $id)->orWhere('PatientCode', $id)->first();
-                if (!$patient) {
-                    $patient = Patient::orderBy('PatientID', 'desc')->first();
-                }
+                $patient = $this->resolvePatient($id, true);
                 $docTitle = 'PATIENT INTAKE & REGISTRATION TRIAGE FORM';
                 $docTracking = 'REG-' . ($patient ? $patient->PatientCode : '000000');
                 $data['patient'] = $patient;
@@ -90,16 +85,16 @@ class PrintController extends Controller
 
             case 'consultation':
             case 'clinical-note':
-                $note = ConsultationNote::find($id);
-                if (!$note && $id) {
-                    $note = ConsultationNote::where('PatientID', $id)->orderBy('NoteID', 'desc')->first();
+                $note = $numId ? ConsultationNote::find($numId) : null;
+                if (!$note && $numId) {
+                    $note = ConsultationNote::where('PatientID', $numId)->orderBy('NoteID', 'desc')->first();
                 }
                 if (!$note) {
                     $note = ConsultationNote::orderBy('NoteID', 'desc')->first();
                 }
                 if (!$note) {
                     $note = (object)[
-                        'NoteID' => $id ?: 1,
+                        'NoteID' => $numId ?: 1,
                         'PatientID' => 1,
                         'DoctorID' => 1,
                         'Subjective' => 'Patient presented for clinical evaluation and general consultation.',
@@ -128,13 +123,7 @@ class PrintController extends Controller
             case 'comprehensive-medical-certificate':
             case 'full-medical-certificate':
             case 'all-in-one':
-                $patient = Patient::where('PatientID', $id)->orWhere('PatientCode', $id)->first();
-                if (!$patient && !empty($id) && preg_match('/-(\d+)$/', (string)$id, $m)) {
-                    $patient = Patient::find((int)$m[1]);
-                }
-                if (!$patient) {
-                    $patient = Patient::orderBy('PatientID', 'desc')->first();
-                }
+                $patient = $this->resolvePatient($id, true);
                 $docTitle = 'OFFICIAL COMPREHENSIVE MEDICAL RECORD & MEDICAL CERTIFICATE';
                 $docTracking = 'CMR-' . ($patient ? ($patient->PatientCode ?: str_pad((string)$patient->PatientID, 5, '0', STR_PAD_LEFT)) : '000000');
                 $data['patient'] = $patient;
@@ -205,16 +194,16 @@ class PrintController extends Controller
             case 'laboratory':
             case 'lab-result':
             case 'lab':
-                $result = LaboratoryResult::find($id);
-                if (!$result && $id) {
-                    $result = LaboratoryResult::where('PatientID', $id)->orderBy('ResultID', 'desc')->first();
+                $result = $numId ? LaboratoryResult::find($numId) : null;
+                if (!$result && $numId) {
+                    $result = LaboratoryResult::where('PatientID', $numId)->orderBy('ResultID', 'desc')->first();
                 }
                 if (!$result) {
                     $result = LaboratoryResult::orderBy('ResultID', 'desc')->first();
                 }
                 if (!$result) {
                     $result = (object)[
-                        'ResultID' => $id ?: 1,
+                        'ResultID' => $numId ?: 1,
                         'PatientID' => 1,
                         'DoctorID' => 1,
                         'RequestID' => 1,
@@ -242,17 +231,17 @@ class PrintController extends Controller
 
             case 'prescription':
             case 'rx':
-                $rx = Prescription::find($id);
-                if (!$rx && $id) {
-                    $rx = Prescription::where('PatientID', $id)->orderBy('PrescriptionID', 'desc')->first();
+                $rx = $numId ? Prescription::find($numId) : null;
+                if (!$rx && $numId) {
+                    $rx = Prescription::where('PatientID', $numId)->orderBy('PrescriptionID', 'desc')->first();
                 }
                 if (!$rx) {
                     $rx = Prescription::orderBy('PrescriptionID', 'desc')->first();
                 }
                 if (!$rx) {
                     $rx = (object)[
-                        'PrescriptionID' => $id ?: 1,
-                        'PrescriptionCode' => 'RX-TEST-' . ($id ?: 1),
+                        'PrescriptionID' => $numId ?: 1,
+                        'PrescriptionCode' => 'RX-TEST-' . ($numId ?: 1),
                         'PatientID' => 1,
                         'DoctorID' => 1,
                         'MedicineName' => 'Amoxicillin 500mg Capsule',
@@ -279,17 +268,17 @@ class PrintController extends Controller
             case 'billing':
             case 'billing-statement':
             case 'invoice':
-                $invoice = BillingInvoice::find($id);
-                if (!$invoice && $id) {
-                    $invoice = BillingInvoice::where('PatientID', $id)->orderBy('InvoiceID', 'desc')->first();
+                $invoice = $numId ? BillingInvoice::find($numId) : null;
+                if (!$invoice && $numId) {
+                    $invoice = BillingInvoice::where('PatientID', $numId)->orderBy('InvoiceID', 'desc')->first();
                 }
                 if (!$invoice) {
                     $invoice = BillingInvoice::orderBy('InvoiceID', 'desc')->first();
                 }
                 if (!$invoice) {
                     $invoice = (object)[
-                        'InvoiceID' => $id ?: 1,
-                        'InvoiceNumber' => 'INV-2026-' . str_pad((string)($id ?: 1), 6, '0', STR_PAD_LEFT),
+                        'InvoiceID' => $numId ?: 1,
+                        'InvoiceNumber' => 'INV-2026-' . str_pad((string)($numId ?: 1), 6, '0', STR_PAD_LEFT),
                         'PatientID' => 1,
                         'GrossAmount' => 3500.00,
                         'PhilHealthDeduction' => 1000.00,
@@ -315,16 +304,16 @@ class PrintController extends Controller
             case 'payment':
             case 'receipt':
             case 'payment-receipt':
-                $payment = BillingPayment::find($id);
-                if (!$payment && $id) {
-                    $payment = BillingPayment::where('PatientID', $id)->orderBy('PaymentID', 'desc')->first();
+                $payment = $numId ? BillingPayment::find($numId) : null;
+                if (!$payment && $numId) {
+                    $payment = BillingPayment::where('PatientID', $numId)->orderBy('PaymentID', 'desc')->first();
                 }
                 if (!$payment) {
                     $payment = BillingPayment::orderBy('PaymentID', 'desc')->first();
                 }
                 if (!$payment) {
                     $payment = (object)[
-                        'PaymentID' => $id ?: 1,
+                        'PaymentID' => $numId ?: 1,
                         'InvoiceID' => 1,
                         'PatientID' => 1,
                         'ReceiptNumber' => 'OR-' . date('Ymd') . '-0001',
@@ -347,16 +336,16 @@ class PrintController extends Controller
                 break;
 
             case 'referral':
-                $referral = Referral::find($id);
-                if (!$referral && $id) {
-                    $referral = Referral::where('PatientID', $id)->orderBy('ReferralID', 'desc')->first();
+                $referral = $numId ? Referral::find($numId) : null;
+                if (!$referral && $numId) {
+                    $referral = Referral::where('PatientID', $numId)->orderBy('ReferralID', 'desc')->first();
                 }
                 if (!$referral) {
                     $referral = Referral::orderBy('ReferralID', 'desc')->first();
                 }
                 if (!$referral) {
                     $referral = (object)[
-                        'ReferralID' => $id ?: 1,
+                        'ReferralID' => $numId ?: 1,
                         'ReferralCode' => 'REF-000001',
                         'PatientID' => 1,
                         'ReferringDoctorID' => 1,
@@ -406,13 +395,7 @@ class PrintController extends Controller
             case 'digital-id':
             case 'digital-id-slip':
             case 'id-slip':
-                $patient = Patient::where('PatientID', $id)->orWhere('PatientCode', $id)->first();
-                if (!$patient) {
-                    if ($isSpecificId) {
-                        abort(404, 'Patient record not found for Digital ID slip.');
-                    }
-                    $patient = Patient::orderBy('PatientID', 'desc')->first();
-                }
+                $patient = $this->resolvePatient($id, true);
                 $docTitle = 'OFFICIAL PATIENT DIGITAL IDENTIFICATION SLIP';
                 $docTracking = 'ID-' . ($patient ? $patient->PatientCode : '000000');
                 $data['patient'] = $patient;
@@ -423,9 +406,9 @@ class PrintController extends Controller
             case 'medication-label':
             case 'pharmacy-label':
             case 'label':
-                $dispense = DB::table('dispensing_records')->where('DispenseID', $id)->first();
-                if (!$dispense && $id) {
-                    $dispense = DB::table('dispensing_records')->where('PatientID', $id)->orderBy('DispenseID', 'desc')->first();
+                $dispense = $numId ? DB::table('dispensing_records')->where('DispenseID', $numId)->first() : null;
+                if (!$dispense && $numId) {
+                    $dispense = DB::table('dispensing_records')->where('PatientID', $numId)->orderBy('DispenseID', 'desc')->first();
                 }
                 if (!$dispense) {
                     $dispense = DB::table('dispensing_records')->orderBy('DispenseID', 'desc')->first();
@@ -442,13 +425,7 @@ class PrintController extends Controller
             case 'certificate':
             case 'medical-certificate':
             case 'med-cert':
-                $patient = Patient::where('PatientID', $id)->orWhere('PatientCode', $id)->first();
-                if (!$patient) {
-                    if ($isSpecificId) {
-                        abort(404, 'Patient record not found for Medical Certificate.');
-                    }
-                    $patient = Patient::orderBy('PatientID', 'desc')->first();
-                }
+                $patient = $this->resolvePatient($id, true);
                 
                 $isFullRequested = ($request->query('full') == 1 || $request->query('all') == 1);
                 
@@ -611,5 +588,44 @@ class PrintController extends Controller
             'count'   => count($logs),
             'data'    => $logs,
         ]);
+    }
+
+    /**
+     * Safely resolve a Patient by numeric PatientID, string PatientCode, or trailing number (PostgreSQL-safe).
+     */
+    private function resolvePatient($id, bool $fallbackToLatest = true)
+    {
+        $patient = null;
+        if (!empty($id) && $id !== 'latest' && $id !== 'preview') {
+            if (is_numeric($id)) {
+                $patient = Patient::where('PatientID', (int)$id)->orWhere('PatientCode', (string)$id)->first();
+            } else {
+                $patient = Patient::where('PatientCode', (string)$id)->first();
+                if (!$patient && preg_match('/-(\d+)$/', (string)$id, $m)) {
+                    $numId = (int)$m[1];
+                    if ($numId > 0) {
+                        $patient = Patient::find($numId);
+                    }
+                }
+            }
+        }
+        if (!$patient && $fallbackToLatest) {
+            $patient = Patient::orderBy('PatientID', 'desc')->first();
+        }
+        return $patient;
+    }
+
+    /**
+     * Extract integer ID from numeric value or formatted code like P-2026-001 (PostgreSQL-safe).
+     */
+    private function extractNumericId($id): ?int
+    {
+        if (is_numeric($id)) {
+            return (int)$id;
+        }
+        if (!empty($id) && preg_match('/-(\d+)$/', (string)$id, $m)) {
+            return (int)$m[1];
+        }
+        return null;
     }
 }
