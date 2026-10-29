@@ -668,6 +668,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
           <a href="/print/patient/<?= $patientId ?>" target="_blank" class="px-3.5 py-2.5 bg-white/10 hover:bg-white/20 text-white font-bold rounded-xl text-xs transition flex items-center gap-1.5 border border-white/20" title="Print Comprehensive Patient Record">
             <i data-lucide="file-text" class="w-4 h-4"></i>
             <span>Print Profile</span>
+          </a>
           <button type="button" onclick="openDispositionModal()" class="px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-black rounded-xl text-xs shadow-lg shadow-emerald-600/20 transition flex items-center gap-1.5">
             <i data-lucide="clipboard-check" class="w-4 h-4"></i>
             <span>Decide Disposition & Finalize</span>
@@ -686,7 +687,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
             Current Stage: <?= empty($existingDiagnoses) ? 'In Consultation' : (!empty($existingTreatmentPlans) ? 'Treatment Regimen' : 'Differential Diagnosis') ?>
           </span>
         </div>
-        <div class="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-9 gap-2">
+        <div class="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-9 gap-2.5">
           <?php foreach ($stages as $idx => $st): 
             $stageTarget = '';
             if ($st['key'] === 'consultation') {
@@ -698,20 +699,28 @@ require_once __DIR__ . '/../includes/sidebar.php';
             } elseif ($st['key'] === 'prescription') {
                 $stageTarget = doctor_url('views/prescriptions/index.php?patient_id=' . $patientId);
             }
+
+            $cardClass = "w-full min-h-[76px] flex flex-col items-center justify-center p-2.5 rounded-2xl text-center border transition select-none " . (
+                $st['done'] 
+                    ? 'bg-emerald-50 border-emerald-200 text-emerald-800 hover:bg-emerald-100 hover:border-emerald-300' 
+                    : (!empty($st['active']) 
+                        ? 'bg-blue-50 border-2 border-blue-500 text-blue-900 shadow-sm ring-2 ring-blue-500/20' 
+                        : 'bg-slate-50 border-slate-200/80 text-slate-500 hover:bg-slate-100/80')
+            );
           ?>
             <?php if ($stageTarget): ?>
-              <a href="<?= $stageTarget ?>" class="flex flex-col items-center text-center p-2 rounded-2xl transition hover:scale-105 cursor-pointer <?= $st['done'] ? 'bg-emerald-50/80 border border-emerald-200 text-emerald-800 hover:bg-emerald-100/80' : (!empty($st['active']) ? 'bg-blue-50 border-2 border-blue-500 text-blue-900 shadow-sm hover:bg-blue-100' : 'bg-slate-50 border border-slate-200/60 text-slate-500 hover:bg-slate-100') ?>">
-                <div class="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold mb-1 <?= $st['done'] ? 'bg-emerald-600 text-white' : (!empty($st['active']) ? 'bg-blue-600 text-white animate-pulse' : 'bg-slate-200 text-slate-500') ?>">
+              <a href="<?= $stageTarget ?>" class="<?= $cardClass ?> cursor-pointer group">
+                <div class="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold mb-1.5 shrink-0 transition-transform group-hover:scale-110 <?= $st['done'] ? 'bg-emerald-600 text-white' : (!empty($st['active']) ? 'bg-blue-600 text-white animate-pulse' : 'bg-slate-200 text-slate-500') ?>">
                   <?= $st['done'] ? '✓' : ($idx + 1) ?>
                 </div>
-                <span class="text-[10px] font-extrabold uppercase tracking-tight leading-tight"><?= e($st['label']) ?></span>
+                <span class="text-[10px] font-black uppercase tracking-tight leading-tight line-clamp-2"><?= e($st['label']) ?></span>
               </a>
             <?php else: ?>
-              <div class="flex flex-col items-center text-center p-2 rounded-2xl transition <?= $st['done'] ? 'bg-emerald-50/80 border border-emerald-200 text-emerald-800' : (!empty($st['active']) ? 'bg-blue-50 border-2 border-blue-500 text-blue-900 shadow-sm' : 'bg-slate-50 border border-slate-200/60 text-slate-400') ?>">
-                <div class="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold mb-1 <?= $st['done'] ? 'bg-emerald-600 text-white' : (!empty($st['active']) ? 'bg-blue-600 text-white animate-pulse' : 'bg-slate-200 text-slate-500') ?>">
+              <div class="<?= $cardClass ?>">
+                <div class="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold mb-1.5 shrink-0 <?= $st['done'] ? 'bg-emerald-600 text-white' : (!empty($st['active']) ? 'bg-blue-600 text-white animate-pulse' : 'bg-slate-200 text-slate-500') ?>">
                   <?= $st['done'] ? '✓' : ($idx + 1) ?>
                 </div>
-                <span class="text-[10px] font-extrabold uppercase tracking-tight leading-tight"><?= e($st['label']) ?></span>
+                <span class="text-[10px] font-black uppercase tracking-tight leading-tight line-clamp-2"><?= e($st['label']) ?></span>
               </div>
             <?php endif; ?>
           <?php endforeach; ?>

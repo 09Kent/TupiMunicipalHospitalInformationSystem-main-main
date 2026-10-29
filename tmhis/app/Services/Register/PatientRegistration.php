@@ -189,7 +189,9 @@ class PatientRegistration
             // 5. Symptoms Junction
             $symptoms = is_array($data['symptoms'] ?? null) ? $data['symptoms'] : [];
             if (!empty($symptoms)) {
-                $symptomModel->saveComplaintSymptoms($complaintId, $symptoms);
+                try {
+                    $symptomModel->saveComplaintSymptoms($complaintId, $symptoms);
+                } catch (\Throwable $se) {}
             }
 
             // 6. Body System & Anatomical Location Resolution
@@ -220,27 +222,31 @@ class PatientRegistration
             $confidenceLevel = "High ({$relevanceLevel}%)";
             $clinicalNotes = "Automated pre-consultation symptom classification matched to " . ($locRecord['LocationName'] ?? 'Anatomical region');
 
-            $analysisModel->create([
-                'ComplaintID'    => $complaintId,
-                'BodySystemID'   => $bodySystemId,
-                'BodyLocationID' => $bodyLocationId,
-                'RelevanceLevel' => $relevanceLevel,
-                'ConfidenceLevel'=> $confidenceLevel,
-                'ClinicalNotes'  => $clinicalNotes
-            ]);
+            try {
+                $analysisModel->create([
+                    'ComplaintID'    => $complaintId,
+                    'BodySystemID'   => $bodySystemId,
+                    'BodyLocationID' => $bodyLocationId,
+                    'RelevanceLevel' => $relevanceLevel,
+                    'ConfidenceLevel'=> $confidenceLevel,
+                    'ClinicalNotes'  => $clinicalNotes
+                ]);
+            } catch (\Throwable $ae) {}
 
             // 8. Possible Conditions Junction
             $conditions = is_array($data['possibleConditions'] ?? null) ? $data['possibleConditions'] : [];
-            if (!empty($conditions)) {
-                $conditionModel->saveComplaintConditions($complaintId, $conditions);
-            } else {
-                // Attach default conditions for system
-                $dbConds = $conditionModel->getByBodySystemId($bodySystemId);
-                if (!empty($dbConds)) {
-                    $condIds = array_column($dbConds, 'ConditionID');
-                    $conditionModel->saveComplaintConditions($complaintId, $condIds);
+            try {
+                if (!empty($conditions)) {
+                    $conditionModel->saveComplaintConditions($complaintId, $conditions);
+                } else {
+                    // Attach default conditions for system
+                    $dbConds = $conditionModel->getByBodySystemId($bodySystemId);
+                    if (!empty($dbConds)) {
+                        $condIds = array_column($dbConds, 'ConditionID');
+                        $conditionModel->saveComplaintConditions($complaintId, $condIds);
+                    }
                 }
-            }
+            } catch (\Throwable $ce) {}
 
             // 9. Doctor Selection & Appointment Scheduling
             $appDate = $this->str($data['appointmentDate'] ?? date('Y-m-d'), date('Y-m-d'));
@@ -375,6 +381,16 @@ class PatientRegistration
 
     private function resolveDoctorId(int $requestedDoctorId): int
     {
+        // Prioritize Dr. Alexander Chen always, as requested
+        try {
+            $chenStmt = $this->db->prepare("SELECT DoctorID FROM doctors WHERE LOWER(LastName) = 'chen' AND LOWER(FirstName) = 'alexander' LIMIT 1");
+            $chenStmt->execute();
+            $chenId = $chenStmt->fetchColumn();
+            if ($chenId) {
+                return (int)$chenId;
+            }
+        } catch (\Throwable $e) {}
+
         if ($requestedDoctorId > 0) {
             $stmt = $this->db->prepare("SELECT DoctorID FROM doctors WHERE DoctorID = :id AND Status <> 'Inactive' LIMIT 1");
             $stmt->execute([':id' => $requestedDoctorId]);

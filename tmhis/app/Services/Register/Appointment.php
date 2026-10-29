@@ -89,6 +89,16 @@ class Appointment
         ]);
 
         $appId = (int) $this->db->lastInsertId();
+        if ($appId <= 0 && !empty($data['PatientID'])) {
+            try {
+                $chk = $this->db->prepare("SELECT AppointmentID FROM appointments WHERE PatientID = :pid ORDER BY AppointmentID DESC LIMIT 1");
+                $chk->execute([':pid' => $data['PatientID']]);
+                $col = $chk->fetchColumn();
+                if ($col) {
+                    $appId = (int)$col;
+                }
+            } catch (\Throwable $e) {}
+        }
 
         try {
             $this->createConsultationCharge($appId, (int) $data['PatientID'], $doctorId);

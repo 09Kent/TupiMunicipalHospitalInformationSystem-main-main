@@ -76,25 +76,27 @@ class PatientTimelineService
 
         // 4. Doctor Assignments
         try {
-            $docAssigns = DB::table('doctor_assignments as da')
-                ->leftJoin('doctors as d', 'da.DoctorID', '=', 'd.DoctorID')
-                ->where('da.PatientID', $patientId)
-                ->select('da.*', 'd.FirstName as DocFirst', 'd.LastName as DocLast')
-                ->get();
+            if (\Illuminate\Support\Facades\Schema::hasTable('doctor_assignments')) {
+                $docAssigns = DB::table('doctor_assignments as da')
+                    ->leftJoin('doctors as d', 'da.DoctorID', '=', 'd.DoctorID')
+                    ->where('da.PatientID', $patientId)
+                    ->select('da.*', 'd.FirstName as DocFirst', 'd.LastName as DocLast')
+                    ->get();
 
-            foreach ($docAssigns as $da) {
-                $docName = $da->DocLast ? "Dr. {$da->DocFirst} {$da->DocLast}" : 'Attending Physician';
-                $events[] = [
-                    'timestamp'   => strtotime($da->AssignedAt),
-                    'time'        => date('h:i A', strtotime($da->AssignedAt)),
-                    'date'        => date('M d, Y', strtotime($da->AssignedAt)),
-                    'stage'       => 'Doctor Assignment',
-                    'title'       => 'Assigned to Attending Physician',
-                    'description' => "Patient assigned to {$docName} by " . ($da->AssignedByName ?: 'Staff') . ".",
-                    'actor'       => $da->AssignedByName ?: 'Clinical Coordinator',
-                    'icon'        => 'stethoscope',
-                    'status'      => 'completed'
-                ];
+                foreach ($docAssigns as $da) {
+                    $docName = $da->DocLast ? "Dr. {$da->DocFirst} {$da->DocLast}" : 'Attending Physician';
+                    $events[] = [
+                        'timestamp'   => strtotime($da->AssignedAt),
+                        'time'        => date('h:i A', strtotime($da->AssignedAt)),
+                        'date'        => date('M d, Y', strtotime($da->AssignedAt)),
+                        'stage'       => 'Doctor Assignment',
+                        'title'       => 'Assigned to Attending Physician',
+                        'description' => "Patient assigned to {$docName} by " . ($da->AssignedByName ?: 'Staff') . ".",
+                        'actor'       => $da->AssignedByName ?: 'Clinical Coordinator',
+                        'icon'        => 'stethoscope',
+                        'status'      => 'completed'
+                    ];
+                }
             }
         } catch (\Throwable $e) {}
 

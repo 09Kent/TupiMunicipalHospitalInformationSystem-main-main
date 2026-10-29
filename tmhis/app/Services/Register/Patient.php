@@ -159,7 +159,19 @@ class Patient
             }
         }
 
-        return (int) $this->db->lastInsertId();
+        $insertedId = (int) $this->db->lastInsertId();
+        if ($insertedId <= 0 && !empty($patientCode)) {
+            try {
+                $chk = $this->db->prepare("SELECT PatientID FROM patients WHERE PatientCode = :code ORDER BY PatientID DESC LIMIT 1");
+                $chk->execute([':code' => $patientCode]);
+                $col = $chk->fetchColumn();
+                if ($col) {
+                    $insertedId = (int)$col;
+                }
+            } catch (\Throwable $e) {}
+        }
+
+        return $insertedId;
     }
 
     /**

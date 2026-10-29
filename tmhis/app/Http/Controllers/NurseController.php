@@ -304,7 +304,9 @@ class NurseController extends Controller
 
     public function updatePatientStatus(Request $request, $id)
     {
-        $patient = \App\Models\Patient::where('PatientID', $id)->orWhere('PatientCode', $id)->firstOrFail();
+        $patient = is_numeric($id)
+            ? \App\Models\Patient::where('PatientID', (int)$id)->orWhere('PatientCode', (string)$id)->firstOrFail()
+            : \App\Models\Patient::where('PatientCode', (string)$id)->firstOrFail();
         $status = $request->input('status', 'Active');
         $patient->update(['Status' => $status]);
 
