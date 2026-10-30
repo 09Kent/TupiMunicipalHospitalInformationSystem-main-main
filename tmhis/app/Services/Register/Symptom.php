@@ -46,7 +46,16 @@ class Symptom
      */
     public function saveComplaintSymptoms(int $complaintId, array $symptomIdsOrNames): void
     {
-        if (empty($symptomIdsOrNames)) return;
+        if ($complaintId <= 0 || empty($symptomIdsOrNames)) return;
+
+        // Verify complaint exists in database to prevent FK violation
+        try {
+            $chk = $this->db->prepare("SELECT 1 FROM complaints WHERE ComplaintID = :cid LIMIT 1");
+            $chk->execute([':cid' => $complaintId]);
+            if (!$chk->fetchColumn()) {
+                return;
+            }
+        } catch (\Throwable $e) {}
 
         // Clear existing
         $stmtDel = $this->db->prepare("DELETE FROM patient_symptoms WHERE ComplaintID = :cid");

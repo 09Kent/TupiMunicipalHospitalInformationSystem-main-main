@@ -298,33 +298,37 @@ class AssignmentApiController extends Controller
 
         $doctorAssignments = collect();
         try {
-            $doctorAssignments = DB::table('doctor_assignments as da')
-                ->leftJoin('doctors as d', 'da.DoctorID', '=', 'd.DoctorID')
-                ->where('da.PatientID', $patientId)
-                ->select('da.*', 'd.FirstName as DocFirst', 'd.LastName as DocLast', 'd.Specialty', 'd.LicenseNumber')
-                ->orderBy('da.AssignmentID', 'desc')
-                ->get();
+            if (\Illuminate\Support\Facades\Schema::hasTable('doctor_assignments')) {
+                $doctorAssignments = DB::table('doctor_assignments as da')
+                    ->leftJoin('doctors as d', 'da.DoctorID', '=', 'd.DoctorID')
+                    ->where('da.PatientID', $patientId)
+                    ->select('da.*', 'd.FirstName as DocFirst', 'd.LastName as DocLast', 'd.Specialty', 'd.LicenseNumber')
+                    ->orderBy('da.AssignmentID', 'desc')
+                    ->get();
+            }
         } catch (\Throwable $e) {
         }
 
         $nurseAssignments = collect();
         try {
-            $nurseAssignments = DB::table('nurse_assignments as na')
-                ->leftJoin('users as u', 'na.NurseID', '=', 'u.UserID')
-                ->leftJoin('nurse_tasks as nt', 'na.TaskID', '=', 'nt.TaskID')
-                ->where('na.PatientID', $patientId)
-                ->select(
-                    'na.*',
-                    DB::raw("TRIM(CONCAT(COALESCE(u.FirstName, ''), ' ', COALESCE(u.LastName, ''))) as NurseName"),
-                    'u.Username as NurseUsername',
-                    'nt.TaskTitle',
-                    'nt.Status as TaskStatus',
-                    'nt.MedicationName',
-                    'nt.Dosage',
-                    'nt.DueTime'
-                )
-                ->orderBy('na.AssignmentID', 'desc')
-                ->get();
+            if (\Illuminate\Support\Facades\Schema::hasTable('nurse_assignments')) {
+                $nurseAssignments = DB::table('nurse_assignments as na')
+                    ->leftJoin('users as u', 'na.NurseID', '=', 'u.UserID')
+                    ->leftJoin('nurse_tasks as nt', 'na.TaskID', '=', 'nt.TaskID')
+                    ->where('na.PatientID', $patientId)
+                    ->select(
+                        'na.*',
+                        DB::raw("TRIM(CONCAT(COALESCE(u.FirstName, ''), ' ', COALESCE(u.LastName, ''))) as NurseName"),
+                        'u.Username as NurseUsername',
+                        'nt.TaskTitle',
+                        'nt.Status as TaskStatus',
+                        'nt.MedicationName',
+                        'nt.Dosage',
+                        'nt.DueTime'
+                    )
+                    ->orderBy('na.AssignmentID', 'desc')
+                    ->get();
+            }
         } catch (\Throwable $e) {
         }
 

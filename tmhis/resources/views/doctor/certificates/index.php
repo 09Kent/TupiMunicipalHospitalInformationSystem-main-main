@@ -620,11 +620,25 @@ function initPatientSearchWidget(searchId, hiddenId, resultsId, statusId) {
 
     timer = setTimeout(async () => {
       try {
-        const res = await fetch('<?= url('/doctor/api/prescription-patients') ?>?q=' + encodeURIComponent(q), {
-          headers: { 'Accept': 'application/json' }
-        });
-        const payload = await res.json();
-        if (res.ok && payload.success && payload.data && payload.data.length > 0) {
+        let payload = null;
+        try {
+          const res = await fetch('<?= url('/doctor/api/prescription-patients') ?>?q=' + encodeURIComponent(q), {
+            headers: { 'Accept': 'application/json' }
+          });
+          if (res.ok) {
+            const j = await res.json();
+            if (j && j.success && Array.isArray(j.data)) payload = j;
+          }
+        } catch (err) {}
+
+        if (!payload) {
+          const fb = await fetch('/api/search/patients?q=' + encodeURIComponent(q), {
+            headers: { 'Accept': 'application/json' }
+          });
+          payload = await fb.json();
+        }
+
+        if (payload && payload.success && payload.data && payload.data.length > 0) {
           renderItems(payload.data);
         } else if (localMatches.length === 0) {
           renderItems([]);

@@ -421,4 +421,376 @@ class BillingController extends Controller
             ]
         ];
     }
+
+    /**
+     * POS Feature: Get active medicines for retail pharmacy sales
+     */
+    public function posMedicines(Request $request): JsonResponse
+    {
+        try {
+            $query = DB::table('pharmacy_inventory')
+                ->where('Status', '!=', 'Inactive');
+
+            if ($request->filled('search')) {
+                $search = trim($request->input('search'));
+                $query->where(function ($q) use ($search) {
+                    $q->where('ItemCode', 'like', "%{$search}%")
+                      ->orWhere('GenericName', 'like', "%{$search}%")
+                      ->orWhere('BrandName', 'like', "%{$search}%")
+                      ->orWhere('DosageForm', 'like', "%{$search}%");
+                });
+            }
+
+            if ($request->filled('dosage_form') && $request->input('dosage_form') !== 'All') {
+                $query->where('DosageForm', $request->input('dosage_form'));
+            }
+
+            $medicines = $query->orderBy('GenericName', 'asc')
+                ->limit(100)
+                ->get();
+
+            return response()->json([
+                'success' => true,
+                'data' => $medicines
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to load medicines: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * POS Feature: Search hospital patients
+     */
+    public function posPatients(Request $request): JsonResponse
+    {
+        try {
+            $search = trim($request->input('search', ''));
+            if (empty($search)) {
+                $patients = DB::table('patients')
+                    ->select('PatientID', 'PatientCode', 'FirstName', 'LastName', 'DateOfBirth', 'Gender', 'ContactNumber')
+                    ->orderBy('PatientID', 'desc')
+                    ->limit(20)
+                    ->get();
+            } else {
+                $patients = DB::table('patients')
+                    ->where(function ($q) use ($search) {
+                        $q->where('PatientCode', 'like', "%{$search}%")
+                          ->orWhere('FirstName', 'like', "%{$search}%")
+                          ->orWhere('LastName', 'like', "%{$search}%")
+                          ->orWhere('ContactNumber', 'like', "%{$search}%");
+                    })
+                    ->select('PatientID', 'PatientCode', 'FirstName', 'LastName', 'DateOfBirth', 'Gender', 'ContactNumber')
+                    ->orderBy('PatientID', 'desc')
+                    ->limit(20)
+                    ->get();
+            }
+
+            $mapped = $patients->map(function ($p) {
+                $age = 'N/A';
+                if (!empty($p->DateOfBirth)) {
+                    $age = \Carbon\Carbon::parse($p->DateOfBirth)->age . ' yrs';
+                }
+                return [
+                    'PatientID' => $p->PatientID,
+                    'PatientCode' => $p->PatientCode,
+                    'FullName' => trim($p->FirstName . ' ' . $p->LastName),
+                    'Age' => $age,
+                    'Gender' => $p->Gender ?: 'Unspecified',
+                    'ContactNumber' => $p->ContactNumber ?: 'None'
+                ];
+            });
+
+            return response()->json([
+                'success' => true,
+                'data' => $mapped
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to search patients: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * POS Feature: Complete checkout transaction
+     */
+    public function posCheckout(Request $request): JsonResponse
+    {
+        $request->validate([
+            'customer_type'   => 'required|in:Walk-in,Patient,walk-in,patient',
+            'patient_id'      => 'nullable|integer',
+            'customer_name'   => 'nullable|string|max:150',
+            'customer_phone'  => 'nullable|string|max:50',
+            'items'           => 'required|array|min:1',
+            'items.*.inventory_id' => 'required|integer|min:1',
+            'items.*.quantity'     => 'required|integer|min:1',
+            'discount_type'   => 'nullable|string|max:50',
+            'discount_amount' => 'nullable|numeric|min:0',
+            'payment_method'  => 'required|string|max:50',
+            'amount_received' => 'required|numeric|min:0',
+            'reference_number'=> 'nullable|string|max:100',
+            'notes'           => 'nullable|string|max:500',
+        ]);
+
+        $customerType = (stripos($request->input('customer_type'), 'patient') !== false) ? 'Patient' : 'Walk-in';
+        $patientId = null;
+        $customerName = trim($request->input('customer_name') ?: '');
+
+        if ($customerType === 'Patient') {
+            $pId = (int)$request->input('patient_id', 0);
+            if ($pId <= 0) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Patient selection is required for patient customer type.'
+                ], 422);
+            }
+            $patient = DB::table('patients')->where('PatientID', $pId)->first();
+            if (!$patient) {
+                return response()->json([
+                    'success' => false,
+                    'message' => "Selected patient record #{$pId} does not exist."
+                ], 404);
+            }
+            $patientId = $pId;
+            if (empty($customerName)) {
+                $customerName = trim($patient->FirstName . ' ' . $patient->LastName);
+            }
+        }
+
+        if (empty($customerName)) {
+            $customerName = 'Walk-in Customer';
+        }
+
+        $itemsInput = $request->input('items');
+        $user = auth()->user();
+        $cashierId = $user ? $user->UserID : 1;
+        $cashierName = $user ? ($user->FullName ?: $user->Username) : 'Official Cashier';
+
+        try {
+            $sale = DB::transaction(function () use ($request, $customerType, $patientId, $customerName, $itemsInput, $cashierId, $cashierName) {
+                // 1. Lock and validate inventory items
+                $processedItems = [];
+                $subTotal = 0.00;
+
+                foreach ($itemsInput as $item) {
+                    $invId = (int)$item['inventory_id'];
+                    $qty = (int)$item['quantity'];
+
+                    // Row-lock inventory to ensure atomicity & concurrency safety
+                    $inventory = DB::table('pharmacy_inventory')
+                        ->where('InventoryID', $invId)
+                        ->lockForUpdate()
+                        ->first();
+
+                    if (!$inventory) {
+                        throw new \Exception("Medicine inventory record #{$invId} was not found.");
+                    }
+
+                    if ($inventory->CurrentStock < $qty) {
+                        $medName = $inventory->BrandName ? "{$inventory->BrandName} ({$inventory->GenericName})" : $inventory->GenericName;
+                        throw new \Exception("Insufficient stock for {$medName}. Requested: {$qty}, Available: {$inventory->CurrentStock}.");
+                    }
+
+                    $unitPrice = (float)$inventory->SellingPrice;
+                    $itemSubTotal = round($unitPrice * $qty, 2);
+                    $subTotal += $itemSubTotal;
+
+                    $processedItems[] = [
+                        'inventory' => $inventory,
+                        'unit_price' => $unitPrice,
+                        'quantity' => $qty,
+                        'sub_total' => $itemSubTotal
+                    ];
+                }
+
+                // 2. Compute Discounts & Totals
+                $discountType = $request->input('discount_type') ?: 'None';
+                $requestedDiscount = (float)($request->input('discount_amount') ?? 0.00);
+
+                if (stripos($discountType, 'senior') !== false || stripos($discountType, 'pwd') !== false) {
+                    $discountAmount = round($subTotal * 0.20, 2);
+                } elseif (stripos($discountType, 'employee') !== false) {
+                    $discountAmount = round($subTotal * 0.10, 2);
+                } else {
+                    $discountAmount = min($subTotal, max(0.00, $requestedDiscount));
+                }
+
+                $totalAmount = max(0.00, round($subTotal - $discountAmount, 2));
+                $paymentMethod = $request->input('payment_method');
+                $amountReceived = (float)$request->input('amount_received');
+
+                if (strcasecmp($paymentMethod, 'Cash') === 0) {
+                    if ($amountReceived < $totalAmount) {
+                        throw new \Exception("Insufficient cash amount received. Total due is ₱" . number_format($totalAmount, 2) . ", but received ₱" . number_format($amountReceived, 2) . ".");
+                    }
+                    $changeAmount = round($amountReceived - $totalAmount, 2);
+                } else {
+                    if ($amountReceived <= 0) {
+                        $amountReceived = $totalAmount;
+                    }
+                    $changeAmount = 0.00;
+                }
+
+                // 3. Generate unique Receipt Number
+                $datePrefix = date('Ymd');
+                $latestToday = DB::table('pos_sales')
+                    ->where('ReceiptNumber', 'like', "POS-{$datePrefix}-%")
+                    ->orderBy('SaleID', 'desc')
+                    ->value('ReceiptNumber');
+
+                if ($latestToday && preg_match('/POS-\d+-(\d+)/', $latestToday, $matches)) {
+                    $seq = (int)$matches[1] + 1;
+                } else {
+                    $seq = 1;
+                }
+                $receiptNumber = sprintf("POS-%s-%04d", $datePrefix, $seq);
+
+                // 4. Create POS Sale Record
+                $saleId = DB::table('pos_sales')->insertGetId([
+                    'ReceiptNumber'   => $receiptNumber,
+                    'CustomerType'    => $customerType,
+                    'PatientID'       => $patientId,
+                    'CustomerName'    => $customerName,
+                    'CustomerPhone'   => $request->input('customer_phone'),
+                    'SubTotal'        => $subTotal,
+                    'DiscountType'    => $discountType,
+                    'DiscountAmount'  => $discountAmount,
+                    'TotalAmount'     => $totalAmount,
+                    'AmountReceived'  => $amountReceived,
+                    'ChangeAmount'    => $changeAmount,
+                    'PaymentMethod'   => $paymentMethod,
+                    'ReferenceNumber' => $request->input('reference_number'),
+                    'CashierID'       => $cashierId,
+                    'CashierName'     => $cashierName,
+                    'Status'          => 'Completed',
+                    'Notes'           => $request->input('notes'),
+                    'created_at'      => now(),
+                    'updated_at'      => now(),
+                ]);
+
+                // 5. Create Sale Items and Deduct Inventory
+                foreach ($processedItems as $pItem) {
+                    $inv = $pItem['inventory'];
+                    $qty = $pItem['quantity'];
+
+                    $medDisplayName = $inv->BrandName ? "{$inv->BrandName} ({$inv->GenericName})" : $inv->GenericName;
+
+                    DB::table('pos_sale_items')->insert([
+                        'SaleID'       => $saleId,
+                        'InventoryID'  => $inv->InventoryID,
+                        'ItemCode'     => $inv->ItemCode,
+                        'MedicineName' => $medDisplayName,
+                        'DosageForm'   => $inv->DosageForm,
+                        'Strength'     => $inv->Strength,
+                        'UnitPrice'    => $pItem['unit_price'],
+                        'Quantity'     => $qty,
+                        'SubTotal'     => $pItem['sub_total'],
+                        'created_at'   => now(),
+                        'updated_at'   => now(),
+                    ]);
+
+                    // Deduct stock in pharmacy_inventory
+                    $newStock = $inv->CurrentStock - $qty;
+                    DB::table('pharmacy_inventory')
+                        ->where('InventoryID', $inv->InventoryID)
+                        ->update([
+                            'CurrentStock' => $newStock,
+                            'Status'       => ($newStock <= 0) ? 'Out of Stock' : (($newStock <= ($inv->ReorderLevel ?? 10)) ? 'Low Stock' : 'In Stock')
+                        ]);
+
+                    // Record stock movement
+                    DB::table('pharmacy_stock_movements')->insert([
+                        'InventoryID'   => $inv->InventoryID,
+                        'MovementType'  => 'Dispensed',
+                        'Quantity'      => -$qty,
+                        'ReferenceCode' => $receiptNumber,
+                        'RecordedBy'    => $cashierId,
+                        'CreatedAt'     => now()
+                    ]);
+                }
+
+                return \App\Models\PosSale::with('items', 'patient')->find($saleId);
+            });
+
+            return response()->json([
+                'success'     => true,
+                'message'     => 'POS sale completed successfully!',
+                'receipt_url' => url('/print/pos-receipt/' . $sale->SaleID),
+                'sale'        => $sale
+            ], 201);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ], 422);
+        }
+    }
+
+    /**
+     * POS Feature: Sales history with date and search filters
+     */
+    public function posSalesHistory(Request $request): JsonResponse
+    {
+        try {
+            $query = \App\Models\PosSale::with(['items', 'patient'])
+                ->orderBy('SaleID', 'desc');
+
+            if ($request->filled('search')) {
+                $search = trim($request->input('search'));
+                $query->where(function ($q) use ($search) {
+                    $q->where('ReceiptNumber', 'like', "%{$search}%")
+                      ->orWhere('CustomerName', 'like', "%{$search}%")
+                      ->orWhere('ReferenceNumber', 'like', "%{$search}%");
+                });
+            }
+
+            if ($request->filled('customer_type') && $request->input('customer_type') !== 'All') {
+                $query->where('CustomerType', $request->input('customer_type'));
+            }
+
+            if ($request->filled('start_date')) {
+                $query->whereDate('created_at', '>=', $request->input('start_date'));
+            }
+
+            if ($request->filled('end_date')) {
+                $query->whereDate('created_at', '<=', $request->input('end_date'));
+            }
+
+            $sales = $query->limit(50)->get();
+
+            return response()->json([
+                'success' => true,
+                'data' => $sales
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to load sales history: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * POS Feature: Get single sale details
+     */
+    public function posReceipt(int $id): JsonResponse
+    {
+        try {
+            $sale = \App\Models\PosSale::with(['items', 'patient'])->findOrFail($id);
+            return response()->json([
+                'success' => true,
+                'data' => $sale,
+                'receipt_url' => url('/print/pos-receipt/' . $sale->SaleID)
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Receipt not found: ' . $e->getMessage()
+            ], 404);
+        }
+    }
 }

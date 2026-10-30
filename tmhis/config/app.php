@@ -54,6 +54,8 @@ return [
 
     'url' => env('APP_URL', 'http://localhost'),
 
+    'enable_demo_login' => env('ENABLE_DEMO_LOGIN', env('APP_ENV') !== 'production'),
+
     /*
     |--------------------------------------------------------------------------
     | Application Timezone

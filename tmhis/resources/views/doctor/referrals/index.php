@@ -14,7 +14,7 @@ $pageTitle = 'Patient Referrals (Internal & External) | Doctor Portal • Tupi M
 $activeMenu = 'referrals';
 
 $currentUser = Session::getCurrentUser();
-$doctorId = $currentUser['doctor_id'] ?? (int)session('doctor_id', 1);
+$doctorId = $currentUser['doctor_id'] ?? (int) session('doctor_id', 1);
 $specialtyId = $currentUser['specialty_id'] ?? 2;
 
 $refModel = new Referral();
@@ -22,101 +22,101 @@ $patientModel = new Patient();
 $specialtyModel = new Specialty();
 $doctorModel = new Doctor();
 
-$selectedPatientId = (int)($_GET['patient_id'] ?? 0);
+$selectedPatientId = (int) ($_GET['patient_id'] ?? 0);
 $doctorPatients = $patientModel->getDoctorPatients($doctorId, 100, 0);
 $allSpecialties = $specialtyModel->getAll();
 $allDoctors = $doctorModel->getAll();
 
 // Handle POST actions
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $action = $_POST['action'] ?? '';
-    $csrf = $_POST['csrf_token'] ?? '';
+  $action = $_POST['action'] ?? '';
+  $csrf = $_POST['csrf_token'] ?? '';
 
-    if (!validate_csrf($csrf)) {
-        Session::setFlash('error', 'Invalid security token.');
-    } elseif ($action === 'create_referral') {
-        $pId = (int)($_POST['patient_id'] ?? 0);
-        $refType = $_POST['referral_type'] ?? 'Internal';
-        $targetSpecId = !empty($_POST['target_specialty_id']) ? (int)$_POST['target_specialty_id'] : null;
-        $targetDocId = !empty($_POST['target_doctor_id']) ? (int)$_POST['target_doctor_id'] : null;
-        $receivingHospital = trim($_POST['receiving_hospital'] ?? '');
-        $hospitalAddress = trim($_POST['hospital_address'] ?? '');
-        $requestedService = trim($_POST['requested_service'] ?? '');
-        $reason = trim($_POST['reason'] ?? '');
-        $summary = trim($_POST['clinical_summary'] ?? '');
-        $priority = $_POST['priority'] ?? 'Routine';
-        $urgency = $_POST['urgency'] ?? $priority;
+  if (!validate_csrf($csrf)) {
+    Session::setFlash('error', 'Invalid security token.');
+  } elseif ($action === 'create_referral') {
+    $pId = (int) ($_POST['patient_id'] ?? 0);
+    $refType = $_POST['referral_type'] ?? 'Internal';
+    $targetSpecId = !empty($_POST['target_specialty_id']) ? (int) $_POST['target_specialty_id'] : null;
+    $targetDocId = !empty($_POST['target_doctor_id']) ? (int) $_POST['target_doctor_id'] : null;
+    $receivingHospital = trim($_POST['receiving_hospital'] ?? '');
+    $hospitalAddress = trim($_POST['hospital_address'] ?? '');
+    $requestedService = trim($_POST['requested_service'] ?? '');
+    $reason = trim($_POST['reason'] ?? '');
+    $summary = trim($_POST['clinical_summary'] ?? '');
+    $priority = $_POST['priority'] ?? 'Routine';
+    $urgency = $_POST['urgency'] ?? $priority;
 
-        if ($pId && !empty($reason)) {
-            if (!$patientModel->hasDoctorAccess($doctorId, $pId)) {
-                Session::setFlash('error', 'Access Denied: You are not authorized to create referrals for this patient.');
-                header("Location: " . doctor_url("views/referrals/index.php"));
-                exit;
-            }
+    if ($pId && !empty($reason)) {
+      if (!$patientModel->hasDoctorAccess($doctorId, $pId)) {
+        Session::setFlash('error', 'Access Denied: You are not authorized to create referrals for this patient.');
+        header("Location: " . doctor_url("views/referrals/index.php"));
+        exit;
+      }
 
-            // Validation based on type
-            if ($refType === 'Internal' && !$targetSpecId) {
-                Session::setFlash('error', 'Please choose a target clinical specialty for internal referral.');
-                header("Location: " . doctor_url("views/referrals/index.php"));
-                exit;
-            }
-            if ($refType === 'External' && empty($receivingHospital)) {
-                Session::setFlash('error', 'Please specify the receiving hospital for external referral.');
-                header("Location: " . doctor_url("views/referrals/index.php"));
-                exit;
-            }
+      // Validation based on type
+      if ($refType === 'Internal' && !$targetSpecId) {
+        Session::setFlash('error', 'Please choose a target clinical specialty for internal referral.');
+        header("Location: " . doctor_url("views/referrals/index.php"));
+        exit;
+      }
+      if ($refType === 'External' && empty($receivingHospital)) {
+        Session::setFlash('error', 'Please specify the receiving hospital for external referral.');
+        header("Location: " . doctor_url("views/referrals/index.php"));
+        exit;
+      }
 
-            $refId = $refModel->create([
-                'patient_id'           => $pId,
-                'referral_type'        => $refType,
-                'referring_doctor_id'  => $doctorId,
-                'referring_department' => $currentUser['specialty'] ?? 'General Medicine',
-                'target_specialty_id'  => $targetSpecId,
-                'target_doctor_id'     => $targetDocId,
-                'receiving_hospital'   => $receivingHospital ?: null,
-                'hospital_address'     => $hospitalAddress ?: null,
-                'requested_service'    => $requestedService ?: null,
-                'reason'               => $reason,
-                'clinical_summary'     => $summary,
-                'priority'             => $priority,
-                'urgency'              => $urgency,
-                'status'               => 'Pending',
-                'tracking_status'      => $refType === 'External' ? 'Sent' : 'Created'
-            ]);
+      $refId = $refModel->create([
+        'patient_id' => $pId,
+        'referral_type' => $refType,
+        'referring_doctor_id' => $doctorId,
+        'referring_department' => $currentUser['specialty'] ?? 'General Medicine',
+        'target_specialty_id' => $targetSpecId,
+        'target_doctor_id' => $targetDocId,
+        'receiving_hospital' => $receivingHospital ?: null,
+        'hospital_address' => $hospitalAddress ?: null,
+        'requested_service' => $requestedService ?: null,
+        'reason' => $reason,
+        'clinical_summary' => $summary,
+        'priority' => $priority,
+        'urgency' => $urgency,
+        'status' => 'Pending',
+        'tracking_status' => $refType === 'External' ? 'Sent' : 'Created'
+      ]);
 
-            Session::setFlash('success', ($refType === 'External' ? 'External hospital referral dispatched' : 'Internal specialist referral routed') . ' successfully.');
-            header("Location: " . doctor_url("views/referrals/index.php"));
-            exit;
-        } else {
-            Session::setFlash('error', 'Please fill in all required referral details.');
-        }
-    } elseif ($action === 'update_status') {
-        $refId = (int)($_POST['referral_id'] ?? 0);
-        $newStatus = $_POST['status'] ?? 'Accepted';
-        $notes = trim($_POST['response_notes'] ?? '');
-
-        if ($refId) {
-            $ref = $refModel->findById($refId);
-            if ($ref && ((int)$ref['TargetDoctorID'] === $doctorId || ((int)$ref['TargetSpecialtyID'] === $specialtyId && empty($ref['TargetDoctorID'])) || (int)$ref['ReferringDoctorID'] === $doctorId)) {
-                $refModel->updateStatus($refId, $newStatus, $notes);
-                Session::setFlash('success', "Referral status updated to $newStatus.");
-            } else {
-                Session::setFlash('error', 'Access Denied: You can only update referrals directed to you or your specialty.');
-            }
-            header("Location: " . doctor_url("views/referrals/index.php"));
-            exit;
-        }
-    } elseif ($action === 'update_tracking') {
-        $refId = (int)($_POST['referral_id'] ?? 0);
-        $tracking = $_POST['tracking_status'] ?? 'Sent';
-
-        if ($refId) {
-            $refModel->updateTracking($refId, $tracking);
-            Session::setFlash('success', "Referral tracking status updated to: $tracking");
-            header("Location: " . doctor_url("views/referrals/index.php"));
-            exit;
-        }
+      Session::setFlash('success', ($refType === 'External' ? 'External hospital referral dispatched' : 'Internal specialist referral routed') . ' successfully.');
+      header("Location: " . doctor_url("views/referrals/index.php"));
+      exit;
+    } else {
+      Session::setFlash('error', 'Please fill in all required referral details.');
     }
+  } elseif ($action === 'update_status') {
+    $refId = (int) ($_POST['referral_id'] ?? 0);
+    $newStatus = $_POST['status'] ?? 'Accepted';
+    $notes = trim($_POST['response_notes'] ?? '');
+
+    if ($refId) {
+      $ref = $refModel->findById($refId);
+      if ($ref && ((int) $ref['TargetDoctorID'] === $doctorId || ((int) $ref['TargetSpecialtyID'] === $specialtyId && empty($ref['TargetDoctorID'])) || (int) $ref['ReferringDoctorID'] === $doctorId)) {
+        $refModel->updateStatus($refId, $newStatus, $notes);
+        Session::setFlash('success', "Referral status updated to $newStatus.");
+      } else {
+        Session::setFlash('error', 'Access Denied: You can only update referrals directed to you or your specialty.');
+      }
+      header("Location: " . doctor_url("views/referrals/index.php"));
+      exit;
+    }
+  } elseif ($action === 'update_tracking') {
+    $refId = (int) ($_POST['referral_id'] ?? 0);
+    $tracking = $_POST['tracking_status'] ?? 'Sent';
+
+    if ($refId) {
+      $refModel->updateTracking($refId, $tracking);
+      Session::setFlash('success', "Referral tracking status updated to: $tracking");
+      header("Location: " . doctor_url("views/referrals/index.php"));
+      exit;
+    }
+  }
 }
 
 $outgoingReferrals = $refModel->getOutgoing($doctorId);
@@ -127,7 +127,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
 ?>
 
 <div class="flex-1 flex flex-col min-w-0 overflow-y-auto h-screen bg-slate-50">
-  
+
   <?php require_once __DIR__ . '/../includes/topbar.php'; ?>
 
   <main class="p-6 sm:p-8 space-y-6 flex-1">
@@ -141,18 +141,19 @@ require_once __DIR__ . '/../includes/sidebar.php';
             Internal & External
           </span>
         </div>
-        <p class="text-xs text-slate-500 font-medium mt-1">Cross-departmental specialist evaluations and external hospital transfers with live tracking.</p>
+        <p class="text-xs text-slate-500 font-medium mt-1">Cross-departmental specialist evaluations and external
+          hospital transfers with live tracking.</p>
       </div>
 
       <div class="flex items-center gap-2.5">
         <button onclick="openNewRefModal('Internal')"
-                class="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs shadow-md shadow-blue-600/25 transition flex items-center gap-2">
+          class="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs shadow-md shadow-blue-600/25 transition flex items-center gap-2">
           <i data-lucide="share-2" class="w-4 h-4"></i>
           <span>Internal Specialty Referral</span>
         </button>
 
         <button onclick="openNewRefModal('External')"
-                class="px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl text-xs shadow-md shadow-amber-600/25 transition flex items-center gap-2">
+          class="px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl text-xs shadow-md shadow-amber-600/25 transition flex items-center gap-2">
           <i data-lucide="building-2" class="w-4 h-4"></i>
           <span>Refer to Another Hospital</span>
         </button>
@@ -161,20 +162,28 @@ require_once __DIR__ . '/../includes/sidebar.php';
 
     <!-- Section 1: Incoming Referrals (Sent to this doctor or specialty) -->
     <div class="bg-white rounded-3xl border border-slate-200/80 shadow-card overflow-hidden">
-      <div class="p-5 border-b border-slate-100 flex items-center justify-between">
+      <div class="p-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 class="text-sm font-extrabold text-slate-900 font-display flex items-center gap-2">
             <i data-lucide="inbox" class="w-4 h-4 text-purple-600"></i>
             <span>Incoming Referrals to <?= e($currentUser['specialty']) ?> (<?= count($incomingReferrals) ?>)</span>
           </h2>
-          <p class="text-xs text-slate-400 font-medium">Patients referred from other hospital medical departments for your evaluation</p>
+          <p class="text-xs text-slate-400 font-medium">Patients referred from other hospital medical departments for
+            your evaluation</p>
+        </div>
+        <div class="relative w-full sm:w-64">
+          <i data-lucide="search"
+            class="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+          <input type="text" placeholder="Filter incoming..." oninput="filterIncomingReferrals(this.value)"
+            class="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-500 transition" />
         </div>
       </div>
 
       <div class="overflow-x-auto">
         <table class="w-full text-left border-collapse text-xs">
           <thead>
-            <tr class="bg-slate-50/80 border-b border-slate-100 text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
+            <tr
+              class="bg-slate-50/80 border-b border-slate-100 text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
               <th class="py-3 px-5">Referral Code</th>
               <th class="py-3 px-5">Patient Name</th>
               <th class="py-3 px-5">Referring Doctor</th>
@@ -191,7 +200,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
               </tr>
             <?php else: ?>
               <?php foreach ($incomingReferrals as $inRef): ?>
-                <tr class="hover:bg-blue-50/40 transition">
+                <tr class="in-ref-row hover:bg-blue-50/40 transition">
                   <td class="py-4 px-5 font-mono font-bold text-blue-700">
                     <?= e($inRef['ReferralCode']) ?>
                     <span class="block text-[10px] font-semibold text-slate-400 font-sans">
@@ -199,35 +208,39 @@ require_once __DIR__ . '/../includes/sidebar.php';
                     </span>
                   </td>
                   <td class="py-4 px-5">
-                    <a href="<?= doctor_url('views/patients/view.php?id=' . $inRef['PatientID']) ?>" 
-                       class="font-extrabold text-slate-900 hover:text-blue-600 transition block">
+                    <a href="<?= doctor_url('views/patients/view.php?id=' . $inRef['PatientID']) ?>"
+                      class="font-extrabold text-slate-900 hover:text-blue-600 transition block">
                       <?= e($inRef['PatientFirstName'] . ' ' . $inRef['PatientLastName']) ?>
                     </a>
                     <span class="text-[11px] text-slate-400 font-mono"><?= e($inRef['PatientCode']) ?></span>
                   </td>
                   <td class="py-4 px-5">
-                    <div class="font-bold text-slate-800">Dr. <?= e($inRef['RefDocFirstName'] . ' ' . $inRef['RefDocLastName']) ?></div>
+                    <div class="font-bold text-slate-800">Dr.
+                      <?= e($inRef['RefDocFirstName'] . ' ' . $inRef['RefDocLastName']) ?></div>
                     <span class="text-[11px] text-slate-400"><?= e($inRef['RefDocSpecialty']) ?></span>
                   </td>
                   <td class="py-4 px-5 max-w-sm">
                     <p class="font-bold text-slate-800 line-clamp-1"><?= e($inRef['Reason']) ?></p>
-                    <p class="text-[11px] text-slate-500 line-clamp-2"><?= e($inRef['ClinicalSummary'] ?: 'Standard specialist opinion request.') ?></p>
+                    <p class="text-[11px] text-slate-500 line-clamp-2">
+                      <?= e($inRef['ClinicalSummary'] ?: 'Standard specialist opinion request.') ?></p>
                   </td>
                   <td class="py-4 px-5">
-                    <span class="px-2 py-0.5 rounded-full text-[10px] font-bold border <?= get_priority_badge($inRef['Priority']) ?>">
+                    <span
+                      class="px-2 py-0.5 rounded-full text-[10px] font-bold border <?= get_priority_badge($inRef['Priority']) ?>">
                       <?= e($inRef['Priority']) ?>
                     </span>
                   </td>
                   <td class="py-4 px-5">
-                    <span class="px-2.5 py-1 text-[10px] font-bold rounded-full border <?= get_status_badge($inRef['Status']) ?>">
+                    <span
+                      class="px-2.5 py-1 text-[10px] font-bold rounded-full border <?= get_status_badge($inRef['Status']) ?>">
                       <?= e($inRef['TrackingStatus'] ?? $inRef['Status']) ?>
                     </span>
                   </td>
                   <td class="py-4 px-5 text-right space-x-1.5 whitespace-nowrap">
                     <!-- Universal Printout -->
-                    <a href="/print/referral/<?= (int)$inRef['ReferralID'] ?>" target="_blank"
-                       title="Print Official Referral Document"
-                       class="px-2.5 py-1 text-slate-700 bg-slate-100 hover:bg-slate-200 font-bold rounded-xl text-[11px] transition inline-flex items-center gap-1 border border-slate-200">
+                    <a href="/print/referral/<?= (int) $inRef['ReferralID'] ?>" target="_blank"
+                      title="Print Official Referral Document"
+                      class="px-2.5 py-1 text-slate-700 bg-slate-100 hover:bg-slate-200 font-bold rounded-xl text-[11px] transition inline-flex items-center gap-1 border border-slate-200">
                       <i data-lucide="printer" class="w-3.5 h-3.5"></i>
                       <span>Print</span>
                     </a>
@@ -238,7 +251,8 @@ require_once __DIR__ . '/../includes/sidebar.php';
                         <input type="hidden" name="action" value="update_status" />
                         <input type="hidden" name="referral_id" value="<?= $inRef['ReferralID'] ?>" />
                         <input type="hidden" name="status" value="Accepted" />
-                        <button type="submit" class="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-[11px] transition">
+                        <button type="submit"
+                          class="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-[11px] transition">
                           Accept
                         </button>
                       </form>
@@ -248,7 +262,8 @@ require_once __DIR__ . '/../includes/sidebar.php';
                         <input type="hidden" name="action" value="update_status" />
                         <input type="hidden" name="referral_id" value="<?= $inRef['ReferralID'] ?>" />
                         <input type="hidden" name="status" value="Completed" />
-                        <button type="submit" class="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-[11px] transition">
+                        <button type="submit"
+                          class="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-[11px] transition">
                           Complete
                         </button>
                       </form>
@@ -264,20 +279,28 @@ require_once __DIR__ . '/../includes/sidebar.php';
 
     <!-- Section 2: Outgoing Referrals (Sent by this doctor) -->
     <div class="bg-white rounded-3xl border border-slate-200/80 shadow-card overflow-hidden">
-      <div class="p-5 border-b border-slate-100 flex items-center justify-between">
+      <div class="p-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 class="text-sm font-extrabold text-slate-900 font-display flex items-center gap-2">
             <i data-lucide="send" class="w-4 h-4 text-blue-600"></i>
             <span>Outgoing Referrals (<?= count($outgoingReferrals) ?>)</span>
           </h2>
-          <p class="text-xs text-slate-400 font-medium">Internal specialty consultations and external hospital transfers requested by you</p>
+          <p class="text-xs text-slate-400 font-medium">Internal specialty consultations and external hospital transfers
+            requested by you</p>
+        </div>
+        <div class="relative w-full sm:w-64">
+          <i data-lucide="search"
+            class="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+          <input type="text" placeholder="Filter outgoing..." oninput="filterOutgoingReferrals(this.value)"
+            class="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition" />
         </div>
       </div>
 
       <div class="overflow-x-auto">
         <table class="w-full text-left border-collapse text-xs">
           <thead>
-            <tr class="bg-slate-50/80 border-b border-slate-100 text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
+            <tr
+              class="bg-slate-50/80 border-b border-slate-100 text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
               <th class="py-3 px-5">Referral Code & Type</th>
               <th class="py-3 px-5">Patient Name</th>
               <th class="py-3 px-5">Destination / Receiving Facility</th>
@@ -293,20 +316,22 @@ require_once __DIR__ . '/../includes/sidebar.php';
                 <td colspan="7" class="py-8 text-center text-slate-400 italic">No outgoing referrals recorded yet.</td>
               </tr>
             <?php else: ?>
-              <?php foreach ($outgoingReferrals as $outRef): 
+              <?php foreach ($outgoingReferrals as $outRef):
                 $isExternal = ($outRef['ReferralType'] ?? 'Internal') === 'External';
                 $tracking = $outRef['TrackingStatus'] ?? 'Created';
-              ?>
-                <tr class="hover:bg-slate-50">
+                ?>
+                <tr class="out-ref-row hover:bg-slate-50">
                   <td class="py-4 px-5">
                     <span class="font-mono font-bold text-blue-700 block"><?= e($outRef['ReferralCode']) ?></span>
-                    <span class="inline-block mt-0.5 px-2 py-0.5 rounded text-[10px] font-bold <?= $isExternal ? 'bg-amber-100 text-amber-800 border border-amber-200' : 'bg-blue-50 text-blue-700 border border-blue-100' ?>">
+                    <span
+                      class="inline-block mt-0.5 px-2 py-0.5 rounded text-[10px] font-bold <?= $isExternal ? 'bg-amber-100 text-amber-800 border border-amber-200' : 'bg-blue-50 text-blue-700 border border-blue-100' ?>">
                       <?= $isExternal ? 'External Hospital' : 'Internal Specialty' ?>
                     </span>
                   </td>
                   <td class="py-4 px-5 font-extrabold text-slate-900">
                     <?= e($outRef['PatientFirstName'] . ' ' . $outRef['PatientLastName']) ?>
-                    <span class="block text-[11px] text-slate-400 font-mono font-normal"><?= e($outRef['PatientCode']) ?></span>
+                    <span
+                      class="block text-[11px] text-slate-400 font-mono font-normal"><?= e($outRef['PatientCode']) ?></span>
                   </td>
                   <td class="py-4 px-5">
                     <?php if ($isExternal): ?>
@@ -318,7 +343,8 @@ require_once __DIR__ . '/../includes/sidebar.php';
                         <div class="text-[11px] text-slate-400 truncate max-w-xs"><?= e($outRef['HospitalAddress']) ?></div>
                       <?php endif; ?>
                     <?php else: ?>
-                      <span class="px-2.5 py-1 bg-slate-100 rounded-xl font-bold text-slate-700 text-[11px] border border-slate-200 block w-fit">
+                      <span
+                        class="px-2.5 py-1 bg-slate-100 rounded-xl font-bold text-slate-700 text-[11px] border border-slate-200 block w-fit">
                         <?= e($outRef['TargetSpecialtyName'] ?? 'Specialty') ?>
                       </span>
                       <span class="text-[11px] text-slate-500 mt-0.5 block">
@@ -343,9 +369,9 @@ require_once __DIR__ . '/../includes/sidebar.php';
                   <td class="py-4 px-5 text-slate-500 whitespace-nowrap"><?= format_date($outRef['CreatedAt']) ?></td>
                   <td class="py-4 px-5 text-right whitespace-nowrap space-x-1">
                     <!-- Print Referral Document -->
-                    <a href="/print/referral/<?= (int)$outRef['ReferralID'] ?>" target="_blank"
-                       title="Print Official Referral Document"
-                       class="px-2.5 py-1 text-slate-700 bg-slate-100 hover:bg-slate-200 font-bold rounded-xl text-[11px] transition inline-flex items-center gap-1 border border-slate-200">
+                    <a href="/print/referral/<?= (int) $outRef['ReferralID'] ?>" target="_blank"
+                      title="Print Official Referral Document"
+                      class="px-2.5 py-1 text-slate-700 bg-slate-100 hover:bg-slate-200 font-bold rounded-xl text-[11px] transition inline-flex items-center gap-1 border border-slate-200">
                       <i data-lucide="printer" class="w-3.5 h-3.5"></i>
                       <span>Print Form</span>
                     </a>
@@ -357,7 +383,8 @@ require_once __DIR__ . '/../includes/sidebar.php';
                         <input type="hidden" name="action" value="update_tracking" />
                         <input type="hidden" name="referral_id" value="<?= $outRef['ReferralID'] ?>" />
                         <input type="hidden" name="tracking_status" value="Transferred" />
-                        <button type="submit" title="Confirm patient arrival / transfer at hospital" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-[11px] transition">
+                        <button type="submit" title="Confirm patient arrival / transfer at hospital"
+                          class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-[11px] transition">
                           Transferred
                         </button>
                       </form>
@@ -376,9 +403,11 @@ require_once __DIR__ . '/../includes/sidebar.php';
 </div>
 
 <!-- Modal: Create Referral (Supports Internal & External) -->
-<div id="newRefModal" class="<?= isset($_GET['new']) ? '' : 'hidden' ?> fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-  <div class="bg-white rounded-3xl max-w-xl w-full p-6 sm:p-8 border border-slate-200 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto">
-    
+<div id="newRefModal"
+  class="<?= isset($_GET['new']) ? '' : 'hidden' ?> fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+  <div
+    class="bg-white rounded-3xl max-w-xl w-full p-6 sm:p-8 border border-slate-200 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto">
+
     <div class="flex items-center justify-between border-b border-slate-100 pb-3">
       <div class="flex items-center gap-2.5">
         <div class="w-10 h-10 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center">
@@ -390,7 +419,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
         </div>
       </div>
       <button type="button" onclick="document.getElementById('newRefModal').classList.add('hidden')"
-              class="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition">
+        class="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition">
         <i data-lucide="x" class="w-4 h-4"></i>
       </button>
     </div>
@@ -401,15 +430,22 @@ require_once __DIR__ . '/../includes/sidebar.php';
 
       <!-- Referral Type Toggle -->
       <div>
-        <label class="block font-bold text-slate-700 mb-1.5 uppercase text-[11px] tracking-wider">Referral Type *</label>
+        <label class="block font-bold text-slate-700 mb-1.5 uppercase text-[11px] tracking-wider">Referral Type
+          *</label>
         <div class="grid grid-cols-2 gap-3 p-1.5 bg-slate-100 rounded-2xl border border-slate-200/80">
-          <label class="flex items-center justify-center gap-2 py-2 px-3 rounded-xl cursor-pointer font-bold transition text-xs select-none" id="type-internal-label">
-            <input type="radio" name="referral_type" value="Internal" checked onchange="toggleRefType('Internal')" class="hidden">
+          <label
+            class="flex items-center justify-center gap-2 py-2 px-3 rounded-xl cursor-pointer font-bold transition text-xs select-none"
+            id="type-internal-label">
+            <input type="radio" name="referral_type" value="Internal" checked onchange="toggleRefType('Internal')"
+              class="hidden">
             <i data-lucide="stethoscope" class="w-4 h-4"></i>
             <span>Internal Hospital Referral</span>
           </label>
-          <label class="flex items-center justify-center gap-2 py-2 px-3 rounded-xl cursor-pointer font-bold transition text-xs select-none" id="type-external-label">
-            <input type="radio" name="referral_type" value="External" onchange="toggleRefType('External')" class="hidden">
+          <label
+            class="flex items-center justify-center gap-2 py-2 px-3 rounded-xl cursor-pointer font-bold transition text-xs select-none"
+            id="type-external-label">
+            <input type="radio" name="referral_type" value="External" onchange="toggleRefType('External')"
+              class="hidden">
             <i data-lucide="building-2" class="w-4 h-4"></i>
             <span>External Hospital Referral</span>
           </label>
@@ -420,19 +456,20 @@ require_once __DIR__ . '/../includes/sidebar.php';
       <div>
         <label class="block font-bold text-slate-700 mb-1">Search Patient *</label>
         <div class="relative">
-          <input type="text" id="ref-patient-search-input" 
-                 placeholder="Type patient name, Patient ID, or Student ID..." 
-                 oninput="filterRefPatients(this.value)"
-                 autocomplete="off"
-                 class="w-full px-3.5 py-2.5 pl-9 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          <input type="text" id="ref-patient-search-input" placeholder="Type patient name, Patient ID, or Student ID..."
+            oninput="filterRefPatients(this.value)" autocomplete="off"
+            class="w-full px-3.5 py-2.5 pl-9 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500" />
           <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 top-3 pointer-events-none"></i>
-          
-          <div id="ref-patient-search-results" class="hidden absolute left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-50 max-h-48 overflow-y-auto divide-y divide-slate-100">
+
+          <div id="ref-patient-search-results"
+            class="hidden absolute left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-50 max-h-48 overflow-y-auto divide-y divide-slate-100">
             <!-- Results dynamically generated -->
           </div>
         </div>
-        <input type="hidden" name="patient_id" id="ref-selected-patient-id" value="<?= $selectedPatientId ?: ($doctorPatients[0]['PatientID'] ?? '') ?>" required />
-        <div id="ref-selected-patient-badge" class="mt-1.5 p-2 bg-blue-50 border border-blue-100 rounded-xl flex items-center justify-between text-[11px] font-bold text-blue-900">
+        <input type="hidden" name="patient_id" id="ref-selected-patient-id"
+          value="<?= $selectedPatientId ?: ($doctorPatients[0]['PatientID'] ?? '') ?>" required />
+        <div id="ref-selected-patient-badge"
+          class="mt-1.5 p-2 bg-blue-50 border border-blue-100 rounded-xl flex items-center justify-between text-[11px] font-bold text-blue-900">
           <span id="ref-selected-patient-name">
             <?= !empty($doctorPatients[0]) ? e($doctorPatients[0]['FirstName'] . ' ' . $doctorPatients[0]['LastName']) . ' (' . e($doctorPatients[0]['PatientCode']) . ')' : 'No patient selected' ?>
           </span>
@@ -445,11 +482,12 @@ require_once __DIR__ . '/../includes/sidebar.php';
         <div>
           <label class="block font-bold text-slate-700 mb-1">Target Medical Specialty *</label>
           <select name="target_specialty_id" id="target_specialty_id"
-                  class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500">
+            class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500">
             <option value="">-- Choose Target Specialty --</option>
             <?php foreach ($allSpecialties as $spec): ?>
               <?php if ($spec['SpecialtyID'] != $specialtyId): ?>
-                <option value="<?= $spec['SpecialtyID'] ?>"><?= e($spec['SpecialtyName']) ?> (<?= e($spec['Description']) ?>)</option>
+                <option value="<?= $spec['SpecialtyID'] ?>"><?= e($spec['SpecialtyName']) ?>
+                  (<?= e($spec['Description']) ?>)</option>
               <?php endif; ?>
             <?php endforeach; ?>
           </select>
@@ -457,12 +495,13 @@ require_once __DIR__ . '/../includes/sidebar.php';
 
         <div>
           <label class="block font-bold text-slate-700 mb-1">Target Doctor (Optional)</label>
-          <select name="target_doctor_id" 
-                  class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <select name="target_doctor_id"
+            class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500">
             <option value="">Any Available Specialist</option>
             <?php foreach ($allDoctors as $doc): ?>
               <?php if ($doc['DoctorID'] != $doctorId): ?>
-                <option value="<?= $doc['DoctorID'] ?>">Dr. <?= e($doc['FirstName'] . ' ' . $doc['LastName']) ?> (<?= e($doc['Specialty'] ?? 'General') ?>)</option>
+                <option value="<?= $doc['DoctorID'] ?>">Dr. <?= e($doc['FirstName'] . ' ' . $doc['LastName']) ?>
+                  (<?= e($doc['Specialty'] ?? 'General') ?>)</option>
               <?php endif; ?>
             <?php endforeach; ?>
           </select>
@@ -474,9 +513,8 @@ require_once __DIR__ . '/../includes/sidebar.php';
         <div>
           <label class="block font-bold text-amber-900 mb-1">Receiving Hospital / Medical Center *</label>
           <input type="text" name="receiving_hospital" id="receiving_hospital"
-                 placeholder="e.g. South Cotabato Provincial Hospital / GenSan Doctors Hospital" 
-                 list="hospital-presets"
-                 class="w-full px-3.5 py-2.5 bg-white border border-amber-300 rounded-xl font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500" />
+            placeholder="e.g. South Cotabato Provincial Hospital / GenSan Doctors Hospital" list="hospital-presets"
+            class="w-full px-3.5 py-2.5 bg-white border border-amber-300 rounded-xl font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500" />
           <datalist id="hospital-presets">
             <option value="South Cotabato Provincial Hospital (SCPH) - Koronadal City">
             <option value="General Santos City District Hospital">
@@ -489,16 +527,65 @@ require_once __DIR__ . '/../includes/sidebar.php';
 
         <div>
           <label class="block font-bold text-amber-900 mb-1">Hospital Address / Location</label>
-          <input type="text" name="hospital_address" 
-                 placeholder="e.g. Aguinaldo St., Koronadal City, South Cotabato" 
-                 class="w-full px-3.5 py-2.5 bg-white border border-amber-300 rounded-xl font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500" />
+          <input type="text" name="hospital_address" placeholder="e.g. Aguinaldo St., Koronadal City, South Cotabato"
+            class="w-full px-3.5 py-2.5 bg-white border border-amber-300 rounded-xl font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500" />
         </div>
 
         <div>
           <label class="block font-bold text-amber-900 mb-1">Requested Service / Level of Care *</label>
-          <input type="text" name="requested_service" 
-                 placeholder="e.g. Tertiary ICU Admission, Advanced CT/MRI, Emergency Neurosurgery" 
-                 class="w-full px-3.5 py-2.5 bg-white border border-amber-300 rounded-xl font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500" />
+          <input type="text" name="requested_service"
+            placeholder="e.g. Tertiary ICU Admission, Advanced CT/MRI, Emergency Neurosurgery"
+            class="w-full px-3.5 py-2.5 bg-white border border-amber-300 rounded-xl font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500" />
+        </div>
+
+        <!-- Ambulance Fleet Availability & Transport Dispatch -->
+        <div class="p-3.5 bg-white rounded-xl border border-amber-300 space-y-2.5">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-amber-950 flex items-center gap-1.5">
+              <span>🚑</span> Municipal Ambulance Availability Status
+            </span>
+            <span id="ref-amb-status-badge"
+              class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
+              Checking Fleet...
+            </span>
+          </div>
+
+          <div>
+            <label class="block text-[11px] font-bold text-slate-700 mb-1">Transport Vehicle & Dispatch Mode *</label>
+            <select name="ambulance_id" id="ref-ambulance-select" onchange="handleAmbulanceSelect(this)"
+              class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500">
+              <option value="">-- Choose Transport Mode --</option>
+              <option value="1">Ambulance Unit 01 (ALS - Advanced Life Support) [SGA-1041]</option>
+              <option value="2">Ambulance Unit 02 (BLS - Basic Life Support) [SKD-5520]</option>
+              <option value="3">Ambulance Unit 03 (Rapid Inter-Facility Transport) [SMM-9832]</option>
+              <option value="0">Private Vehicle (Family / Patient Arranged)</option>
+              <option value="-1">LGU / MDRRMO Disaster Emergency Rescue Unit</option>
+            </select>
+          </div>
+
+          <div id="ref-amb-info-box"
+            class="p-2.5 bg-slate-50 rounded-lg border border-slate-200 text-[11px] space-y-1 text-slate-700">
+            <div class="flex items-center justify-between">
+              <span class="text-slate-500 font-medium">Assigned Driver / EMT:</span>
+              <span class="font-bold text-slate-800" id="ref-amb-driver-name">Reynaldo Gomez (EMT-B)</span>
+            </div>
+            <div class="flex items-center justify-between">
+              <span class="text-slate-500 font-medium">Emergency Contact:</span>
+              <span class="font-mono font-bold text-blue-700" id="ref-amb-contact-num">0917-882-9011</span>
+            </div>
+            <div class="flex items-center justify-between">
+              <span class="text-slate-500 font-medium">Equipped With:</span>
+              <span class="font-bold text-slate-800" id="ref-amb-equip-desc">Advanced Life Support (ALS) with O2 &
+                Monitor</span>
+            </div>
+          </div>
+
+          <div id="ref-amb-alert-box"
+            class="hidden p-2.5 bg-rose-50 rounded-lg border border-rose-200 text-[11px] text-rose-800 font-semibold flex items-start gap-1.5">
+            <i data-lucide="alert-circle" class="w-4 h-4 text-rose-600 shrink-0 mt-0.5"></i>
+            <span>Warning: All hospital ambulance units are currently in transit. Please coordinate with PDRRMO or
+              arrange emergency private transport.</span>
+          </div>
         </div>
       </div>
 
@@ -506,7 +593,8 @@ require_once __DIR__ . '/../includes/sidebar.php';
       <div class="grid grid-cols-2 gap-3">
         <div>
           <label class="block font-bold text-slate-700 mb-1">Referral Priority *</label>
-          <select name="priority" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800">
+          <select name="priority"
+            class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800">
             <option value="Routine" selected>Routine Consultation</option>
             <option value="Urgent">Urgent Evaluation</option>
             <option value="Emergency">Emergency Transfer / Review</option>
@@ -515,7 +603,8 @@ require_once __DIR__ . '/../includes/sidebar.php';
 
         <div>
           <label class="block font-bold text-slate-700 mb-1">Clinical Urgency *</label>
-          <select name="urgency" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800">
+          <select name="urgency"
+            class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800">
             <option value="Routine" selected>Routine (Within 48h)</option>
             <option value="Urgent">Urgent (Within 12h)</option>
             <option value="Emergency">Immediate (Stat)</option>
@@ -526,24 +615,26 @@ require_once __DIR__ . '/../includes/sidebar.php';
       <!-- Reason for Referral -->
       <div>
         <label class="block font-bold text-slate-700 mb-1">Reason for Referral *</label>
-        <input type="text" name="reason" required placeholder="e.g. Need higher level tertiary intensive care / specialized diagnostic evaluation..." 
-               class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        <input type="text" name="reason" required
+          placeholder="e.g. Need higher level tertiary intensive care / specialized diagnostic evaluation..."
+          class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500" />
       </div>
 
       <!-- Clinical Summary -->
       <div>
         <label class="block font-bold text-slate-700 mb-1">Diagnosis & Clinical Case Summary</label>
-        <textarea name="clinical_summary" rows="3" placeholder="Summarize patient diagnosis, initial vital signs, treatment given, and reason TMHIMS cannot manage patient..." 
-                  class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+        <textarea name="clinical_summary" rows="3"
+          placeholder="Summarize patient diagnosis, initial vital signs, treatment given, and reason TMHIMS cannot manage patient..."
+          class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
       </div>
 
       <div class="pt-3 border-t border-slate-100 flex items-center justify-end gap-3">
         <button type="button" onclick="document.getElementById('newRefModal').classList.add('hidden')"
-                class="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition">
+          class="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition">
           Cancel
         </button>
         <button type="submit" id="ref-submit-btn"
-                class="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-md shadow-blue-600/20 transition flex items-center gap-1.5">
+          class="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-md shadow-blue-600/20 transition flex items-center gap-1.5">
           <i data-lucide="check" class="w-4 h-4"></i>
           <span>Dispatch Referral</span>
         </button>
@@ -555,13 +646,13 @@ require_once __DIR__ . '/../includes/sidebar.php';
 
 <script>
   // Available patients in memory for instantaneous search
-  const REFERRAL_PATIENTS = <?= json_encode(array_map(function($p) {
-      return [
-          'id' => (int)$p['PatientID'],
-          'name' => $p['FirstName'] . ' ' . $p['LastName'],
-          'code' => $p['PatientCode'] ?? ('TMH-' . $p['PatientID']),
-          'student_id' => $p['StudentID'] ?? ''
-      ];
+  const REFERRAL_PATIENTS = <?= json_encode(array_map(function ($p) {
+    return [
+      'id' => (int) $p['PatientID'],
+      'name' => $p['FirstName'] . ' ' . $p['LastName'],
+      'code' => $p['PatientCode'] ?? ('TMH-' . $p['PatientID']),
+      'student_id' => $p['StudentID'] ?? ''
+    ];
   }, $doctorPatients)) ?>;
 
   let refSearchTimer = null;
@@ -574,9 +665,9 @@ require_once __DIR__ . '/../includes/sidebar.php';
       return;
     }
 
-    const matches = REFERRAL_PATIENTS.filter(p => 
-      p.name.toLowerCase().includes(q) || 
-      p.code.toLowerCase().includes(q) || 
+    const matches = REFERRAL_PATIENTS.filter(p =>
+      p.name.toLowerCase().includes(q) ||
+      p.code.toLowerCase().includes(q) ||
       (p.student_id && p.student_id.toLowerCase().includes(q))
     );
 
@@ -682,9 +773,115 @@ require_once __DIR__ . '/../includes/sidebar.php';
     }
   });
 
+  let AMBULANCE_FLEET = [];
+
+  function fetchDoctorAmbulances() {
+    fetch('/api/ambulances')
+      .then(res => res.json())
+      .then(res => {
+        if (!res.success || !res.data) return;
+        AMBULANCE_FLEET = res.data;
+        const total = res.summary ? res.summary.total : res.data.length;
+        const avail = res.summary ? res.summary.available : res.data.filter(a => a.status === 'Available').length;
+
+        const badge = document.getElementById('ref-amb-status-badge');
+        const alertBox = document.getElementById('ref-amb-alert-box');
+        const select = document.getElementById('ref-ambulance-select');
+
+        if (badge) {
+          if (avail > 0) {
+            badge.textContent = `${avail} of ${total} Ready`;
+            badge.className = 'px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800';
+            if (alertBox) alertBox.classList.add('hidden');
+          } else {
+            badge.textContent = `0 of ${total} Available`;
+            badge.className = 'px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800';
+            if (alertBox) alertBox.classList.remove('hidden');
+          }
+        }
+
+        if (select) {
+          select.innerHTML = '<option value="">-- Choose Transport Mode --</option>';
+          res.data.forEach(a => {
+            const opt = document.createElement('option');
+            opt.value = a.id;
+            const isAvail = a.status === 'Available';
+            opt.textContent = `${a.unit_name} [${a.plate_number}] - ${isAvail ? 'AVAILABLE' : (a.status === 'On Transfer' ? 'IN TRANSIT' : 'MAINTENANCE')}`;
+            if (!isAvail) opt.disabled = true;
+            select.appendChild(opt);
+          });
+          const optPriv = document.createElement('option');
+          optPriv.value = "0";
+          optPriv.textContent = "Private Vehicle (Family / Patient Arranged)";
+          select.appendChild(optPriv);
+
+          const optLgu = document.createElement('option');
+          optLgu.value = "-1";
+          optLgu.textContent = "LGU / MDRRMO Disaster Emergency Rescue Unit";
+          select.appendChild(optLgu);
+
+          // Select first available unit by default if present
+          const firstAvail = res.data.find(a => a.status === 'Available');
+          if (firstAvail) {
+            select.value = firstAvail.id;
+            handleAmbulanceSelect(select);
+          }
+        }
+      })
+      .catch(() => { });
+  }
+
+  function handleAmbulanceSelect(selectEl) {
+    const val = parseInt(selectEl.value, 10);
+    const infoBox = document.getElementById('ref-amb-info-box');
+    const driverText = document.getElementById('ref-amb-driver-name');
+    const contactText = document.getElementById('ref-amb-contact-num');
+    const equipText = document.getElementById('ref-amb-equip-desc');
+
+    if (!infoBox) return;
+
+    if (val > 0) {
+      const amb = AMBULANCE_FLEET.find(a => a.id === val);
+      if (amb) {
+        if (driverText) driverText.textContent = amb.driver || 'Assigned Duty EMT';
+        if (contactText) contactText.textContent = amb.contact || '+63 (083) 228-0001';
+        if (equipText) equipText.textContent = `${amb.equipment_level} • ${amb.notes || 'Equipped with transport O2'}`;
+        infoBox.classList.remove('hidden');
+      }
+    } else if (val === 0) {
+      if (driverText) driverText.textContent = 'Family / Self-Transport';
+      if (contactText) contactText.textContent = 'Patient Guardian Contact';
+      if (equipText) equipText.textContent = 'Private Vehicle - No hospital equipment dispatched';
+      infoBox.classList.remove('hidden');
+    } else if (val === -1) {
+      if (driverText) driverText.textContent = 'MDRRMO Rescue Driver on Duty';
+      if (contactText) contactText.textContent = 'Tupi MDRRMO Hotline: (083) 228-2999';
+      if (equipText) equipText.textContent = 'Municipal Disaster Risk Reduction Rescue Ambulance';
+      infoBox.classList.remove('hidden');
+    } else {
+      infoBox.classList.add('hidden');
+    }
+  }
+
+  // Table filtering functions
+  function filterIncomingReferrals(q) {
+    const query = (q || '').toLowerCase().trim();
+    document.querySelectorAll('.in-ref-row').forEach(row => {
+      row.style.display = !query || row.textContent.toLowerCase().includes(query) ? '' : 'none';
+    });
+  }
+
+  function filterOutgoingReferrals(q) {
+    const query = (q || '').toLowerCase().trim();
+    document.querySelectorAll('.out-ref-row').forEach(row => {
+      row.style.display = !query || row.textContent.toLowerCase().includes(query) ? '' : 'none';
+    });
+  }
+
   // Initialize modal state on load
   document.addEventListener('DOMContentLoaded', () => {
     toggleRefType('Internal');
+    fetchDoctorAmbulances();
   });
 </script>
 

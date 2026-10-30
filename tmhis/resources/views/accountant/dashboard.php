@@ -123,6 +123,18 @@
               <span class="sidebar-tooltip">Payments</span>
             </div>
 
+            <!-- POS / Pharmacy Sales -->
+            <div class="sidebar-item relative">
+              <a href="javascript:void(0)" onclick="switchView('pos')" data-view="pos" class="nav-link flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium text-slate-600 hover:text-brand-600 hover:bg-slate-50 transition-all group">
+                <div class="flex items-center gap-3">
+                  <i data-lucide="shopping-bag" class="w-5 h-5 flex-shrink-0 text-slate-500 group-hover:text-brand-600"></i>
+                  <span class="sidebar-text">POS / Pharmacy</span>
+                </div>
+                <span class="sidebar-text text-[9px] font-black px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800">RETAIL</span>
+              </a>
+              <span class="sidebar-tooltip">POS / Pharmacy Sales</span>
+            </div>
+
             <!-- Patient Accounts -->
             <div class="sidebar-item relative">
               <a href="javascript:void(0)" onclick="switchView('accounts')" data-view="accounts" class="nav-link flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-600 hover:text-brand-600 hover:bg-slate-50 transition-all group">
@@ -818,6 +830,361 @@
         </div>
 
       </section>
+
+      <!-- ====================================================
+           VIEW: POINT-OF-SALE (POS) / PHARMACY RETAIL SALES
+           ==================================================== -->
+      <section id="view-pos" class="view-section hidden space-y-6">
+        
+        <!-- POS Top Control & Customer Switcher Bar -->
+        <div class="hospity-card p-4 sm:p-5">
+          <div class="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+            
+            <!-- Customer Type Toggle -->
+            <div class="flex items-center gap-3">
+              <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Customer Type:</span>
+              <div class="inline-flex p-1 bg-slate-100 rounded-xl border border-slate-200 text-xs font-bold">
+                <button type="button" id="pos-btn-walkin" onclick="PosModule.setCustomerType('walkin')" class="px-3.5 py-1.5 rounded-lg transition-all bg-white text-slate-800 shadow-sm">
+                  <i data-lucide="user" class="w-3.5 h-3.5 inline mr-1"></i> Walk-in Customer
+                </button>
+                <button type="button" id="pos-btn-patient" onclick="PosModule.setCustomerType('patient')" class="px-3.5 py-1.5 rounded-lg transition-all text-slate-500 hover:text-slate-800">
+                  <i data-lucide="heart-pulse" class="w-3.5 h-3.5 inline mr-1"></i> Hospital Patient
+                </button>
+              </div>
+            </div>
+
+            <!-- Customer Details Container -->
+            <div class="flex-1 w-full lg:w-auto">
+              <!-- Walk-in Customer Inputs -->
+              <div id="pos-walkin-inputs" class="flex flex-wrap items-center gap-2">
+                <div class="relative flex-1 min-w-[200px]">
+                  <input type="text" id="pos-customer-name" placeholder="Walk-in Customer Name" value="Walk-in Customer" class="w-full text-xs font-semibold px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition">
+                </div>
+                <div class="relative w-40">
+                  <input type="text" id="pos-customer-phone" placeholder="Phone (Optional)" class="w-full text-xs font-medium px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition">
+                </div>
+              </div>
+
+              <!-- Hospital Patient Search & Selector -->
+              <div id="pos-patient-inputs" class="hidden flex flex-wrap items-center gap-2 relative">
+                <div class="relative flex-1 min-w-[240px]">
+                  <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                  <input type="text" id="pos-patient-search" placeholder="Search patient by ID, name, or phone..." oninput="PosModule.searchPatients(this.value)" autocomplete="off" class="w-full text-xs font-medium pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition">
+                  <!-- Patient Dropdown Results -->
+                  <div id="pos-patient-dropdown" class="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-50 max-h-60 overflow-y-auto hidden"></div>
+                </div>
+                <!-- Selected Patient Pill Badge -->
+                <div id="pos-selected-patient-badge" class="hidden items-center gap-2 px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-xl text-xs">
+                  <i data-lucide="check-circle" class="w-4 h-4 text-blue-600"></i>
+                  <div>
+                    <span id="pos-badge-patient-name" class="font-bold text-blue-900">Patient Name</span>
+                    <span id="pos-badge-patient-code" class="text-[10px] text-blue-600 font-mono ml-1">PAT-0000</span>
+                  </div>
+                  <button type="button" onclick="PosModule.clearPatient()" class="text-slate-400 hover:text-rose-600 p-0.5" title="Remove Patient">
+                    <i data-lucide="x" class="w-3.5 h-3.5"></i>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Terminal Info & Quick Stats -->
+            <div class="flex items-center gap-2 text-xs font-medium text-slate-500">
+              <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200 font-bold">
+                <span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span> Live Inventory
+              </span>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- POS Workspace: 2-Column Split -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          
+          <!-- LEFT COLUMN: MEDICINE CATALOG (7 Cols) -->
+          <div class="lg:col-span-7 space-y-4">
+            
+            <!-- Search & Filter Controls -->
+            <div class="hospity-card p-4 space-y-3">
+              <div class="flex flex-col sm:flex-row gap-3">
+                <div class="relative flex-1">
+                  <i data-lucide="search" class="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                  <input type="text" id="pos-medicine-search" placeholder="Search medicines by generic, brand, or code..." oninput="PosModule.filterMedicines()" class="w-full pl-9 pr-3 py-2.5 text-xs font-medium bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition">
+                </div>
+                <div class="w-full sm:w-44">
+                  <select id="pos-dosage-filter" onchange="PosModule.filterMedicines()" class="w-full text-xs font-semibold py-2.5 px-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white transition">
+                    <option value="All">All Dosage Forms</option>
+                    <option value="Tablet">Tablet</option>
+                    <option value="Capsule">Capsule</option>
+                    <option value="Syrup">Syrup</option>
+                    <option value="Suspension">Suspension</option>
+                    <option value="Injection">Injection</option>
+                    <option value="Vial">Vial</option>
+                    <option value="Ampoule">Ampoule</option>
+                    <option value="Ointment">Ointment</option>
+                    <option value="IV Fluid">IV Fluid</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- Quick Category Pills -->
+              <div class="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs" id="pos-category-pills">
+                <button type="button" onclick="PosModule.setDosagePill('All')" class="px-2.5 py-1 rounded-lg bg-brand-50 text-brand-700 font-bold border border-brand-200 whitespace-nowrap">All Items</button>
+                <button type="button" onclick="PosModule.setDosagePill('Tablet')" class="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 font-medium hover:bg-slate-200 transition whitespace-nowrap">Tablets</button>
+                <button type="button" onclick="PosModule.setDosagePill('Capsule')" class="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 font-medium hover:bg-slate-200 transition whitespace-nowrap">Capsules</button>
+                <button type="button" onclick="PosModule.setDosagePill('Syrup')" class="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 font-medium hover:bg-slate-200 transition whitespace-nowrap">Syrup / Liquids</button>
+                <button type="button" onclick="PosModule.setDosagePill('Injection')" class="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 font-medium hover:bg-slate-200 transition whitespace-nowrap">Injections</button>
+              </div>
+            </div>
+
+            <!-- Medicine Cards Grid Container -->
+            <div id="pos-medicine-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 max-h-[580px] overflow-y-auto pr-1">
+              <!-- Rendered dynamically -->
+            </div>
+
+            <!-- Loading & Empty State -->
+            <div id="pos-medicine-empty" class="hidden text-center py-12 hospity-card p-6">
+              <i data-lucide="package-search" class="w-10 h-10 text-slate-300 mx-auto mb-2"></i>
+              <p class="text-sm font-bold text-slate-600">No matching medicines found</p>
+              <p class="text-xs text-slate-400 mt-1">Try searching with a different generic name, brand, or dosage form.</p>
+            </div>
+
+          </div>
+
+          <!-- RIGHT COLUMN: INTERACTIVE POS CART & CHECKOUT (5 Cols) -->
+          <div class="lg:col-span-5 space-y-4">
+            
+            <div class="hospity-card p-5 space-y-4">
+              
+              <!-- Cart Header -->
+              <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div class="flex items-center gap-2">
+                  <span class="p-2 bg-brand-50 text-brand-600 rounded-xl">
+                    <i data-lucide="shopping-cart" class="w-4 h-4"></i>
+                  </span>
+                  <div>
+                    <h2 class="text-sm font-bold text-slate-900 font-heading">CURRENT ORDER</h2>
+                    <p class="text-[10px] text-slate-400" id="pos-cart-count">0 items selected</p>
+                  </div>
+                </div>
+                <button type="button" onclick="PosModule.clearCart()" class="text-xs font-semibold text-rose-600 hover:text-rose-700 hover:bg-rose-50 px-2 py-1 rounded-lg transition" title="Clear all items">
+                  Clear
+                </button>
+              </div>
+
+              <!-- Cart Line Items (Scrollable) -->
+              <div id="pos-cart-items" class="space-y-2.5 max-h-[220px] overflow-y-auto pr-1">
+                <!-- Empty state placeholder -->
+                <div id="pos-cart-empty" class="text-center py-8">
+                  <i data-lucide="shopping-bag" class="w-8 h-8 text-slate-300 mx-auto mb-2"></i>
+                  <p class="text-xs font-semibold text-slate-500">Cart is empty</p>
+                  <p class="text-[10px] text-slate-400 mt-0.5">Click "Add" on any medicine card to begin.</p>
+                </div>
+              </div>
+
+              <!-- Cart Summary & Calculation Box -->
+              <div class="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-2.5 text-xs">
+                
+                <!-- Gross Subtotal -->
+                <div class="flex justify-between items-center text-slate-600">
+                  <span class="font-medium">Subtotal</span>
+                  <span class="font-mono font-bold text-slate-900" id="pos-subtotal">₱0.00</span>
+                </div>
+
+                <!-- Discount Selector -->
+                <div class="pt-2 border-t border-slate-200/60 space-y-2">
+                  <div class="flex items-center justify-between">
+                    <span class="font-semibold text-slate-700">Discount Option</span>
+                    <select id="pos-discount-select" onchange="PosModule.updateDiscount()" class="text-xs font-bold py-1 px-2.5 bg-white border border-slate-200 rounded-lg">
+                      <option value="None">None (Standard)</option>
+                      <option value="Senior Citizen">Senior Citizen (20%)</option>
+                      <option value="PWD">PWD (20%)</option>
+                      <option value="Employee">Hospital Employee (10%)</option>
+                      <option value="Custom">Custom Amount</option>
+                    </select>
+                  </div>
+
+                  <!-- Custom Discount Amount Input (Hidden by default) -->
+                  <div id="pos-custom-discount-wrap" class="hidden flex items-center justify-between gap-2">
+                    <span class="text-[10px] text-slate-500">Custom Amount (₱):</span>
+                    <input type="number" id="pos-custom-discount-input" min="0" step="0.01" value="0.00" oninput="PosModule.updateDiscount()" class="w-24 text-right text-xs font-bold py-1 px-2 bg-white border border-slate-200 rounded-lg">
+                  </div>
+
+                  <div class="flex justify-between items-center text-slate-600">
+                    <span class="text-emerald-700 font-medium">Discount Deducted</span>
+                    <span class="font-mono font-bold text-emerald-700" id="pos-discount-amount">-₱0.00</span>
+                  </div>
+                </div>
+
+                <!-- Total Payable Banner -->
+                <div class="pt-2.5 border-t border-slate-200 flex justify-between items-center">
+                  <span class="text-sm font-black text-slate-900 uppercase tracking-tight">Total Due</span>
+                  <span class="text-xl font-black font-mono text-emerald-800" id="pos-total-amount">₱0.00</span>
+                </div>
+
+              </div>
+
+              <!-- Payment Settlement Panel -->
+              <div class="space-y-3 pt-1">
+                <span class="text-xs font-bold text-slate-700 uppercase tracking-wider block">Payment Method</span>
+                
+                <!-- Payment Method Pills -->
+                <div class="grid grid-cols-3 gap-1.5 text-xs font-semibold">
+                  <button type="button" onclick="PosModule.setPaymentMethod('Cash')" id="pos-pm-cash" class="pos-pm-btn py-2 px-2 rounded-xl border border-brand-500 bg-brand-50 text-brand-700 text-center font-bold">
+                    💵 Cash
+                  </button>
+                  <button type="button" onclick="PosModule.setPaymentMethod('GCash')" id="pos-pm-gcash" class="pos-pm-btn py-2 px-2 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 text-center">
+                    📱 GCash
+                  </button>
+                  <button type="button" onclick="PosModule.setPaymentMethod('Maya')" id="pos-pm-maya" class="pos-pm-btn py-2 px-2 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 text-center">
+                    💳 Maya
+                  </button>
+                  <button type="button" onclick="PosModule.setPaymentMethod('Card')" id="pos-pm-card" class="pos-pm-btn py-2 px-2 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 text-center">
+                    💳 Card
+                  </button>
+                  <button type="button" onclick="PosModule.setPaymentMethod('Bank')" id="pos-pm-bank" class="pos-pm-btn py-2 px-2 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 text-center col-span-2">
+                    🏦 Bank Transfer
+                  </button>
+                </div>
+
+                <!-- Cash Tender & Change Calculator Box -->
+                <div id="pos-cash-calculator" class="p-3.5 bg-emerald-50/60 rounded-xl border border-emerald-200/80 space-y-2.5">
+                  <div class="flex items-center justify-between gap-3">
+                    <label for="pos-amount-tendered" class="text-xs font-bold text-emerald-950 uppercase">Cash Tendered:</label>
+                    <div class="relative w-36">
+                      <span class="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-emerald-700">₱</span>
+                      <input type="number" id="pos-amount-tendered" step="0.01" min="0" placeholder="0.00" oninput="PosModule.calculateChange()" class="w-full text-right font-mono font-bold text-xs pl-6 pr-2.5 py-1.5 bg-white border border-emerald-300 rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition">
+                    </div>
+                  </div>
+
+                  <!-- Quick Cash Buttons -->
+                  <div class="flex items-center gap-1.5 flex-wrap text-[10px] font-bold">
+                    <span class="text-slate-400 mr-1">Quick:</span>
+                    <button type="button" onclick="PosModule.quickCash('exact')" class="px-2 py-0.5 rounded bg-white border border-emerald-200 hover:bg-emerald-100 text-emerald-800">Exact</button>
+                    <button type="button" onclick="PosModule.quickCash(50)" class="px-2 py-0.5 rounded bg-white border border-emerald-200 hover:bg-emerald-100 text-emerald-800">+₱50</button>
+                    <button type="button" onclick="PosModule.quickCash(100)" class="px-2 py-0.5 rounded bg-white border border-emerald-200 hover:bg-emerald-100 text-emerald-800">+₱100</button>
+                    <button type="button" onclick="PosModule.quickCash(500)" class="px-2 py-0.5 rounded bg-white border border-emerald-200 hover:bg-emerald-100 text-emerald-800">+₱500</button>
+                    <button type="button" onclick="PosModule.quickCash(1000)" class="px-2 py-0.5 rounded bg-white border border-emerald-200 hover:bg-emerald-100 text-emerald-800">+₱1,000</button>
+                  </div>
+
+                  <!-- Change Due Banner -->
+                  <div class="flex justify-between items-center pt-2 border-t border-emerald-200/80">
+                    <span class="text-xs font-bold text-emerald-900">Change Due:</span>
+                    <span class="font-mono text-base font-black text-emerald-800" id="pos-change-due">₱0.00</span>
+                  </div>
+                  <!-- Insufficient Alert -->
+                  <p id="pos-insufficient-alert" class="hidden text-[10px] font-bold text-rose-600 bg-rose-50 px-2 py-1 rounded border border-rose-200">
+                    ⚠️ Tendered amount is less than total due.
+                  </p>
+                </div>
+
+                <!-- Digital Reference Number Field (for GCash, Maya, Card, Bank) -->
+                <div id="pos-reference-wrap" class="hidden space-y-1">
+                  <label for="pos-reference-number" class="text-xs font-bold text-slate-700">Reference / Approval Code:</label>
+                  <input type="text" id="pos-reference-number" placeholder="e.g. GCASH-12345678 or Auth-987" class="w-full text-xs font-mono font-medium px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition">
+                </div>
+
+                <!-- Transaction Notes (Optional) -->
+                <div class="space-y-1">
+                  <input type="text" id="pos-notes" placeholder="Sale notes or prescription remark (Optional)..." class="w-full text-xs px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition">
+                </div>
+
+              </div>
+
+              <!-- Complete Sale Action Button -->
+              <div class="pt-2">
+                <button type="button" id="pos-complete-sale-btn" onclick="PosModule.checkout()" class="w-full py-3.5 px-4 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 active:scale-[0.99] text-white font-black text-sm rounded-xl shadow-lg shadow-emerald-600/20 transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
+                  <i data-lucide="printer" class="w-4 h-4"></i>
+                  <span id="pos-checkout-btn-label">Complete Sale & Print Receipt</span>
+                  <span id="pos-checkout-spinner" class="hidden animate-spin">⏳</span>
+                </button>
+              </div>
+
+            </div>
+
+          </div>
+
+        </div>
+
+        <!-- POS SALES TRANSACTION HISTORY & REPRINT SECTION -->
+        <div class="hospity-card p-6 space-y-4">
+          <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div>
+              <div class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                <h2 class="text-base font-bold text-slate-900 font-heading">POS TRANSACTION HISTORY</h2>
+              </div>
+              <p class="text-xs text-slate-400">Past retail pharmacy sales, stock audit trail & receipt re-printing</p>
+            </div>
+            
+            <!-- Filters -->
+            <div class="flex items-center gap-2 flex-wrap">
+              <input type="text" id="pos-history-search" placeholder="Search receipt or customer..." oninput="PosModule.loadSalesHistory()" class="text-xs font-medium px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white transition">
+              <input type="date" id="pos-history-date" onchange="PosModule.loadSalesHistory()" class="text-xs font-medium px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white transition">
+              <button type="button" onclick="PosModule.loadSalesHistory()" class="p-2 text-slate-500 hover:text-brand-600 hover:bg-slate-50 rounded-xl transition" title="Refresh Sales History">
+                <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+              </button>
+            </div>
+          </div>
+
+          <!-- History Table -->
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-slate-50 text-slate-500 font-bold uppercase text-[10px] border-b border-slate-200">
+                <tr>
+                  <th class="py-3 px-3">Receipt No.</th>
+                  <th class="py-3 px-3">Date & Time</th>
+                  <th class="py-3 px-3">Customer</th>
+                  <th class="py-3 px-3">Payment</th>
+                  <th class="py-3 px-3 text-right">Items</th>
+                  <th class="py-3 px-3 text-right">Total Amount</th>
+                  <th class="py-3 px-3 text-center">Cashier</th>
+                  <th class="py-3 px-3 text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody id="pos-history-tbody" class="divide-y divide-slate-100">
+                <!-- Dynamically populated -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- POS RECEIPT MODAL POPUP -->
+      <div id="pos-receipt-modal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-3xl shadow-2xl max-w-lg w-full overflow-hidden flex flex-col max-h-[90vh] animate-scale-up border border-slate-100">
+          <!-- Modal Header -->
+          <div class="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+            <div class="flex items-center gap-2.5">
+              <span class="p-2 bg-emerald-50 text-emerald-600 rounded-xl">
+                <i data-lucide="receipt" class="w-5 h-5"></i>
+              </span>
+              <div>
+                <h3 class="font-bold text-slate-900 text-sm font-heading">Official POS Receipt</h3>
+                <p class="text-[10px] text-slate-400 font-mono" id="pos-modal-receipt-no">POS-2026-0001</p>
+              </div>
+            </div>
+            <button type="button" onclick="PosModule.closeReceiptModal()" class="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100 transition">
+              <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+          </div>
+
+          <!-- Modal Body (Printable Receipt Container) -->
+          <div class="p-6 overflow-y-auto space-y-4 text-xs" id="pos-modal-receipt-body">
+            <!-- Rendered dynamically -->
+          </div>
+
+          <!-- Modal Footer -->
+          <div class="p-4 border-t border-slate-100 bg-slate-50 flex items-center justify-between gap-3">
+            <button type="button" onclick="PosModule.closeReceiptModal()" class="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-bold hover:bg-white transition text-xs">
+              Close
+            </button>
+            <button type="button" id="pos-modal-print-btn" onclick="PosModule.printCurrentReceipt()" class="px-5 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-bold transition text-xs shadow-md shadow-brand-600/20 flex items-center gap-2">
+              <i data-lucide="printer" class="w-4 h-4"></i> Print Official Receipt
+            </button>
+          </div>
+        </div>
+      </div>
 
       <!-- ====================================================
            VIEW: PATIENT ACCOUNTS & OUTSTANDING BALANCES

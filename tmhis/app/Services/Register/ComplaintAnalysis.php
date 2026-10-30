@@ -21,6 +21,19 @@ class ComplaintAnalysis
 
     public function create(array $data): int
     {
+        $cid = (int)($data['ComplaintID'] ?? 0);
+        if ($cid <= 0) return 0;
+
+        try {
+            $chk = $this->db->prepare("SELECT 1 FROM complaints WHERE ComplaintID = :cid LIMIT 1");
+            $chk->execute([':cid' => $cid]);
+            if (!$chk->fetchColumn()) {
+                return 0;
+            }
+        } catch (\Throwable $e) {
+            return 0;
+        }
+
         $stmt = $this->db->prepare("
             INSERT INTO complaint_analysis (
                 ComplaintID, BodySystemID, BodyLocationID, 

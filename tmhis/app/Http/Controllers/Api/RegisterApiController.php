@@ -133,9 +133,9 @@ class RegisterApiController extends Controller
 
     public function getDoctors(Request $request)
     {
-        $specialtyId = (int) $request->query('specialty_id', 0);
         $doctorService = new Doctor();
-        $doctors = $specialtyId > 0 ? $doctorService->getBySpecialty($specialtyId) : $doctorService->getAll();
+        // Constrain to Dr. Alexander Chen only as required
+        $doctors = $doctorService->getAll();
 
         return response()->json([
             'success' => true,

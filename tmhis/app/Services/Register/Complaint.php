@@ -40,16 +40,30 @@ class Complaint
             'rel'  => !empty($data['RelievingFactors']) ? trim((string)$data['RelievingFactors']) : null
         ]);
 
+        $complaintId = 0;
         try {
             $stmtId = $this->db->prepare("SELECT ComplaintID FROM complaints WHERE PatientID = :pid ORDER BY ComplaintID DESC LIMIT 1");
             $stmtId->execute([':pid' => $data['PatientID']]);
             $fetchedId = (int)$stmtId->fetchColumn();
             if ($fetchedId > 0) {
-                return $fetchedId;
+                $complaintId = $fetchedId;
             }
         } catch (\Throwable $e) {}
 
-        return (int)$this->db->lastInsertId();
+        if ($complaintId <= 0) {
+            $lastId = (int)$this->db->lastInsertId();
+            if ($lastId > 0) {
+                try {
+                    $chk = $this->db->prepare("SELECT 1 FROM complaints WHERE ComplaintID = :cid LIMIT 1");
+                    $chk->execute([':cid' => $lastId]);
+                    if ($chk->fetchColumn()) {
+                        $complaintId = $lastId;
+                    }
+                } catch (\Throwable $e) {}
+            }
+        }
+
+        return $complaintId;
     }
 
     public function getById(int $complaintId): ?array

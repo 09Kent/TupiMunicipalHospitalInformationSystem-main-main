@@ -114,6 +114,54 @@ class Consultation
                 } catch (\Throwable $catErr) {
                 }
 
+                // Create active nurse assignment and initial care tasks
+                try {
+                    $nurseId = 4;
+                    $nStmt = $this->db->query("SELECT UserID FROM users WHERE RoleID = 3 OR LOWER(Role) LIKE '%nurse%' ORDER BY UserID ASC LIMIT 1");
+                    $fetchedNurse = $nStmt ? $nStmt->fetchColumn() : null;
+                    if ($fetchedNurse) $nurseId = (int)$fetchedNurse;
+
+                    $stmtNurse = $this->db->prepare("
+                        INSERT INTO nurse_assignments (
+                            PatientID, DoctorID, NurseID, TaskDescription, Status, AssignedBy, AssignedByName, Notes, AssignedAt
+                        ) VALUES (
+                            :pid, :doc_id, :nid, :task_desc, 'Active', :assigned_by, :assigned_by_name, :notes, NOW()
+                        )
+                    ");
+                    $stmtNurse->execute([
+                        ':pid' => $patientId,
+                        ':doc_id' => $doctorId,
+                        ':nid' => $nurseId,
+                        ':task_desc' => 'Inpatient Bedside Intake & Vitals: ' . substr($reason, 0, 50),
+                        ':assigned_by' => auth()->id() ?? $doctorId,
+                        ':assigned_by_name' => auth()->user() ? auth()->user()->FullName : 'Dr. Alexander Chen, MD',
+                        ':notes' => "Inpatient Admission to $ward, $room ($bed)."
+                    ]);
+
+                    $taskIns = $this->db->prepare("
+                        INSERT INTO nurse_tasks (
+                            PatientID, NurseID, DoctorID, TaskTitle, Category, Priority, Status,
+                            ScheduledTime, DueTime, Remarks, MedicationName, CreatedAt
+                        ) VALUES (
+                            :pid, :nid, :doc_id, :title, :cat, :prio, :stat,
+                            :sched, :due, :rem, :med, NOW()
+                        )
+                    ");
+                    $taskIns->execute([
+                        ':pid' => $patientId,
+                        ':nid' => $nurseId,
+                        ':doc_id' => $doctorId,
+                        ':title' => 'Inpatient Bedside Intake & Vital Signs Monitoring',
+                        ':cat' => 'Vital Signs',
+                        ':prio' => 'Urgent',
+                        ':stat' => 'Due',
+                        ':sched' => date('Y-m-d H:i:s'),
+                        ':due' => 'Due Now',
+                        ':rem' => "Admitted to $ward, $room ($bed). Perform baseline vitals, SpO2, and continuous monitoring.",
+                        ':med' => null
+                    ]);
+                } catch (\Throwable $nte) {}
+
                 // Next queue status routes patient directly into Inpatient Nurse Station
                 $nextQueueStatus = 'Admitted - Inpatient';
 

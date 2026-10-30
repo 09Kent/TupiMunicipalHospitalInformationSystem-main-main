@@ -65,28 +65,56 @@ class Appointment
             $appTime = $dt->format('h:i A');
         }
 
-        $stmt = $this->db->prepare("
-            INSERT INTO appointments (
-                PatientID, DoctorID, AppointmentDate, AppointmentTime, 
-                ConsultationType, Reason, Priority, Notes, Status, CreatedBy, CreatedAt
-            ) VALUES (
-                :pid, :doc_id, :app_date, :app_time, 
-                :type, :reason, :prio, :notes, :status, :created_by, NOW()
-            )
-        ");
+        try {
+            $stmt = $this->db->prepare("
+                INSERT INTO appointments (
+                    PatientID, DoctorID, AppointmentDate, AppointmentTime, 
+                    ConsultationType, Reason, Priority, Notes, Status, CreatedBy, CreatedAt
+                ) VALUES (
+                    :pid, :doc_id, :app_date, :app_time, 
+                    :type, :reason, :prio, :notes, :status, :created_by, NOW()
+                )
+            ");
 
-        $stmt->execute([
-            'pid' => $data['PatientID'],
-            'doc_id' => $data['DoctorID'],
-            'app_date' => $data['AppointmentDate'] ?? date('Y-m-d'),
-            'app_time' => $data['AppointmentTime'] ?? '02:30 PM',
-            'type' => $data['ConsultationType'] ?? 'In-Person Consultation',
-            'reason' => trim($data['Reason'] ?? 'General Consultation'),
-            'prio' => $data['Priority'] ?? 'Normal',
-            'notes' => !empty($data['Notes']) ? trim($data['Notes']) : null,
-            'status' => $data['Status'] ?? 'Scheduled',
-            'created_by' => $data['CreatedBy'] ?? 1
-        ]);
+            $stmt->execute([
+                'pid' => $data['PatientID'],
+                'doc_id' => $data['DoctorID'],
+                'app_date' => $data['AppointmentDate'] ?? date('Y-m-d'),
+                'app_time' => $data['AppointmentTime'] ?? '02:30 PM',
+                'type' => $data['ConsultationType'] ?? 'In-Person Consultation',
+                'reason' => trim($data['Reason'] ?? 'General Consultation'),
+                'prio' => $data['Priority'] ?? 'Normal',
+                'notes' => !empty($data['Notes']) ? trim($data['Notes']) : null,
+                'status' => $data['Status'] ?? 'Scheduled',
+                'created_by' => $data['CreatedBy'] ?? 1
+            ]);
+        } catch (\Throwable $e) {
+            if (stripos($e->getMessage(), 'consultation') !== false || stripos($e->getMessage(), '42703') !== false || stripos($e->getMessage(), 'column') !== false) {
+                $stmt = $this->db->prepare("
+                    INSERT INTO appointments (
+                        PatientID, DoctorID, AppointmentDate, AppointmentTime, 
+                        Reason, Priority, Notes, Status, CreatedBy, CreatedAt
+                    ) VALUES (
+                        :pid, :doc_id, :app_date, :app_time, 
+                        :reason, :prio, :notes, :status, :created_by, NOW()
+                    )
+                ");
+
+                $stmt->execute([
+                    'pid' => $data['PatientID'],
+                    'doc_id' => $data['DoctorID'],
+                    'app_date' => $data['AppointmentDate'] ?? date('Y-m-d'),
+                    'app_time' => $data['AppointmentTime'] ?? '02:30 PM',
+                    'reason' => trim($data['Reason'] ?? 'General Consultation'),
+                    'prio' => $data['Priority'] ?? 'Normal',
+                    'notes' => !empty($data['Notes']) ? trim($data['Notes']) : null,
+                    'status' => $data['Status'] ?? 'Scheduled',
+                    'created_by' => $data['CreatedBy'] ?? 1
+                ]);
+            } else {
+                throw $e;
+            }
+        }
 
         $appId = (int) $this->db->lastInsertId();
         if ($appId <= 0 && !empty($data['PatientID'])) {

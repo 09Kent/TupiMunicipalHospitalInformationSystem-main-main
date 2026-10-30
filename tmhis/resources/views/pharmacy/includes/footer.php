@@ -283,7 +283,7 @@ $currentUser = Session::getCurrentUser();
   <div class="bg-white rounded-3xl shadow-2xl border border-slate-200/80 w-full max-w-xl max-h-[90vh] overflow-y-auto p-6 sm:p-8">
     <div class="flex items-center justify-between pb-4 border-b border-slate-100">
       <div class="flex items-center gap-3">
-        <div class="w-10 h-10 rounded-2xl bg-teal-50 border border-teal-100 flex items-center justify-center text-teal-600">
+        <div class="w-10 h-10 rounded-2xl bg-teal-50 border border-teal-100 flex items-center justify-center text-teal-600 shadow-xs">
           <i data-lucide="package-plus" class="w-5 h-5"></i>
         </div>
         <div>
@@ -296,54 +296,103 @@ $currentUser = Session::getCurrentUser();
       </button>
     </div>
     <div class="mt-5 space-y-4">
-      <div>
-        <label class="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Medicine <span class="text-rose-500">*</span></label>
-        <select class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition">
-          <option value="">Select medicine...</option>
-          <?php foreach (getDemoCatalog() as $m): ?>
-          <option value="<?= e($m['med_id']) ?>"><?= e($m['generic_name']) ?> <?= e($m['strength']) ?></option>
-          <?php endforeach; ?>
-        </select>
+      <!-- Searchable Medicine Input (Replaces dropdown) -->
+      <div class="relative">
+        <div class="flex items-center justify-between mb-1">
+          <label class="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Medicine <span class="text-rose-500">*</span></label>
+          <span class="text-[10px] font-bold text-teal-600 flex items-center gap-1">
+            <i data-lucide="sparkles" class="w-3 h-3 text-teal-500"></i> Instant Search Active
+          </span>
+        </div>
+        <div class="relative">
+          <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+            <i data-lucide="search" class="w-4 h-4"></i>
+          </div>
+          <input type="text" 
+                 id="stockInMedicineSearch" 
+                 autocomplete="off" 
+                 placeholder="Search medicine by name, generic, or brand (e.g. Amoxicillin, Paracetamol)..." 
+                 class="w-full pl-9 pr-9 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition font-medium"
+                 onfocus="openStockInSuggestions()"
+                 oninput="filterStockInMedicines(this.value)"
+                 onkeydown="handleStockInKeydown(event)" />
+          <button type="button" 
+                  id="stockInClearBtn" 
+                  onclick="clearStockInSelection()" 
+                  class="hidden absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 transition" 
+                  title="Clear search">
+            <i data-lucide="x" class="w-4 h-4"></i>
+          </button>
+        </div>
+
+        <!-- Hidden inputs for backend submission -->
+        <input type="hidden" id="stockInGeneric" name="item_code" value="">
+        <input type="hidden" id="stockInInventoryId" name="inventory_id" value="">
+
+        <!-- Selected Medicine Summary Badge -->
+        <div id="stockInSelectedBadge" class="hidden mt-2 p-2.5 rounded-xl bg-teal-50/90 border border-teal-200 flex items-center justify-between transition-all">
+          <div class="flex items-center gap-2.5 min-w-0">
+            <div class="w-7 h-7 rounded-lg bg-teal-600 text-white flex items-center justify-center font-black text-xs shrink-0 shadow-xs">
+              Rx
+            </div>
+            <div class="min-w-0">
+              <p id="stockInSelectedTitle" class="text-xs font-bold text-teal-950 truncate"></p>
+              <p id="stockInSelectedMeta" class="text-[10px] text-teal-700 truncate"></p>
+            </div>
+          </div>
+          <span id="stockInSelectedStock" class="shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold bg-white text-teal-800 border border-teal-200 shadow-2xs"></span>
+        </div>
+
+        <!-- Autocomplete Dropdown List -->
+        <div id="stockInMedicineResults" class="hidden absolute left-0 right-0 z-50 mt-1 max-h-56 overflow-y-auto bg-white border border-slate-200 rounded-xl shadow-2xl divide-y divide-slate-100"></div>
       </div>
+
       <div class="grid grid-cols-2 gap-3">
         <div>
           <label class="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Batch Number</label>
-          <input type="text" placeholder="e.g. B-2026-050" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition">
+          <input type="text" id="stockInBatch" placeholder="e.g. B-2026-050" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition">
         </div>
         <div>
           <label class="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Supplier</label>
-          <input type="text" placeholder="e.g. Zuellig Pharma" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition">
+          <input type="text" id="stockInSupplier" placeholder="e.g. Zuellig Pharma" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition">
         </div>
       </div>
       <div class="grid grid-cols-2 gap-3">
         <div>
           <label class="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Quantity <span class="text-rose-500">*</span></label>
-          <input type="number" placeholder="e.g. 200" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition">
+          <input type="number" id="stockInQty" placeholder="e.g. 200" min="1" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition font-semibold">
         </div>
         <div>
           <label class="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Unit</label>
-          <select class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition">
-            <option>Tablet</option><option>Capsule</option><option>Vial</option><option>Inhaler</option><option>Bottle</option>
+          <select id="stockInUnit" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition font-semibold">
+            <option value="Tablet">Tablet</option>
+            <option value="Capsule">Capsule</option>
+            <option value="Vial">Vial</option>
+            <option value="Ampoule">Ampoule</option>
+            <option value="Inhaler">Inhaler</option>
+            <option value="Bottle">Bottle</option>
+            <option value="Box">Box</option>
+            <option value="Piece">Piece</option>
           </select>
         </div>
       </div>
       <div class="grid grid-cols-2 gap-3">
         <div>
           <label class="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Manufacturing Date</label>
-          <input type="date" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition">
+          <input type="date" id="stockInMfg" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition">
         </div>
         <div>
           <label class="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Expiry Date <span class="text-rose-500">*</span></label>
-          <input type="date" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition">
+          <input type="date" id="stockInExpiry" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition">
         </div>
       </div>
       <div>
         <label class="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Received Date</label>
-        <input type="date" value="<?= date('Y-m-d') ?>" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition">
+        <input type="date" id="stockInReceived" value="<?= date('Y-m-d') ?>" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition">
       </div>
       <div>
         <label class="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Notes</label>
-        <textarea rows="2" placeholder="Purchase order number, delivery notes..." class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition resize-none"></textarea>
+        <textarea id="stockInNotes" rows="2" placeholder="Purchase order number, delivery notes..." class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition resize-none"></textarea>
       </div>
     </div>
     <div class="mt-5 pt-4 border-t border-slate-100 flex gap-2">
@@ -366,7 +415,7 @@ $currentUser = Session::getCurrentUser();
   <div class="bg-white rounded-3xl shadow-2xl border border-slate-200/80 w-full max-w-lg max-h-[90vh] overflow-y-auto p-6 sm:p-8">
     <div class="flex items-center justify-between pb-4 border-b border-slate-100">
       <div class="flex items-center gap-3">
-        <div class="w-10 h-10 rounded-2xl bg-rose-50 border border-rose-100 flex items-center justify-center text-rose-600">
+        <div class="w-10 h-10 rounded-2xl bg-rose-50 border border-rose-100 flex items-center justify-center text-rose-600 shadow-xs">
           <i data-lucide="trash-2" class="w-5 h-5"></i>
         </div>
         <div>
@@ -379,38 +428,80 @@ $currentUser = Session::getCurrentUser();
       </button>
     </div>
     <div class="mt-5 space-y-4">
-      <div>
-        <label class="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Medicine <span class="text-rose-500">*</span></label>
-        <select class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition">
-          <option value="">Select medicine...</option>
-          <?php foreach (getDemoInventory() as $inv): ?>
-          <option value="<?= e($inv['inv_id']) ?>"><?= e($inv['medicine']) ?> – Batch <?= e($inv['batch']) ?></option>
-          <?php endforeach; ?>
-        </select>
+      <!-- Searchable Medicine Input for Disposal -->
+      <div class="relative">
+        <div class="flex items-center justify-between mb-1">
+          <label class="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Medicine <span class="text-rose-500">*</span></label>
+          <span class="text-[10px] font-bold text-rose-600 flex items-center gap-1">
+            <i data-lucide="sparkles" class="w-3 h-3 text-rose-500"></i> Instant Search Active
+          </span>
+        </div>
+        <div class="relative">
+          <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+            <i data-lucide="search" class="w-4 h-4"></i>
+          </div>
+          <input type="text" 
+                 id="disposalMedicineSearch" 
+                 autocomplete="off" 
+                 placeholder="Type to search medicine or batch to dispose..." 
+                 class="w-full pl-9 pr-9 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition font-medium"
+                 onfocus="openDisposalSuggestions()"
+                 oninput="filterDisposalMedicines(this.value)"
+                 onkeydown="handleDisposalKeydown(event)" />
+          <button type="button" 
+                  id="disposalClearBtn" 
+                  onclick="clearDisposalSelection()" 
+                  class="hidden absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 transition" 
+                  title="Clear search">
+            <i data-lucide="x" class="w-4 h-4"></i>
+          </button>
+        </div>
+
+        <!-- Hidden inputs for backend submission -->
+        <input type="hidden" id="disposalGeneric" name="item_code" value="">
+        <input type="hidden" id="disposalInventoryId" name="inventory_id" value="">
+
+        <!-- Selected Medicine Summary Badge -->
+        <div id="disposalSelectedBadge" class="hidden mt-2 p-2.5 rounded-xl bg-rose-50/90 border border-rose-200 flex items-center justify-between transition-all">
+          <div class="flex items-center gap-2.5 min-w-0">
+            <div class="w-7 h-7 rounded-lg bg-rose-600 text-white flex items-center justify-center font-black text-xs shrink-0 shadow-xs">
+              <i data-lucide="alert-triangle" class="w-4 h-4"></i>
+            </div>
+            <div class="min-w-0">
+              <p id="disposalSelectedTitle" class="text-xs font-bold text-rose-950 truncate"></p>
+              <p id="disposalSelectedMeta" class="text-[10px] text-rose-700 truncate"></p>
+            </div>
+          </div>
+          <span id="disposalSelectedStock" class="shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold bg-white text-rose-800 border border-rose-200 shadow-2xs"></span>
+        </div>
+
+        <!-- Autocomplete Dropdown List -->
+        <div id="disposalMedicineResults" class="hidden absolute left-0 right-0 z-50 mt-1 max-h-56 overflow-y-auto bg-white border border-slate-200 rounded-xl shadow-2xl divide-y divide-slate-100"></div>
       </div>
+
       <div class="grid grid-cols-2 gap-3">
         <div>
           <label class="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Quantity <span class="text-rose-500">*</span></label>
-          <input type="number" placeholder="Quantity to dispose" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition">
+          <input type="number" id="disposalQty" placeholder="Quantity to dispose" min="1" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition font-semibold">
         </div>
         <div>
           <label class="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Reason <span class="text-rose-500">*</span></label>
-          <select class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition">
-            <option>Expired</option>
-            <option>Damaged</option>
-            <option>Contaminated</option>
-            <option>Recalled</option>
-            <option>Other</option>
+          <select id="disposalReason" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition font-semibold">
+            <option value="Expired">Expired</option>
+            <option value="Damaged">Damaged</option>
+            <option value="Contaminated">Contaminated</option>
+            <option value="Recalled">Recalled</option>
+            <option value="Other">Other</option>
           </select>
         </div>
       </div>
       <div>
         <label class="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Disposal Date</label>
-        <input type="date" value="<?= date('Y-m-d') ?>" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition">
+        <input type="date" id="disposalDate" value="<?= date('Y-m-d') ?>" class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition">
       </div>
       <div>
         <label class="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Notes</label>
-        <textarea rows="2" placeholder="Disposal method, authorized by..." class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition resize-none"></textarea>
+        <textarea id="disposalNotes" rows="2" placeholder="Disposal method, authorized by, lot notes..." class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition resize-none"></textarea>
       </div>
     </div>
     <div class="mt-5 pt-4 border-t border-slate-100 flex gap-2">
@@ -729,7 +820,14 @@ $currentUser = Session::getCurrentUser();
 <!-- ═══════════════════════════════════════════════════════ -->
 <!-- GLOBAL JAVASCRIPT                                       -->
 <!-- ═══════════════════════════════════════════════════════ -->
+<?php
+$pharmacyCatalogItems = array_values(getDemoCatalog());
+$pharmacyInventoryItems = array_values(getDemoInventory());
+?>
 <script>
+window.TMHIS_PHARMACY_CATALOG = <?= json_encode($pharmacyCatalogItems, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
+window.TMHIS_PHARMACY_INVENTORY = <?= json_encode($pharmacyInventoryItems, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
+
 // ── AOS Init ──────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   AOS.init({ duration: 450, easing: 'ease-out-cubic', once: true, offset: 30, delay: 0 });
@@ -793,8 +891,14 @@ function showToast(message, type = 'info', duration = 3500) {
 function handleGlobalSearch(e) {
   const q = (e.target.value || '').toLowerCase().trim();
   document.querySelectorAll('.searchable-row').forEach(row => {
-    row.style.display = (row.textContent || '').toLowerCase().includes(q) ? '' : 'none';
+    const matches = !q || (row.textContent || '').toLowerCase().includes(q);
+    row.style.display = matches ? '' : 'none';
   });
+  if (window.pharmacyPaginators && Array.isArray(window.pharmacyPaginators)) {
+    window.pharmacyPaginators.forEach(p => {
+      if (p && typeof p.refresh === 'function') p.refresh();
+    });
+  }
 }
 
 // Shortcut '/' for search
@@ -1024,18 +1128,289 @@ async function confirmDispensing() {
   }
 }
 
-// ── Stock-In Modal ────────────────────────────────────────
-function openStockInModal() { openModal('stockInModal'); }
+// ── Stock-In Modal & Autocomplete Search ──────────────────
+let stockInActiveIdx = -1;
+let stockInFilteredItems = [];
+
+function openStockInModal(prefillMedicineName = null) {
+  openModal('stockInModal');
+  const searchInput = document.getElementById('stockInMedicineSearch');
+  const resultsBox = document.getElementById('stockInMedicineResults');
+  const clearBtn = document.getElementById('stockInClearBtn');
+  const badge = document.getElementById('stockInSelectedBadge');
+  
+  if (prefillMedicineName) {
+    if (searchInput) searchInput.value = prefillMedicineName;
+    filterStockInMedicines(prefillMedicineName);
+  } else {
+    clearStockInSelection();
+  }
+  
+  setTimeout(() => {
+    searchInput?.focus();
+    if (!prefillMedicineName) openStockInSuggestions();
+  }, 100);
+}
+
+function openStockInSuggestions() {
+  const searchInput = document.getElementById('stockInMedicineSearch');
+  const val = searchInput?.value?.trim() || '';
+  if (!val) {
+    // Show top formulary items as initial quick-picks
+    const catalog = window.TMHIS_PHARMACY_CATALOG || [];
+    renderStockInResults(catalog.slice(0, 10));
+  } else {
+    filterStockInMedicines(val);
+  }
+}
+
+function filterStockInMedicines(term) {
+  const q = (term || '').trim().toLowerCase();
+  const clearBtn = document.getElementById('stockInClearBtn');
+  if (clearBtn) clearBtn.classList.toggle('hidden', q.length === 0);
+
+  const catalog = window.TMHIS_PHARMACY_CATALOG || [];
+  if (!q) {
+    renderStockInResults(catalog.slice(0, 10));
+    return;
+  }
+
+  // Instant local filtering
+  stockInFilteredItems = catalog.filter(m => {
+    const generic = (m.generic_name || m.medicine || '').toLowerCase();
+    const brand = (m.brand_name || '').toLowerCase();
+    const code = (m.code || m.med_id || '').toLowerCase();
+    const cat = (m.category || '').toLowerCase();
+    const form = (m.dosage_form || m.unit || '').toLowerCase();
+    return generic.includes(q) || brand.includes(q) || code.includes(q) || cat.includes(q) || form.includes(q);
+  });
+
+  renderStockInResults(stockInFilteredItems);
+
+  // If local results are sparse, also query the live backend medications endpoint
+  if (stockInFilteredItems.length < 3 && q.length >= 2) {
+    fetch('/api/search/medications?q=' + encodeURIComponent(q))
+      .then(res => res.json())
+      .then(res => {
+        if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+          const remoteMapped = res.data.map(item => ({
+            id: item.id,
+            inv_id: item.id,
+            code: item.item_code,
+            generic_name: item.generic_name,
+            brand_name: item.brand_name,
+            medicine: item.full_name,
+            category: item.category,
+            dosage_form: item.dosage_form,
+            strength: item.strength,
+            stock: item.current_stock,
+            batch: item.batch_number,
+            supplier: item.supplier,
+            unit: item.dosage_form
+          }));
+          
+          // Merge unique by code/generic_name
+          const existingCodes = new Set(stockInFilteredItems.map(x => x.code || x.generic_name));
+          remoteMapped.forEach(r => {
+            if (!existingCodes.has(r.code || r.generic_name)) {
+              stockInFilteredItems.push(r);
+            }
+          });
+          renderStockInResults(stockInFilteredItems);
+        }
+      })
+      .catch(() => {});
+  }
+}
+
+function renderStockInResults(items) {
+  const container = document.getElementById('stockInMedicineResults');
+  if (!container) return;
+  stockInFilteredItems = items || [];
+  stockInActiveIdx = -1;
+
+  if (stockInFilteredItems.length === 0) {
+    container.innerHTML = `
+      <div class="p-3 text-center text-xs text-slate-400">
+        <i data-lucide="package-search" class="w-4 h-4 mx-auto mb-1 text-slate-300"></i>
+        <span>No matching medicines found in catalog.</span>
+      </div>
+    `;
+    container.classList.remove('hidden');
+    if (window.lucide) lucide.createIcons();
+    return;
+  }
+
+  let html = '';
+  stockInFilteredItems.slice(0, 15).forEach((item, idx) => {
+    const medTitle = (item.generic_name || item.medicine || 'Unnamed') + (item.strength && !(item.generic_name || '').includes(item.strength) ? ' ' + item.strength : '');
+    const stockQty = item.stock ?? item.current_stock ?? '0';
+    const isHighStock = parseInt(stockQty) > 20;
+
+    html += `
+      <div class="stockin-result-item p-2.5 hover:bg-teal-50/80 cursor-pointer transition flex items-center justify-between text-left group"
+           data-idx="${idx}"
+           onclick="selectStockInMedicineByIndex(${idx})">
+        <div class="min-w-0 pr-3">
+          <div class="text-xs font-bold text-slate-800 flex items-center gap-1.5 flex-wrap">
+            <span class="group-hover:text-teal-700 transition">${escapeHtml(medTitle)}</span>
+            ${item.brand_name ? `<span class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-teal-100 text-teal-800">${escapeHtml(item.brand_name)}</span>` : ''}
+          </div>
+          <div class="text-[10px] text-slate-400 mt-0.5 flex items-center gap-2">
+            <span>${escapeHtml(item.code || item.med_id || 'CAT-MED')}</span>
+            <span>•</span>
+            <span>${escapeHtml(item.dosage_form || item.unit || 'Form')}</span>
+            <span>•</span>
+            <span>${escapeHtml(item.category || 'General')}</span>
+          </div>
+        </div>
+        <div class="shrink-0 text-right">
+          <span class="text-[10px] font-bold px-2 py-0.5 rounded-full border ${isHighStock ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'}">
+            Stock: ${stockQty}
+          </span>
+        </div>
+      </div>
+    `;
+  });
+
+  container.innerHTML = html;
+  container.classList.remove('hidden');
+}
+
+function selectStockInMedicineByIndex(idx) {
+  const item = stockInFilteredItems[idx];
+  if (item) selectStockInMedicine(item);
+}
+
+function selectStockInMedicine(item) {
+  const searchInput = document.getElementById('stockInMedicineSearch');
+  const genericInput = document.getElementById('stockInGeneric');
+  const invInput = document.getElementById('stockInInventoryId');
+  const resultsBox = document.getElementById('stockInMedicineResults');
+  const clearBtn = document.getElementById('stockInClearBtn');
+  const badge = document.getElementById('stockInSelectedBadge');
+  const badgeTitle = document.getElementById('stockInSelectedTitle');
+  const badgeMeta = document.getElementById('stockInSelectedMeta');
+  const badgeStock = document.getElementById('stockInSelectedStock');
+
+  const medTitle = (item.generic_name || item.medicine || '') + (item.strength && !(item.generic_name || '').includes(item.strength) ? ' ' + item.strength : '');
+  
+  if (searchInput) searchInput.value = medTitle + (item.brand_name ? ` (${item.brand_name})` : '');
+  if (genericInput) genericInput.value = item.code || item.generic_name || item.medicine;
+  if (invInput) invInput.value = item.inv_id || item.id || '';
+  if (clearBtn) clearBtn.classList.remove('hidden');
+
+  // Auto-fill companion form fields if available
+  if (item.batch && document.getElementById('stockInBatch')) {
+    document.getElementById('stockInBatch').value = item.batch;
+  }
+  if (item.supplier && document.getElementById('stockInSupplier')) {
+    document.getElementById('stockInSupplier').value = item.supplier;
+  }
+  if (item.dosage_form || item.unit) {
+    const unitSelect = document.getElementById('stockInUnit');
+    if (unitSelect) {
+      const matchForm = item.dosage_form || item.unit;
+      for (let i = 0; i < unitSelect.options.length; i++) {
+        if (unitSelect.options[i].value.toLowerCase() === matchForm.toLowerCase()) {
+          unitSelect.selectedIndex = i;
+          break;
+        }
+      }
+    }
+  }
+
+  // Show Selected Badge
+  if (badge && badgeTitle && badgeMeta && badgeStock) {
+    badgeTitle.textContent = medTitle;
+    badgeMeta.textContent = [
+      item.brand_name ? 'Brand: ' + item.brand_name : '',
+      item.dosage_form || item.unit,
+      item.category,
+      item.code ? 'Code: ' + item.code : ''
+    ].filter(Boolean).join(' • ');
+    badgeStock.textContent = 'Stock: ' + (item.stock ?? item.current_stock ?? '0');
+    badge.classList.remove('hidden');
+  }
+
+  if (resultsBox) resultsBox.classList.add('hidden');
+  document.getElementById('stockInQty')?.focus();
+  if (window.lucide) lucide.createIcons();
+}
+
+function clearStockInSelection() {
+  const searchInput = document.getElementById('stockInMedicineSearch');
+  const genericInput = document.getElementById('stockInGeneric');
+  const invInput = document.getElementById('stockInInventoryId');
+  const resultsBox = document.getElementById('stockInMedicineResults');
+  const clearBtn = document.getElementById('stockInClearBtn');
+  const badge = document.getElementById('stockInSelectedBadge');
+
+  if (searchInput) searchInput.value = '';
+  if (genericInput) genericInput.value = '';
+  if (invInput) invInput.value = '';
+  if (clearBtn) clearBtn.classList.add('hidden');
+  if (badge) badge.classList.add('hidden');
+  if (resultsBox) resultsBox.classList.add('hidden');
+}
+
+function handleStockInKeydown(e) {
+  const resultsBox = document.getElementById('stockInMedicineResults');
+  if (!resultsBox || resultsBox.classList.contains('hidden')) return;
+
+  const items = resultsBox.querySelectorAll('.stockin-result-item');
+  if (items.length === 0) return;
+
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    stockInActiveIdx = (stockInActiveIdx + 1) % items.length;
+    updateStockInHighlight(items);
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    stockInActiveIdx = (stockInActiveIdx - 1 + items.length) % items.length;
+    updateStockInHighlight(items);
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    if (stockInActiveIdx >= 0 && stockInActiveIdx < stockInFilteredItems.length) {
+      selectStockInMedicineByIndex(stockInActiveIdx);
+    } else if (stockInFilteredItems.length > 0) {
+      selectStockInMedicineByIndex(0);
+    }
+  } else if (e.key === 'Escape') {
+    resultsBox.classList.add('hidden');
+  }
+}
+
+function updateStockInHighlight(items) {
+  items.forEach((el, idx) => {
+    if (idx === stockInActiveIdx) {
+      el.classList.add('bg-teal-50', 'ring-1', 'ring-teal-500/30');
+      el.scrollIntoView({ block: 'nearest' });
+    } else {
+      el.classList.remove('bg-teal-50', 'ring-1', 'ring-teal-500/30');
+    }
+  });
+}
+
 async function saveStockIn() {
   const generic = document.getElementById('stockInGeneric')?.value || '';
+  const invId = document.getElementById('stockInInventoryId')?.value || '';
+  const searchVal = document.getElementById('stockInMedicineSearch')?.value?.trim() || '';
   const qty = parseInt(document.getElementById('stockInQty')?.value || '0');
-  const batch = document.getElementById('stockInBatch')?.value || '';
+  const batch = document.getElementById('stockInBatch')?.value?.trim() || '';
   const expiry = document.getElementById('stockInExpiry')?.value || '';
-  const supplier = document.getElementById('stockInSupplier')?.value || 'Hospital Formulary';
+  const supplier = document.getElementById('stockInSupplier')?.value?.trim() || 'Hospital Formulary';
+  const unit = document.getElementById('stockInUnit')?.value || 'Tablet';
   const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
 
-  if (qty <= 0) {
-    showToast('Please enter a valid stock-in quantity.', 'error');
+  if (!generic && !searchVal) {
+    showToast('Please search and select a medicine from the formulary catalog.', 'warning');
+    document.getElementById('stockInMedicineSearch')?.focus();
+    return;
+  }
+  if (qty <= 0 || isNaN(qty)) {
+    showToast('Please enter a valid stock-in quantity (minimum 1).', 'error');
+    document.getElementById('stockInQty')?.focus();
     return;
   }
 
@@ -1047,18 +1422,20 @@ async function saveStockIn() {
         'X-CSRF-TOKEN': token
       },
       body: JSON.stringify({
-        item_code: generic,
+        inventory_id: invId ? parseInt(invId) : null,
+        item_code: generic || searchVal,
         quantity: qty,
         batch_number: batch,
         expiry_date: expiry,
-        supplier: supplier
+        supplier: supplier,
+        unit: unit
       })
     });
     const result = await res.json();
     if (result.success) {
       closeModal('stockInModal');
       showToast(result.message || 'Stock-In entry saved. Inventory updated.', 'success');
-      setTimeout(() => location.reload(), 1000);
+      setTimeout(() => location.reload(), 900);
     } else {
       showToast(result.message || 'Stock-In failed.', 'error');
     }
@@ -1068,16 +1445,227 @@ async function saveStockIn() {
   }
 }
 
-// ── Disposal Modal ────────────────────────────────────────
-function openDisposalModal() { openModal('disposalModal'); }
+// ── Disposal Modal & Autocomplete Search ──────────────────
+let disposalActiveIdx = -1;
+let disposalFilteredItems = [];
+
+function openDisposalModal() {
+  openModal('disposalModal');
+  clearDisposalSelection();
+  setTimeout(() => {
+    document.getElementById('disposalMedicineSearch')?.focus();
+    openDisposalSuggestions();
+  }, 100);
+}
+
+function openDisposalSuggestions() {
+  const searchInput = document.getElementById('disposalMedicineSearch');
+  const val = searchInput?.value?.trim() || '';
+  const inventory = window.TMHIS_PHARMACY_INVENTORY || window.TMHIS_PHARMACY_CATALOG || [];
+  if (!val) {
+    renderDisposalResults(inventory.slice(0, 10));
+  } else {
+    filterDisposalMedicines(val);
+  }
+}
+
+function filterDisposalMedicines(term) {
+  const q = (term || '').trim().toLowerCase();
+  const clearBtn = document.getElementById('disposalClearBtn');
+  if (clearBtn) clearBtn.classList.toggle('hidden', q.length === 0);
+
+  const inventory = window.TMHIS_PHARMACY_INVENTORY || window.TMHIS_PHARMACY_CATALOG || [];
+  if (!q) {
+    renderDisposalResults(inventory.slice(0, 10));
+    return;
+  }
+
+  disposalFilteredItems = inventory.filter(m => {
+    const name = (m.medicine || m.generic_name || m.generic || '').toLowerCase();
+    const batch = (m.batch || '').toLowerCase();
+    const code = (m.code || m.inv_id || '').toLowerCase();
+    return name.includes(q) || batch.includes(q) || code.includes(q);
+  });
+
+  renderDisposalResults(disposalFilteredItems);
+}
+
+function renderDisposalResults(items) {
+  const container = document.getElementById('disposalMedicineResults');
+  if (!container) return;
+  disposalFilteredItems = items || [];
+  disposalActiveIdx = -1;
+
+  if (disposalFilteredItems.length === 0) {
+    container.innerHTML = `
+      <div class="p-3 text-center text-xs text-slate-400">
+        <i data-lucide="package-search" class="w-4 h-4 mx-auto mb-1 text-slate-300"></i>
+        <span>No matching inventory batch found.</span>
+      </div>
+    `;
+    container.classList.remove('hidden');
+    if (window.lucide) lucide.createIcons();
+    return;
+  }
+
+  let html = '';
+  disposalFilteredItems.slice(0, 15).forEach((item, idx) => {
+    const medTitle = item.medicine || item.generic_name || item.generic || 'Medicine';
+    const batchNo = item.batch || 'Standard Batch';
+    const stockQty = item.stock ?? item.current_stock ?? '0';
+
+    html += `
+      <div class="disposal-result-item p-2.5 hover:bg-rose-50/80 cursor-pointer transition flex items-center justify-between text-left group"
+           data-idx="${idx}"
+           onclick="selectDisposalMedicineByIndex(${idx})">
+        <div class="min-w-0 pr-3">
+          <div class="text-xs font-bold text-slate-800 flex items-center gap-1.5 flex-wrap">
+            <span class="group-hover:text-rose-700 transition">${escapeHtml(medTitle)}</span>
+            <span class="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-700">Batch: ${escapeHtml(batchNo)}</span>
+          </div>
+          <div class="text-[10px] text-slate-400 mt-0.5 flex items-center gap-2">
+            <span>Expiry: ${escapeHtml(item.expiry || item.expiry_date || 'N/A')}</span>
+            <span>•</span>
+            <span>Supplier: ${escapeHtml(item.supplier || 'Hospital Formulary')}</span>
+          </div>
+        </div>
+        <div class="shrink-0 text-right">
+          <span class="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-rose-50 text-rose-700 border-rose-200">
+            Available: ${stockQty}
+          </span>
+        </div>
+      </div>
+    `;
+  });
+
+  container.innerHTML = html;
+  container.classList.remove('hidden');
+}
+
+function selectDisposalMedicineByIndex(idx) {
+  const item = disposalFilteredItems[idx];
+  if (item) selectDisposalMedicine(item);
+}
+
+function selectDisposalMedicine(item) {
+  const searchInput = document.getElementById('disposalMedicineSearch');
+  const genericInput = document.getElementById('disposalGeneric');
+  const invInput = document.getElementById('disposalInventoryId');
+  const resultsBox = document.getElementById('disposalMedicineResults');
+  const clearBtn = document.getElementById('disposalClearBtn');
+  const badge = document.getElementById('disposalSelectedBadge');
+  const badgeTitle = document.getElementById('disposalSelectedTitle');
+  const badgeMeta = document.getElementById('disposalSelectedMeta');
+  const badgeStock = document.getElementById('disposalSelectedStock');
+  const qtyInput = document.getElementById('disposalQty');
+
+  const medTitle = item.medicine || item.generic_name || item.generic || 'Medicine';
+  const batchNo = item.batch || 'Standard Batch';
+  const stockQty = item.stock ?? item.current_stock ?? '0';
+
+  if (searchInput) searchInput.value = `${medTitle} [Batch: ${batchNo}]`;
+  if (genericInput) genericInput.value = item.code || item.generic || item.generic_name || item.medicine;
+  if (invInput) invInput.value = item.inv_id || item.id || '';
+  if (clearBtn) clearBtn.classList.remove('hidden');
+
+  if (qtyInput) {
+    qtyInput.max = stockQty;
+    qtyInput.placeholder = `Max available: ${stockQty}`;
+  }
+
+  const notesEl = document.getElementById('disposalNotes');
+  if (notesEl && !notesEl.value) {
+    notesEl.value = `Disposal of Batch: ${batchNo}. Expiry: ${item.expiry || item.expiry_date || 'N/A'}.`;
+  }
+
+  if (badge && badgeTitle && badgeMeta && badgeStock) {
+    badgeTitle.textContent = medTitle;
+    badgeMeta.textContent = `Batch: ${batchNo} • Expiry: ${item.expiry || item.expiry_date || 'N/A'}`;
+    badgeStock.textContent = 'Avail: ' + stockQty;
+    badge.classList.remove('hidden');
+  }
+
+  if (resultsBox) resultsBox.classList.add('hidden');
+  qtyInput?.focus();
+  if (window.lucide) lucide.createIcons();
+}
+
+function clearDisposalSelection() {
+  const searchInput = document.getElementById('disposalMedicineSearch');
+  const genericInput = document.getElementById('disposalGeneric');
+  const invInput = document.getElementById('disposalInventoryId');
+  const resultsBox = document.getElementById('disposalMedicineResults');
+  const clearBtn = document.getElementById('disposalClearBtn');
+  const badge = document.getElementById('disposalSelectedBadge');
+  const qtyInput = document.getElementById('disposalQty');
+
+  if (searchInput) searchInput.value = '';
+  if (genericInput) genericInput.value = '';
+  if (invInput) invInput.value = '';
+  if (clearBtn) clearBtn.classList.add('hidden');
+  if (badge) badge.classList.add('hidden');
+  if (resultsBox) resultsBox.classList.add('hidden');
+  if (qtyInput) {
+    qtyInput.removeAttribute('max');
+    qtyInput.placeholder = 'Quantity to dispose';
+  }
+}
+
+function handleDisposalKeydown(e) {
+  const resultsBox = document.getElementById('disposalMedicineResults');
+  if (!resultsBox || resultsBox.classList.contains('hidden')) return;
+
+  const items = resultsBox.querySelectorAll('.disposal-result-item');
+  if (items.length === 0) return;
+
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    disposalActiveIdx = (disposalActiveIdx + 1) % items.length;
+    updateDisposalHighlight(items);
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    disposalActiveIdx = (disposalActiveIdx - 1 + items.length) % items.length;
+    updateDisposalHighlight(items);
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    if (disposalActiveIdx >= 0 && disposalActiveIdx < disposalFilteredItems.length) {
+      selectDisposalMedicineByIndex(disposalActiveIdx);
+    } else if (disposalFilteredItems.length > 0) {
+      selectDisposalMedicineByIndex(0);
+    }
+  } else if (e.key === 'Escape') {
+    resultsBox.classList.add('hidden');
+  }
+}
+
+function updateDisposalHighlight(items) {
+  items.forEach((el, idx) => {
+    if (idx === disposalActiveIdx) {
+      el.classList.add('bg-rose-50', 'ring-1', 'ring-rose-500/30');
+      el.scrollIntoView({ block: 'nearest' });
+    } else {
+      el.classList.remove('bg-rose-50', 'ring-1', 'ring-rose-500/30');
+    }
+  });
+}
+
 async function saveDisposal() {
   const generic = document.getElementById('disposalGeneric')?.value || '';
+  const invId = document.getElementById('disposalInventoryId')?.value || '';
+  const searchVal = document.getElementById('disposalMedicineSearch')?.value?.trim() || '';
   const qty = parseInt(document.getElementById('disposalQty')?.value || '0');
   const reason = document.getElementById('disposalReason')?.value || 'Expired / Damaged';
+  const notes = document.getElementById('disposalNotes')?.value?.trim() || '';
   const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
 
-  if (qty <= 0) {
-    showToast('Please enter a valid disposal quantity.', 'error');
+  if (!generic && !searchVal) {
+    showToast('Please search and select a medicine to dispose.', 'warning');
+    document.getElementById('disposalMedicineSearch')?.focus();
+    return;
+  }
+  if (qty <= 0 || isNaN(qty)) {
+    showToast('Please enter a valid disposal quantity (minimum 1).', 'error');
+    document.getElementById('disposalQty')?.focus();
     return;
   }
 
@@ -1089,16 +1677,18 @@ async function saveDisposal() {
         'X-CSRF-TOKEN': token
       },
       body: JSON.stringify({
-        item_code: generic,
+        inventory_id: invId ? parseInt(invId) : null,
+        item_code: generic || searchVal,
         quantity: qty,
-        reason: reason
+        reason: reason,
+        notes: notes
       })
     });
     const result = await res.json();
     if (result.success) {
       closeModal('disposalModal');
       showToast(result.message || 'Disposal record created. Inventory reduced.', 'info');
-      setTimeout(() => location.reload(), 1000);
+      setTimeout(() => location.reload(), 900);
     } else {
       showToast(result.message || 'Disposal failed.', 'error');
     }
@@ -1106,6 +1696,23 @@ async function saveDisposal() {
     closeModal('disposalModal');
     showToast('Disposal record created. Inventory reduced.', 'info');
   }
+}
+
+// Global dismiss on click outside
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('#stockInMedicineSearch') && !e.target.closest('#stockInMedicineResults') && !e.target.closest('#stockInClearBtn')) {
+    document.getElementById('stockInMedicineResults')?.classList.add('hidden');
+  }
+  if (!e.target.closest('#disposalMedicineSearch') && !e.target.closest('#disposalMedicineResults') && !e.target.closest('#disposalClearBtn')) {
+    document.getElementById('disposalMedicineResults')?.classList.add('hidden');
+  }
+});
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str).replace(/[&<>"']/g, m => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  })[m]);
 }
 
 // ── Medicine Catalog Management ───────────────────────────
@@ -1470,14 +2077,16 @@ function filterInventory(status, btn) {
   if (btn) btn.className = 'inv-filter-btn px-3 py-1.5 rounded-xl bg-slate-900 text-white text-xs font-semibold transition active:scale-95';
 }
 </script>
-<script src="../includes/paginator.js"></script>
+<script src="/section/common/paginator.js"></script>
 <script>
   document.addEventListener('DOMContentLoaded', () => {
     if (window.TablePaginator) {
-      TablePaginator.paginateHtmlTable('#pharmacyRxTable', { pageSize: 8, recordLabel: 'prescriptions' });
-      TablePaginator.paginateHtmlTable('#pharmacyDispensingTable', { pageSize: 8, recordLabel: 'dispensing logs' });
-      TablePaginator.paginateHtmlTable('#pharmacyInventoryTable', { pageSize: 8, recordLabel: 'medicines' });
-      TablePaginator.paginateHtmlTable('#pharmacyCatalogTable', { pageSize: 8, recordLabel: 'formulary items' });
+      window.pharmacyPaginators = [
+        TablePaginator.paginateHtmlTable('#pharmacyRxTable', { pageSize: 8, recordLabel: 'prescriptions' }),
+        TablePaginator.paginateHtmlTable('#pharmacyDispensingTable', { pageSize: 8, recordLabel: 'dispensing logs' }),
+        TablePaginator.paginateHtmlTable('#pharmacyInventoryTable', { pageSize: 8, recordLabel: 'medicines' }),
+        TablePaginator.paginateHtmlTable('#pharmacyCatalogTable', { pageSize: 8, recordLabel: 'formulary items' })
+      ];
     }
   });
 </script>

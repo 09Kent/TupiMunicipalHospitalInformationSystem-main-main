@@ -18,6 +18,7 @@ use App\Http\Controllers\Api\SearchApiController;
 use App\Http\Controllers\Api\AssignmentApiController;
 use App\Http\Controllers\Api\MedicationAdministrationApiController;
 use App\Http\Controllers\Api\ReferralApiController;
+use App\Http\Controllers\Api\AmbulanceApiController;
 
 // Public Landing Page
 Route::get('/', [LandingController::class, 'index'])->name('landing');
@@ -187,6 +188,13 @@ Route::middleware(['auth', 'role:Billing,Cashier,Accountant,Admin'])->prefix('bi
     Route::post('/payments/{id}/verify-bank', [BillingController::class, 'verifyBankPayment'])->name('payments.verify-bank');
     Route::post('/payments/{id}/simulate-provider-callback', [BillingController::class, 'simulateProviderCallback'])->name('payments.simulate-callback');
     Route::post('/aggregate/{patientId}', [BillingController::class, 'aggregateUnbilled'])->name('aggregate');
+
+    // POS / Pharmacy Retail Sales Endpoints
+    Route::get('/pos/medicines', [BillingController::class, 'posMedicines'])->name('pos.medicines');
+    Route::get('/pos/patients', [BillingController::class, 'posPatients'])->name('pos.patients');
+    Route::post('/pos/checkout', [BillingController::class, 'posCheckout'])->name('pos.checkout');
+    Route::get('/pos/sales', [BillingController::class, 'posSalesHistory'])->name('pos.sales');
+    Route::get('/pos/receipt/{id}', [BillingController::class, 'posReceipt'])->name('pos.receipt');
 });
 
 // External Payment Webhooks (No session CSRF required)
@@ -266,6 +274,19 @@ Route::prefix('api/search')->name('api.search.')->group(function () {
     Route::get('/queue', [SearchApiController::class, 'searchQueue'])->name('queue');
 });
 
+// Resilient direct aliases for Search (supporting Vercel serverless prefix normalization and direct client calls)
+Route::prefix('search')->group(function () {
+    Route::get('/patients', [SearchApiController::class, 'searchPatients']);
+    Route::get('/doctors', [SearchApiController::class, 'searchDoctors']);
+    Route::get('/nurses', [SearchApiController::class, 'searchNurses']);
+    Route::get('/diseases', [SearchApiController::class, 'searchDiseases']);
+    Route::get('/medications', [SearchApiController::class, 'searchMedications']);
+});
+Route::prefix('doctor/api/search')->group(function () {
+    Route::get('/patients', [SearchApiController::class, 'searchPatients']);
+    Route::get('/diseases', [SearchApiController::class, 'searchDiseases']);
+});
+
 // 2. Universal Print Engine & Logs
 Route::get('/print/{type}/{id?}', [PrintController::class, 'show'])->name('print.show');
 Route::middleware(['auth'])->group(function () {
@@ -292,6 +313,20 @@ Route::middleware(['auth'])->prefix('api/referrals')->name('api.referrals.')->gr
     Route::post('/create', [ReferralApiController::class, 'create'])->name('create');
     Route::post('/{id}/tracking', [ReferralApiController::class, 'updateTracking'])->name('tracking');
     Route::get('/patient/{patientId}', [ReferralApiController::class, 'listForPatient'])->name('patient');
+});
+
+// 6. Ambulance Fleet & Transfer Availability (Register & Doctor Referral Integration)
+Route::prefix('api/ambulances')->name('api.ambulances.')->group(function () {
+    Route::get('/', [AmbulanceApiController::class, 'index'])->name('index');
+    Route::get('/available', [AmbulanceApiController::class, 'available'])->name('available');
+    Route::post('/{id}/status', [AmbulanceApiController::class, 'updateStatus'])->name('status');
+    Route::post('/dispatch', [AmbulanceApiController::class, 'dispatch'])->name('dispatch');
+});
+Route::prefix('ambulances')->group(function () {
+    Route::get('/', [AmbulanceApiController::class, 'index']);
+    Route::get('/available', [AmbulanceApiController::class, 'available']);
+    Route::post('/{id}/status', [AmbulanceApiController::class, 'updateStatus']);
+    Route::post('/dispatch', [AmbulanceApiController::class, 'dispatch']);
 });
 
 // 6. Patient Longitudinal Timeline

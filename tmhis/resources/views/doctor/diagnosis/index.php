@@ -340,7 +340,158 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       ]);
 
       if ($planId) {
-        Session::setFlash('success', 'Treatment plan created successfully.');
+        $admitPatient = !empty($_POST['admit_patient']);
+        if ($admitPatient) {
+          $ward = trim($_POST['admission_ward'] ?? 'Cardiology Inpatient Ward');
+          $room = trim($_POST['admission_room'] ?? 'Room 302');
+          $bed = trim($_POST['admission_bed'] ?? 'Bed A');
+          $admissionReason = trim($_POST['admission_reason'] ?? $goal);
+          $nurseOrders = trim($_POST['nurse_orders'] ?? 'Intake vitals monitoring and administer treatment plan.');
+          $admNum = 'ADM-' . date('Ymd') . '-' . strtoupper(substr(md5(uniqid((string)mt_rand(), true)), 0, 4));
+          $admissionId = 0;
+
+          // 1. Create admissions record
+          try {
+            $stmtAdm = Database::getConnection()->prepare("
+              INSERT INTO admissions (
+                AdmissionNumber, PatientID, DoctorID, AppointmentID, Ward, RoomNumber, BedNumber,
+                AdmissionReason, AdmissionDate, Status, AdmittedBy, AdmittedByName, created_at, updated_at
+              ) VALUES (
+                :adm_num, :pid, :doc_id, :aid, :ward, :room, :bed,
+                :reason, NOW(), 'Admitted', :admitted_by, :admitted_by_name, NOW(), NOW()
+              )
+            ");
+            $stmtAdm->execute([
+              ':adm_num' => $admNum,
+              ':pid' => $patientId,
+              ':doc_id' => $doctorId,
+              ':aid' => $appId ?: ($patient['Appointment']['AppointmentID'] ?? null),
+              ':ward' => $ward,
+              ':room' => $room,
+              ':bed' => $bed,
+              ':reason' => $admissionReason,
+              ':admitted_by' => auth()->id() ?? $doctorId,
+              ':admitted_by_name' => 'Dr. Alexander Chen, MD'
+            ]);
+            $admissionId = (int)Database::getConnection()->lastInsertId();
+          } catch (\Throwable $admErr) {}
+
+          // 2. Update patient category to Inpatient
+          try {
+            $stmtCat = Database::getConnection()->prepare("UPDATE patients SET PatientCategory = 'Inpatient', Status = 'Active', UpdatedAt = NOW() WHERE PatientID = :pid");
+            $stmtCat->execute([':pid' => $patientId]);
+          } catch (\Throwable $catErr) {}
+
+          // 3. Update queue status
+          try {
+            $stmtQueue = Database::getConnection()->prepare("UPDATE patient_queue SET QueueStatus = 'Admitted - Inpatient' WHERE PatientID = :pid AND QueueStatus NOT IN ('Completed', 'Discharged')");
+            $stmtQueue->execute([':pid' => $patientId]);
+          } catch (\Throwable $qe) {}
+
+          // 4. Resolve on-duty nurse ID
+          $nurseId = 4; // Default to Elena Gomez
+          try {
+            $nStmt = Database::getConnection()->query("SELECT UserID FROM users WHERE RoleID = 3 OR LOWER(Role) LIKE '%nurse%' ORDER BY UserID ASC LIMIT 1");
+            $fetchedNurse = $nStmt->fetchColumn();
+            if ($fetchedNurse) $nurseId = (int)$fetchedNurse;
+          } catch (\Throwable $ne) {}
+
+          // 5. Create active nurse assignment
+          try {
+            $stmtNurse = Database::getConnection()->prepare("
+              INSERT INTO nurse_assignments (
+                PatientID, DoctorID, NurseID, TaskDescription, Status, AssignedBy, AssignedByName, Notes, AssignedAt
+              ) VALUES (
+                :pid, :doc_id, :nid, :task_desc, 'Active', :assigned_by, :assigned_by_name, :notes, NOW()
+              )
+            ");
+            $stmtNurse->execute([
+              ':pid' => $patientId,
+              ':doc_id' => $doctorId,
+              ':nid' => $nurseId,
+              ':task_desc' => 'Inpatient Bedside Intake & Monitoring: ' . substr($admissionReason, 0, 50),
+              ':assigned_by' => auth()->id() ?? $doctorId,
+              ':assigned_by_name' => 'Dr. Alexander Chen, MD',
+              ':notes' => "Inpatient Admission to $ward, $room ($bed). Directives: $nurseOrders"
+            ]);
+          } catch (\Throwable $naErr) {}
+
+          // 6. Create actionable nurse tasks
+          try {
+            $taskIns = Database::getConnection()->prepare("
+              INSERT INTO nurse_tasks (
+                PatientID, NurseID, DoctorID, TaskTitle, Category, Priority, Status,
+                ScheduledTime, DueTime, Remarks, MedicationName, CreatedAt
+              ) VALUES (
+                :pid, :nid, :doc_id, :title, :cat, :prio, :stat,
+                :sched, :due, :rem, :med, NOW()
+              )
+            ");
+
+            // Task 1: Bedside intake vitals
+            $taskIns->execute([
+              ':pid' => $patientId,
+              ':nid' => $nurseId,
+              ':doc_id' => $doctorId,
+              ':title' => 'Inpatient Bedside Intake & Vital Signs Monitoring',
+              ':cat' => 'Vital Signs',
+              ':prio' => 'Urgent',
+              ':stat' => 'Due',
+              ':sched' => date('Y-m-d H:i:s'),
+              ':due' => 'Due Now',
+              ':rem' => "Admitted to $ward, $room ($bed). Perform baseline vitals, SpO2, and continuous monitoring.",
+              ':med' => null
+            ]);
+
+            // Task 2: Administer treatment plan
+            $taskIns->execute([
+              ':pid' => $patientId,
+              ':nid' => $nurseId,
+              ':doc_id' => $doctorId,
+              ':title' => 'Administer Inpatient Treatment Plan: ' . substr($goal, 0, 45),
+              ':cat' => 'Medication',
+              ':prio' => 'High',
+              ':stat' => 'Scheduled',
+              ':sched' => date('Y-m-d H:i:s', strtotime('+1 hour')),
+              ':due' => '+1 Hour',
+              ':rem' => "Doctor Chen orders: $medicationPlan. Special instructions: $nurseOrders",
+              ':med' => $medicationPlan ?: 'Prescribed clinical regimen'
+            ]);
+
+            // Task 3: Continuous observation
+            $taskIns->execute([
+              ':pid' => $patientId,
+              ':nid' => $nurseId,
+              ':doc_id' => $doctorId,
+              ':title' => 'Ward Observation & Continuous Bedside Care',
+              ':cat' => 'Observation',
+              ':prio' => 'Normal',
+              ':stat' => 'Scheduled',
+              ':sched' => date('Y-m-d H:i:s', strtotime('+4 hours')),
+              ':due' => '+4 Hours',
+              ':rem' => "Ongoing care for patient in $ward, $room ($bed).",
+              ':med' => null
+            ]);
+          } catch (\Throwable $ntErr) {}
+
+          // 7. System Audit Log
+          try {
+            $stmtAudit = Database::getConnection()->prepare("
+              INSERT INTO system_audit_logs (UserID, UserName, UserRole, Action, Module, RecordID, Details, IPAddress, CreatedAt)
+              VALUES (:uid, 'dr.chen', 'Doctor', 'TREATMENT_PLAN_ADMISSION', 'Doctor Clinical Portal', :rec, :det, '127.0.0.1', NOW())
+            ");
+            $stmtAudit->execute([
+              ':uid' => auth()->id() ?? $doctorId,
+              ':rec' => $admissionId ?: $patientId,
+              ':det' => "Dr. Alexander Chen established treatment plan and ordered inpatient admission for patient #$patientId to $ward ($room, $bed). Automatically routed to Inpatient Nurse Station."
+            ]);
+          } catch (\Throwable $ae) {}
+
+          Session::setFlash('success', "Treatment plan established! Patient admitted as Inpatient to $ward ($room, $bed) and automatically routed to the Nurse Station with active care tasks.");
+        } else {
+          Session::setFlash('success', 'Treatment plan created successfully.');
+        }
+
         header("Location: " . doctor_url("views/diagnosis/index.php?patient_id=$patientId&app_id=$appId"));
         if (function_exists('app') && app()->environment('testing')) {
           return;
@@ -523,18 +674,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $priority = $_POST['referral_priority'] ?? 'Urgent';
         $urgency = $priority;
 
+        $rawAmbId = $_POST['ambulance_id'] ?? null;
+        $ambulanceId = ($rawAmbId !== null && $rawAmbId !== '' && (int)$rawAmbId > 0) ? (int)$rawAmbId : null;
+        $requiresAmbulance = $ambulanceId ? 1 : 0;
+        $ambulanceStatus = $requiresAmbulance ? 'Dispatched' : ($rawAmbId === '0' ? 'Private Transport' : ($rawAmbId === '-1' ? 'MDRRMO Rescue' : null));
+
         $refCode = 'REF-' . date('Ymd') . '-' . rand(1000, 9999);
 
         $stmtRef = $db->prepare("
                     INSERT INTO referrals (
                         ReferralCode, ReferralType, PatientID, ReferringDoctorID, ReferringDepartment,
                         TargetSpecialtyID, TargetDoctorID, ReceivingHospital, HospitalAddress,
-                        RequestedService, Reason, ClinicalSummary, Priority, Urgency, Status, TrackingStatus,
+                        RequestedService, AmbulanceID, RequiresAmbulance, AmbulanceStatus, Reason, ClinicalSummary, Priority, Urgency, Status, TrackingStatus,
                         CreatedAt, UpdatedAt
                     ) VALUES (
                         :code, :rtype, :pid, :doc_id, :dept,
                         :tspec, :tdoc, :hosp, :haddr,
-                        :serv, :reason, :summary, :priority, :urgency, 'Pending', :track,
+                        :serv, :amb_id, :req_amb, :amb_status, :reason, :summary, :priority, :urgency, 'Pending', :track,
                         NOW(), NOW()
                     )
                 ");
@@ -549,6 +705,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           ':hosp' => $receivingHospital ?: null,
           ':haddr' => trim($_POST['hospital_address'] ?? 'South Cotabato'),
           ':serv' => trim($_POST['requested_service'] ?? 'Specialized Medical Evaluation / Transfer'),
+          ':amb_id' => $ambulanceId,
+          ':req_amb' => $requiresAmbulance,
+          ':amb_status' => $ambulanceStatus,
           ':reason' => $refReason,
           ':summary' => $clinicalSummary,
           ':priority' => $priority,
@@ -556,6 +715,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           ':track' => ($refType === 'External' || !empty($receivingHospital)) ? 'Sent' : 'Created'
         ]);
         $referralId = (int) $db->lastInsertId();
+
+        // Dispatch ambulance in fleet record if selected
+        if ($ambulanceId > 0) {
+          try {
+            $ambStmt = $db->prepare("UPDATE ambulances SET Status = 'On Transfer', CurrentDestination = :dest, CurrentPatientID = :pid, EstimatedReturnTime = 'Est. 2 Hours', updated_at = NOW() WHERE AmbulanceID = :aid");
+            $ambStmt->execute([
+              ':dest' => $receivingHospital ?: 'Tertiary Hospital Transfer',
+              ':pid' => $patientId,
+              ':aid' => $ambulanceId
+            ]);
+          } catch (\Throwable $ue) {}
+        }
 
         try {
           $auditStmt = $db->prepare("
@@ -566,7 +737,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ':uid' => $currentUser['user_id'] ?? $doctorId,
             ':uname' => $currentUser['full_name'] ?? 'Attending Physician',
             ':rec' => $referralId,
-            ':det' => "Physician initiated {$refType} referral ({$refCode}) for Patient #{$patientId}."
+            ':det' => "Physician initiated {$refType} referral ({$refCode}) for Patient #{$patientId}." . ($requiresAmbulance ? " Dispatched Ambulance Unit #{$ambulanceId}." : "")
           ]);
         } catch (\Throwable $ae) {
         }
@@ -577,6 +748,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       if ($disposition === 'ADMIT') {
         Session::setFlash('success', "Admission Created Successfully! Patient assigned to {$admissionData['ward']}, {$admissionData['room_number']} ({$admissionData['bed_number']}) and routed to Inpatient Nurse Station.");
       } elseif ($disposition === 'REFER' && $referralId) {
+        $ambNotice = !empty($requiresAmbulance) ? " 🚑 Hospital Ambulance Dispatched." : "";
+        Session::setFlash('success', "Patient Referral Registered (Code: {$refCode})!{$ambNotice} <a href=\"/print/referral/{$referralId}\" target=\"_blank\" class=\"underline font-bold text-blue-600 hover:text-blue-800 ml-1\">🖨️ Print Referral / Transfer Slip</a>");
         Session::setFlash('success', "Patient Referral Registered (Code: {$refCode})! <a href=\"/print/referral/{$referralId}\" target=\"_blank\" class=\"underline font-bold text-blue-600 hover:text-blue-800 ml-1\">🖨️ Print Referral / Transfer Slip</a>");
       } else {
         Session::setFlash('success', "Consultation completed as $disposition. Outpatient records updated and archived.");
@@ -619,37 +792,16 @@ require_once __DIR__ . '/../includes/sidebar.php';
         </p>
       </div>
 
-      <!-- Quick Switch & Search Patient -->
-      <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-        <div class="relative w-full sm:w-64">
-          <div class="relative">
-            <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
-            <input type="text" id="doctor-patient-search" placeholder="Search patient name, ID, student ID..."
-              autocomplete="off"
-              class="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3 py-2 text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition" />
-          </div>
-          <div id="doctor-search-results"
-            class="hidden absolute left-0 right-0 mt-1 bg-white border border-slate-200 rounded-2xl shadow-2xl z-50 max-h-72 overflow-y-auto divide-y divide-slate-100">
-          </div>
+      <!-- Patient Search Bar -->
+      <div class="relative w-full sm:w-80 md:w-96">
+        <div class="relative">
+          <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+          <input type="text" id="doctor-patient-search" placeholder="Search patient name, ID, or patient code..."
+            autocomplete="off"
+            class="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3 py-2 text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition" />
         </div>
-
-        <div class="flex items-center gap-2">
-          <select onchange="if(this.value) window.location.href='?patient_id=' + this.value;"
-            class="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500">
-            <option value="">-- Assigned Queue (<?= count($patientList) ?>) --</option>
-            <?php foreach ($patientList as $p): ?>
-              <option value="<?= $p['PatientID'] ?>" <?= $p['PatientID'] == $patientId ? 'selected' : '' ?>>
-                <?= e($p['FirstName'] . ' ' . $p['LastName']) ?> (<?= e($p['PatientCode']) ?>)
-              </option>
-            <?php endforeach; ?>
-          </select>
-          <?php if ($patient): ?>
-            <a href="<?= doctor_url('views/patients/view.php?id=' . $patientId) ?>"
-              class="p-2 text-slate-400 hover:text-blue-600 bg-slate-50 hover:bg-blue-50 rounded-xl border border-slate-200 transition shrink-0"
-              title="Patient Full Chart">
-              <i data-lucide="external-link" class="w-4 h-4"></i>
-            </a>
-          <?php endif; ?>
+        <div id="doctor-search-results"
+          class="hidden absolute left-0 right-0 mt-1 bg-white border border-slate-200 rounded-2xl shadow-2xl z-50 max-h-72 overflow-y-auto divide-y divide-slate-100">
         </div>
       </div>
     </div>
@@ -658,7 +810,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
       <div class="bg-white rounded-3xl p-12 text-center text-slate-400 border border-slate-200 shadow-card">
         <i data-lucide="users" class="w-12 h-12 mx-auto mb-3 text-slate-300"></i>
         <h3 class="text-base font-bold text-slate-700">No Patient Selected</h3>
-        <p class="text-xs text-slate-400 mt-1">Select a patient from your assigned queue above to start recording notes.
+        <p class="text-xs text-slate-400 mt-1">Search and select a patient from the search bar above to start consultation and diagnosis.
         </p>
       </div>
     <?php else: ?>
@@ -722,7 +874,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
             <?= empty($existingDiagnoses) ? 'In Consultation' : (!empty($existingTreatmentPlans) ? 'Treatment Regimen' : 'Differential Diagnosis') ?>
           </span>
         </div>
-        <div class="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-9 gap-2.5">
+        <div class="flex items-center gap-2 overflow-x-auto pb-1.5 scrollbar-thin scrollbar-thumb-slate-200">
           <?php foreach ($stages as $idx => $st):
             $stageTarget = '';
             if ($st['key'] === 'consultation') {
@@ -735,7 +887,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
               $stageTarget = doctor_url('views/prescriptions/index.php?patient_id=' . $patientId);
             }
 
-            $cardClass = "w-full min-h-[76px] flex flex-col items-center justify-center p-2.5 rounded-2xl text-center border transition select-none " . (
+            $cardClass = "flex-1 min-w-[105px] max-w-[135px] min-h-[74px] flex flex-col items-center justify-center p-2 rounded-2xl text-center border transition select-none " . (
               $st['done']
               ? 'bg-emerald-50 border-emerald-200 text-emerald-800 hover:bg-emerald-100 hover:border-emerald-300'
               : (!empty($st['active'])
@@ -744,22 +896,22 @@ require_once __DIR__ . '/../includes/sidebar.php';
             );
             ?>
             <?php if ($stageTarget): ?>
-              <a href="<?= $stageTarget ?>" class="<?= $cardClass ?> cursor-pointer group">
+              <a href="<?= $stageTarget ?>" class="<?= $cardClass ?> cursor-pointer group" title="<?= e($st['label']) ?>">
                 <div
                   class="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold mb-1.5 shrink-0 transition-transform group-hover:scale-110 <?= $st['done'] ? 'bg-emerald-600 text-white' : (!empty($st['active']) ? 'bg-blue-600 text-white animate-pulse' : 'bg-slate-200 text-slate-500') ?>">
                   <?= $st['done'] ? '✓' : ($idx + 1) ?>
                 </div>
                 <span
-                  class="text-[10px] font-black uppercase tracking-tight leading-tight line-clamp-2"><?= e($st['label']) ?></span>
+                  class="text-[10px] font-black uppercase tracking-tight leading-tight line-clamp-1"><?= e($st['label']) ?></span>
               </a>
             <?php else: ?>
-              <div class="<?= $cardClass ?>">
+              <div class="<?= $cardClass ?>" title="<?= e($st['label']) ?>">
                 <div
                   class="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold mb-1.5 shrink-0 <?= $st['done'] ? 'bg-emerald-600 text-white' : (!empty($st['active']) ? 'bg-blue-600 text-white animate-pulse' : 'bg-slate-200 text-slate-500') ?>">
                   <?= $st['done'] ? '✓' : ($idx + 1) ?>
                 </div>
                 <span
-                  class="text-[10px] font-black uppercase tracking-tight leading-tight line-clamp-2"><?= e($st['label']) ?></span>
+                  class="text-[10px] font-black uppercase tracking-tight leading-tight line-clamp-1"><?= e($st['label']) ?></span>
               </div>
             <?php endif; ?>
           <?php endforeach; ?>
@@ -1133,6 +1285,11 @@ require_once __DIR__ . '/../includes/sidebar.php';
                   <div class="flex items-center gap-1.5 flex-wrap pt-1.5">
                     <span class="text-[9px] font-extrabold uppercase tracking-tight text-slate-400">Common:</span>
                     <button type="button"
+                      onclick="selectQuickDiagnosis('Rabies Virus Infection (Lyssavirus Encephalitis)', 'A82.9', 'Critical')"
+                      class="text-[10px] px-2 py-0.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold transition flex items-center gap-1">
+                      <span>Rabies</span><span class="font-mono text-[9px] opacity-70">A82.9</span>
+                    </button>
+                    <button type="button"
                       onclick="selectQuickDiagnosis('Dengue Fever without Warning Signs', 'A90', 'Moderate')"
                       class="text-[10px] px-2 py-0.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold transition flex items-center gap-1">
                       <span>Dengue</span><span class="font-mono text-[9px] opacity-70">A90</span>
@@ -1282,15 +1439,28 @@ require_once __DIR__ . '/../includes/sidebar.php';
                     class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white transition" />
                 </div>
 
-                <div>
+                <div class="relative">
                   <div class="flex items-center justify-between mb-1">
                     <label class="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">Medication Regimen
                       Overview</label>
-                    <span class="text-[9px] text-slate-400">Prescribed drugs & administration</span>
+                    <span class="text-[9px] font-semibold text-emerald-600 flex items-center gap-1">
+                      <i data-lucide="sparkles" class="w-3 h-3 text-emerald-500"></i> Searchable Medications
+                    </span>
                   </div>
-                  <input type="text" id="plan-medication-input" name="medication_plan"
-                    placeholder="e.g. Daily oral antihypertensives with morning meals..."
-                    class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white transition" />
+                  <div class="relative">
+                    <input type="text" id="plan-medication-input" name="medication_plan"
+                      placeholder="Type medicine name (e.g. Amoxicillin, Paracetamol, Co-amoxiclav) or full regimen..."
+                      autocomplete="off"
+                      class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white transition" />
+                    <div id="plan-medication-results" class="hidden absolute z-50 left-0 right-0 mt-1 max-h-48 overflow-y-auto bg-white border border-slate-200 rounded-xl shadow-xl divide-y divide-slate-100 p-1"></div>
+                  </div>
+                  <div class="mt-1.5 flex items-center gap-1 flex-wrap text-[10px]">
+                    <span class="text-[9px] font-bold text-slate-400 mr-0.5">QUICK RX:</span>
+                    <button type="button" onclick="appendMedicationPlan('Amoxicillin Trihydrate 500mg TID x 7 days')" class="px-2 py-0.5 rounded-full font-semibold bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition border border-emerald-200">+ Amoxicillin 500mg</button>
+                    <button type="button" onclick="appendMedicationPlan('Paracetamol 500mg PO q6h PRN')" class="px-2 py-0.5 rounded-full font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 transition border border-slate-200">+ Paracetamol 500mg</button>
+                    <button type="button" onclick="appendMedicationPlan('Co-amoxiclav 625mg PO BID x 7 days')" class="px-2 py-0.5 rounded-full font-semibold bg-blue-50 text-blue-700 hover:bg-blue-100 transition border border-blue-200">+ Co-amoxiclav</button>
+                    <button type="button" onclick="appendMedicationPlan('Salbutamol 2mg/5ml syr TID')" class="px-2 py-0.5 rounded-full font-semibold bg-purple-50 text-purple-700 hover:bg-purple-100 transition border border-purple-200">+ Salbutamol</button>
+                  </div>
                 </div>
 
                 <div class="grid grid-cols-2 gap-2">
@@ -1309,10 +1479,73 @@ require_once __DIR__ . '/../includes/sidebar.php';
                   </div>
                 </div>
 
-                <button type="submit"
+                <!-- Patient Disposition & Clinical Care Trajectory -->
+                <div class="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-3 mt-2">
+                  <div class="flex items-center justify-between">
+                    <label class="text-[10px] font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                      <i data-lucide="bed-double" class="w-3.5 h-3.5 text-blue-600"></i>
+                      <span>Patient Disposition & Care Trajectory</span>
+                    </label>
+                    <span class="text-[9px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-800">Physician Order</span>
+                  </div>
+
+                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                    <label class="relative flex items-center p-2.5 rounded-xl border border-slate-200 bg-white cursor-pointer hover:border-blue-400 transition select-none">
+                      <input type="radio" name="admit_patient" value="0" checked onchange="togglePlanAdmission(false)" class="text-blue-600 focus:ring-blue-500" />
+                      <div class="ml-2">
+                        <span class="block font-bold text-slate-800 text-[11px]">Outpatient Regimen</span>
+                        <span class="block text-[9px] text-slate-400">Prescription & scheduled review</span>
+                      </div>
+                    </label>
+
+                    <label class="relative flex items-center p-2.5 rounded-xl border border-blue-200 bg-blue-50/50 cursor-pointer hover:border-blue-500 transition select-none">
+                      <input type="radio" name="admit_patient" value="1" onchange="togglePlanAdmission(true)" class="text-blue-600 focus:ring-blue-500" />
+                      <div class="ml-2">
+                        <span class="block font-bold text-blue-950 text-[11px]">Direct Inpatient Admission</span>
+                        <span class="block text-[9px] text-blue-600 font-semibold">Route directly to Nurse Station</span>
+                      </div>
+                    </label>
+                  </div>
+
+                  <!-- Inpatient Admission Controls (Collapsible) -->
+                  <div id="plan-admission-details" class="hidden pt-3 border-t border-slate-200/80 space-y-3">
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <div>
+                        <label class="block text-[9px] font-bold uppercase text-slate-500 mb-1">Inpatient Ward</label>
+                        <select name="admission_ward" class="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-slate-800">
+                          <option value="Cardiology Inpatient Ward" selected>Cardiology Inpatient Ward (5th Flr)</option>
+                          <option value="Medical Ward (General)">Medical Ward (General)</option>
+                          <option value="Intensive Care Unit (ICU)">Intensive Care Unit (ICU)</option>
+                          <option value="Surgical / Step-down Ward">Surgical / Step-down Ward</option>
+                          <option value="Pediatric Ward">Pediatric Ward</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label class="block text-[9px] font-bold uppercase text-slate-500 mb-1">Room Number</label>
+                        <input type="text" name="admission_room" value="Room 302" class="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-slate-800" />
+                      </div>
+                      <div>
+                        <label class="block text-[9px] font-bold uppercase text-slate-500 mb-1">Bed Number</label>
+                        <input type="text" name="admission_bed" value="Bed A" class="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-slate-800" />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label class="block text-[9px] font-bold uppercase text-slate-500 mb-1">Clinical Admission Indication</label>
+                      <input type="text" name="admission_reason" placeholder="e.g. Inpatient cardiac monitoring, IV stabilization, continuous vitals tracking" value="<?= e($patient['Complaint']['ComplaintDescription'] ?? 'Inpatient clinical admission and continuous bedside monitoring.') ?>" class="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-800" />
+                    </div>
+
+                    <div>
+                      <label class="block text-[9px] font-bold uppercase text-slate-500 mb-1">Bedside Nurse Directives / Special Orders</label>
+                      <input type="text" name="nurse_orders" placeholder="e.g. Continuous telemetry, vitals q2h, strict I&O, bedside head elevated 30°" value="Intake vitals monitoring, initiate prescribed treatment plan, monitor oxygen saturation." class="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-800" />
+                    </div>
+                  </div>
+                </div>
+
+                <button type="submit" id="btn-submit-treatment-plan"
                   class="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs shadow-xs transition flex items-center justify-center gap-1.5">
                   <i data-lucide="check" class="w-3.5 h-3.5"></i>
-                  <span>Establish Treatment Plan</span>
+                  <span id="treatment-plan-btn-text">Establish Treatment Plan</span>
                 </button>
               </form>
             </div>
@@ -1566,16 +1799,39 @@ require_once __DIR__ . '/../includes/sidebar.php';
                     </select>
                   </div>
                   <div>
-                    <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Transfer Transport Mode
-                      *</label>
-                    <select name="requested_service"
-                      class="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-800">
-                      <option value="TMHIS Emergency Ambulance (O2 + EMT Accompanying)" selected>🚑 TMHIS Ambulance (O2 +
-                        EMT)</option>
-                      <option value="LGU Disaster Risk Reduction / Rescue Vehicle">🚑 LGU MDRRMO Rescue Vehicle</option>
-                      <option value="Private Vehicle (Family Dispatched)">🚗 Private Family Vehicle</option>
+                    <div class="flex items-center justify-between mb-1">
+                      <label class="block text-[10px] font-bold uppercase text-slate-500">Transport & Ambulance *</label>
+                      <span id="disp-amb-badge" class="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-emerald-100 text-emerald-800">
+                        Checking Fleet...
+                      </span>
+                    </div>
+                    <select name="ambulance_id" id="disp-ambulance-select" onchange="updateDispAmbulanceInfo(this)"
+                      class="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-purple-500">
+                      <option value="1">Ambulance Unit 01 (ALS - Advanced Life Support) [SGA-1041]</option>
+                      <option value="2">Ambulance Unit 02 (BLS - Basic Life Support) [SKD-5520]</option>
+                      <option value="3">Ambulance Unit 03 (Rapid Transport) [SMM-9832]</option>
+                      <option value="0">Private Vehicle (Family Dispatched)</option>
+                      <option value="-1">LGU / MDRRMO Disaster Emergency Rescue Unit</option>
                     </select>
+                    <input type="hidden" name="requested_service" id="disp-requested-service" value="TMHIS Emergency Ambulance Transfer" />
                   </div>
+                </div>
+
+                <!-- Live Ambulance Fleet Status Box for Physician -->
+                <div id="disp-amb-info-strip" class="p-2.5 bg-purple-50/80 border border-purple-200 rounded-xl text-xs space-y-1">
+                  <div class="flex items-center justify-between font-bold text-purple-950">
+                    <span id="disp-amb-name-label">Ambulance Unit 01 (ALS - Advanced Life Support)</span>
+                    <span class="font-mono text-[11px] text-purple-700" id="disp-amb-contact-label">Hotline: 0917-882-9011</span>
+                  </div>
+                  <div class="flex items-center justify-between text-[11px] text-slate-600">
+                    <span>Driver on Duty: <strong id="disp-amb-driver-label" class="text-slate-800">Reynaldo Gomez (EMT-B)</strong></span>
+                    <span class="text-emerald-700 font-bold" id="disp-amb-ready-label">✅ Available for Immediate Transfer</span>
+                  </div>
+                </div>
+
+                <div id="disp-amb-alert-strip" class="hidden p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800 font-bold flex items-center gap-2">
+                  <i data-lucide="alert-triangle" class="w-4 h-4 text-rose-600 shrink-0"></i>
+                  <span>Warning: All hospital ambulances are currently on transit. Consider patient private transport or coordinating with MDRRMO Rescue.</span>
                 </div>
 
                 <div>
@@ -1842,6 +2098,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
     } else if (mode === 'REFER') {
       submitBtn.className = 'px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-extrabold shadow-sm transition flex items-center gap-2';
       submitLabel.innerText = 'Finalize & Route Referral';
+      fetchDispositionAmbulances();
     } else if (mode === 'FOLLOW-UP') {
       submitBtn.className = 'px-5 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold shadow-sm transition flex items-center gap-2';
       submitLabel.innerText = 'Finalize & Schedule Follow-Up';
@@ -1867,6 +2124,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
       if (panelInt) panelInt.classList.add('hidden');
       if (btnExt) btnExt.className = 'px-3 py-2 rounded-xl text-xs font-bold border-2 transition flex items-center justify-center gap-2 border-purple-600 bg-purple-600 text-white shadow-sm';
       if (btnInt) btnInt.className = 'px-3 py-2 rounded-xl text-xs font-bold border-2 transition flex items-center justify-center gap-2 border-slate-200 bg-white text-slate-700 hover:border-slate-300';
+      fetchDispositionAmbulances();
     } else {
       if (panelInt) panelInt.classList.remove('hidden');
       if (panelExt) panelExt.classList.add('hidden');
@@ -1887,6 +2145,112 @@ require_once __DIR__ . '/../includes/sidebar.php';
     const reasonInput = document.getElementById('disp-referral-reason');
     if (reasonInput && selectEl) {
       reasonInput.value = selectEl.value;
+    }
+  }
+
+  let DISP_AMBULANCES = [];
+
+  function fetchDispositionAmbulances() {
+    fetch('/api/ambulances')
+      .then(res => res.json())
+      .then(res => {
+        if (!res.success || !res.data) return;
+        DISP_AMBULANCES = res.data;
+        const total = res.summary ? res.summary.total : res.data.length;
+        const avail = res.summary ? res.summary.available : res.data.filter(a => a.status === 'Available').length;
+
+        const badge = document.getElementById('disp-amb-badge');
+        const alertStrip = document.getElementById('disp-amb-alert-strip');
+        const select = document.getElementById('disp-ambulance-select');
+
+        if (badge) {
+          if (avail > 0) {
+            badge.textContent = `${avail} of ${total} Ready`;
+            badge.className = 'text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-emerald-100 text-emerald-800';
+            if (alertStrip) alertStrip.classList.add('hidden');
+          } else {
+            badge.textContent = `0 of ${total} Available`;
+            badge.className = 'text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-rose-100 text-rose-800';
+            if (alertStrip) alertStrip.classList.remove('hidden');
+          }
+        }
+
+        if (select) {
+          select.innerHTML = '';
+          res.data.forEach(a => {
+            const opt = document.createElement('option');
+            opt.value = a.id;
+            const isAvail = a.status === 'Available';
+            opt.textContent = `${a.unit_name} [${a.plate_number}] - ${isAvail ? 'AVAILABLE' : (a.status === 'On Transfer' ? 'IN TRANSIT' : 'MAINTENANCE')}`;
+            if (!isAvail) opt.disabled = true;
+            select.appendChild(opt);
+          });
+          const optPriv = document.createElement('option');
+          optPriv.value = "0";
+          optPriv.textContent = "Private Vehicle (Family Dispatched)";
+          select.appendChild(optPriv);
+
+          const optLgu = document.createElement('option');
+          optLgu.value = "-1";
+          optLgu.textContent = "LGU / MDRRMO Disaster Emergency Rescue Unit";
+          select.appendChild(optLgu);
+
+          const firstAvail = res.data.find(a => a.status === 'Available');
+          if (firstAvail) {
+            select.value = firstAvail.id;
+          } else {
+            select.value = "0";
+          }
+          updateDispAmbulanceInfo(select);
+        }
+      })
+      .catch(() => {});
+  }
+
+  function updateDispAmbulanceInfo(selectEl) {
+    const val = parseInt(selectEl.value, 10);
+    const infoStrip = document.getElementById('disp-amb-info-strip');
+    const nameLabel = document.getElementById('disp-amb-name-label');
+    const contactLabel = document.getElementById('disp-amb-contact-label');
+    const driverLabel = document.getElementById('disp-amb-driver-label');
+    const readyLabel = document.getElementById('disp-amb-ready-label');
+    const reqServiceInput = document.getElementById('disp-requested-service');
+
+    if (!infoStrip) return;
+
+    if (val > 0) {
+      const amb = DISP_AMBULANCES.find(a => a.id === val);
+      if (amb) {
+        if (nameLabel) nameLabel.textContent = amb.unit_name;
+        if (contactLabel) contactLabel.textContent = `Hotline: ${amb.contact || '+63 (083) 228-0001'}`;
+        if (driverLabel) driverLabel.textContent = amb.driver || 'Duty EMT';
+        if (readyLabel) {
+          readyLabel.textContent = '✅ Available for Immediate Transfer';
+          readyLabel.className = 'text-emerald-700 font-bold';
+        }
+        if (reqServiceInput) reqServiceInput.value = `TMHIS Ambulance (${amb.unit_name} - ${amb.plate_number})`;
+        infoStrip.classList.remove('hidden');
+      }
+    } else if (val === 0) {
+      if (nameLabel) nameLabel.textContent = 'Private / Family Vehicle Transport';
+      if (contactLabel) contactLabel.textContent = 'Family Arranged';
+      if (driverLabel) driverLabel.textContent = 'Family Driver';
+      if (readyLabel) {
+        readyLabel.textContent = '🚗 Non-Ambulance Transport';
+        readyLabel.className = 'text-slate-600 font-bold';
+      }
+      if (reqServiceInput) reqServiceInput.value = 'Private Vehicle Transport';
+      infoStrip.classList.remove('hidden');
+    } else if (val === -1) {
+      if (nameLabel) nameLabel.textContent = 'LGU / MDRRMO Rescue Vehicle';
+      if (contactLabel) contactLabel.textContent = 'Hotline: (083) 228-2999';
+      if (driverLabel) driverLabel.textContent = 'MDRRMO Rescue EMT';
+      if (readyLabel) {
+        readyLabel.textContent = '🚒 Municipal Disaster Rescue';
+        readyLabel.className = 'text-amber-700 font-bold';
+      }
+      if (reqServiceInput) reqServiceInput.value = 'MDRRMO Rescue Vehicle';
+      infoStrip.classList.remove('hidden');
     }
   }
 
@@ -1946,10 +2310,8 @@ require_once __DIR__ . '/../includes/sidebar.php';
     area.focus();
   }
 
-  // Quick Select for Formal Diagnosis Form
-  function selectQuickDiagnosis(name, icd, severity) {
-    // Clinical Protocol Dictionary for Instant Client-Side Population
-    const CLINICAL_PROTOCOLS = {
+  // Clinical Protocol Dictionary for Instant Client-Side Population
+  const CLINICAL_PROTOCOLS = {
       'J02.9': {
         goal: 'Symptom resolution, eradicate pharyngeal pathogen, and prevent suppurative complications.',
         lifestyle: 'Warm saline gargle 3-4x daily; Oral fluid intake >2.5L/day; Soft non-acidic diet; Rest.',
@@ -2076,12 +2438,68 @@ require_once __DIR__ . '/../includes/sidebar.php';
         follow_up_schedule: '1-2 Weeks',
         follow_up_days: 10
       },
+      'A82.9': {
+        goal: 'Immediate post-exposure prophylaxis to neutralize rabies virus prior to CNS infiltration; intensive supportive critical care.',
+        lifestyle: 'Immediate aggressive wound flushing under running water with detergent soap for at least 15 minutes; isolate biting domestic animal for 14-day observation.',
+        medication_plan: 'Rabies Vaccine (PCECV/PVRV) Day 0, 3, 7, 28; Equine/Human Rabies Immune Globulin (ERIG/HRIG) infiltration at wound site; Tetanus Toxoid 0.5 mL IM; Co-amoxiclav 625mg PO BID x 7 days.',
+        follow_up_schedule: 'Day 3 Rabies Dose',
+        follow_up_days: 3
+      },
       'Z20.3': {
         goal: 'Prevent rabies virus invasion following animal exposure and prevent secondary bacterial wound infection.',
         lifestyle: 'Wound cleaning with soap and running water for 15 minutes; Observe biting animal for 14 days if domestic.',
         medication_plan: 'Anti-Rabies Vaccine (PCECV) on Day 0, 3, 7, 28; Tetanus Toxoid 0.5ml IM; Co-amoxiclav 625mg PO BID x 5 days.',
         follow_up_schedule: 'Day 3 Rabies Dose',
         follow_up_days: 3
+      },
+      'W54.0': {
+        goal: 'Wound debridement, rabies post-exposure prophylaxis, tetanus prophylaxis, and secondary infection prevention.',
+        lifestyle: 'Wash wound thoroughly with clean water and povidone-iodine; do not tightly suture high-risk puncture wounds; keep dressing dry.',
+        medication_plan: 'Co-amoxiclav 625mg PO BID x 7 days; Anti-Rabies Vaccine (PCECV) Day 0, 3, 7, 28; Tetanus Toxoid 0.5 mL IM; Paracetamol 500mg PO Q6H PRN for pain.',
+        follow_up_schedule: 'Day 3 Rabies Dose & Wound Check',
+        follow_up_days: 3
+      },
+      'A00.9': {
+        goal: 'Immediate aggressive rehydration, correction of metabolic acidosis and hypokalemia, antimicrobial eradication.',
+        lifestyle: 'Strict enteric isolation, safe water sanitation, continuous ORS administration.',
+        medication_plan: 'Ringer\'s Lactate IV rapid infusion; Doxycycline 300mg PO single dose OR Azithromycin 1g PO single dose; Zinc supplementation.',
+        follow_up_schedule: 'Daily Inpatient Rounds',
+        follow_up_days: 1
+      },
+      'A01.0': {
+        goal: 'Eradication of Salmonella typhi, prevention of bowel perforation, and fever defervescence.',
+        lifestyle: 'Strict personal hygiene, drink only boiled/potable water, soft low-fiber diet during active intestinal inflammation.',
+        medication_plan: 'Ciprofloxacin 500mg PO BID x 10 days OR Ceftriaxone 2g IV OD x 7 days; Paracetamol 500mg PO Q6H PRN.',
+        follow_up_schedule: '5 Days',
+        follow_up_days: 5
+      },
+      'A15.0': {
+        goal: 'Microbiologic cure via DOTS protocol, prevent transmission, and prevent drug resistance.',
+        lifestyle: 'Cough etiquette, well-ventilated living quarters, high-protein diet, absolute smoking cessation.',
+        medication_plan: 'Fixed-dose combination anti-TB therapy (Rifampicin, Isoniazid, Pyrazinamide, Ethambutol) daily for 2 months intensive phase, then Rifampicin/Isoniazid for 4 months.',
+        follow_up_schedule: 'Monthly DOTS Review',
+        follow_up_days: 30
+      },
+      'A27.9': {
+        goal: 'Elimination of Leptospira, prevention of renal failure (Weil\'s syndrome) and pulmonary hemorrhage.',
+        lifestyle: 'Avoid wading in flood waters; wear rubber boots; maintain hydration and report dark urine or jaundice.',
+        medication_plan: 'Doxycycline 100mg PO BID x 7 days (mild) OR Penicillin G 1.5 million units IV Q6H x 7 days (moderate-severe).',
+        follow_up_schedule: '3 Days (Renal Panel Check)',
+        follow_up_days: 3
+      },
+      'B50.9': {
+        goal: 'Clearance of blood parasites, prevention of cerebral malaria, and prevention of relapse.',
+        lifestyle: 'Insecticide-treated bed nets, prompt fever reporting, adequate oral fluids.',
+        medication_plan: 'Artemether-Lumefantrine (Coartem) standard weight-based 3-day course; Primaquine single dose on Day 1 for gametocyte clearance.',
+        follow_up_schedule: 'Day 3 & Day 7 Blood Smear',
+        follow_up_days: 3
+      },
+      'U07.1': {
+        goal: 'Prevent hypoxic respiratory failure, manage inflammatory cascade, and isolate during infectious window.',
+        lifestyle: '7-day home isolation, pulse oximetry monitoring twice daily (report SpO2 <94%), mask wearing, fluid hydration.',
+        medication_plan: 'Paracetamol 500mg PO Q6H PRN; Vitamin C 500mg + Zinc 20mg PO OD; Nirmatrelvir/Ritonavir (Paxlovid) for high-risk patients within 5 days.',
+        follow_up_schedule: '5 Days',
+        follow_up_days: 5
       }
     };
 
@@ -2119,6 +2537,28 @@ require_once __DIR__ . '/../includes/sidebar.php';
       if (banner && bannerTitle) {
         bannerTitle.textContent = `${diagName} [${icdCode}]`;
         banner.classList.remove('hidden');
+      }
+      if (window.lucide) lucide.createIcons();
+    }
+
+    function togglePlanAdmission(admit) {
+      const box = document.getElementById('plan-admission-details');
+      const btnText = document.getElementById('treatment-plan-btn-text');
+      const btn = document.getElementById('btn-submit-treatment-plan');
+      if (admit) {
+        if (box) box.classList.remove('hidden');
+        if (btnText) btnText.textContent = 'Establish Treatment Plan & Admit to Nurse Station';
+        if (btn) {
+          btn.classList.remove('bg-emerald-600', 'hover:bg-emerald-700');
+          btn.classList.add('bg-blue-600', 'hover:bg-blue-700');
+        }
+      } else {
+        if (box) box.classList.add('hidden');
+        if (btnText) btnText.textContent = 'Establish Treatment Plan';
+        if (btn) {
+          btn.classList.remove('bg-blue-600', 'hover:bg-blue-700');
+          btn.classList.add('bg-emerald-600', 'hover:bg-emerald-700');
+        }
       }
       if (window.lucide) lucide.createIcons();
     }
@@ -2188,53 +2628,625 @@ require_once __DIR__ . '/../includes/sidebar.php';
       if (window.lucide) lucide.createIcons();
     }
 
+    // Comprehensive Master Diseases & ICD-10 Hospital Catalog
+    const MASTER_DISEASES_CATALOG = [
+      {
+        id: 9001,
+        name: 'Rabies Virus Infection (Lyssavirus Encephalitis)',
+        disease_name: 'Rabies Virus Infection (Lyssavirus Encephalitis)',
+        icd_code: 'A82.9',
+        icd10_code: 'A82.9',
+        category: 'Zoonotic Infection',
+        description: 'Acute fatal viral encephalomyelitis caused by rabies virus transmitted via animal bite/saliva; requires urgent post-exposure prophylaxis.',
+        default_severity: 'Critical',
+        treatment_plan: CLINICAL_PROTOCOLS['A82.9']
+      },
+      {
+        id: 9002,
+        name: 'Contact / Exposure to Rabies (Animal Bite Exposure)',
+        disease_name: 'Contact / Exposure to Rabies (Animal Bite Exposure)',
+        icd_code: 'Z20.3',
+        icd10_code: 'Z20.3',
+        category: 'Preventive / Emergency',
+        description: 'Potential lyssavirus exposure from mammalian bite or scratch requiring anti-rabies vaccination protocol.',
+        default_severity: 'Severe',
+        treatment_plan: CLINICAL_PROTOCOLS['Z20.3']
+      },
+      {
+        id: 9003,
+        name: 'Bitten by Dog (Animal Bite - Dog)',
+        disease_name: 'Bitten by Dog (Animal Bite - Dog)',
+        icd_code: 'W54.0',
+        icd10_code: 'W54.0',
+        category: 'Injury / Trauma',
+        description: 'Canine bite injury with risk of secondary soft tissue infection (Pasteurella, Capnocytophaga) and rabies transmission.',
+        default_severity: 'Moderate',
+        treatment_plan: CLINICAL_PROTOCOLS['W54.0']
+      },
+      {
+        id: 9004,
+        name: 'Contact with Cat (Cat Scratch / Bite)',
+        disease_name: 'Contact with Cat (Cat Scratch / Bite)',
+        icd_code: 'W55.0',
+        icd10_code: 'W55.0',
+        category: 'Injury / Trauma',
+        description: 'Feline scratch or bite with high risk of deep inoculation and Bartonella / Pasteurella infection.',
+        default_severity: 'Moderate',
+        treatment_plan: {
+          goal: 'Prevent cat scratch disease (Bartonella henselae) and rabies transmission; monitor localized lymphadenopathy.',
+          lifestyle: 'Wash scratch or bite site immediately with antiseptic soap; observe cat for 14 days.',
+          medication_plan: 'Co-amoxiclav 625mg PO BID x 7 days or Azithromycin 500mg PO OD x 3 days; Anti-Rabies Vaccine Day 0, 3, 7; Tetanus Toxoid 0.5 mL IM.',
+          follow_up_schedule: 'Day 3 Post-Exposure Dose',
+          follow_up_days: 3
+        }
+      },
+      {
+        id: 9005,
+        name: 'Dengue Fever without Warning Signs',
+        disease_name: 'Dengue Fever without Warning Signs',
+        icd_code: 'A90',
+        icd10_code: 'A90',
+        category: 'Vector-Borne Infection',
+        description: 'Acute viral flavivirus infection transmitted by Aedes aegypti; high fever, myalgia, arthralgia, retro-orbital pain.',
+        default_severity: 'Moderate',
+        treatment_plan: CLINICAL_PROTOCOLS['A90']
+      },
+      {
+        id: 9006,
+        name: 'Dengue Hemorrhagic Fever with Warning Signs',
+        disease_name: 'Dengue Hemorrhagic Fever with Warning Signs',
+        icd_code: 'A91',
+        icd10_code: 'A91',
+        category: 'Vector-Borne Infection',
+        description: 'Dengue infection with persistent vomiting, mucosal bleeding, abdominal tenderness, or thrombocytopenia.',
+        default_severity: 'Severe',
+        treatment_plan: {
+          goal: 'Immediate hospital admission, close hemodynamic monitoring, and controlled intravenous crystalloid resuscitation.',
+          lifestyle: 'Inpatient bed rest; strict hourly intake and output chart; serial hematocrit and platelet count monitoring.',
+          medication_plan: 'Intravenous fluid hydration (D5 0.9 NaCl or Plain Lactated Ringer\'s); IV Paracetamol 1g Q6H for hyperpyrexia.',
+          follow_up_schedule: 'Hourly Inpatient Vitals Check',
+          follow_up_days: 1
+        }
+      },
+      {
+        id: 9007,
+        name: 'Diarrhea and Gastroenteritis (Presumed Infectious Origin)',
+        disease_name: 'Diarrhea and Gastroenteritis (Presumed Infectious Origin)',
+        icd_code: 'A09',
+        icd10_code: 'A09',
+        category: 'Infectious & Parasitic',
+        description: 'Acute loose/watery stools with nausea, vomiting, or abdominal cramps; common in food/waterborne exposure.',
+        default_severity: 'Moderate',
+        treatment_plan: CLINICAL_PROTOCOLS['A09']
+      },
+      {
+        id: 9008,
+        name: 'Typhoid Fever (Salmonella Typhi)',
+        disease_name: 'Typhoid Fever (Salmonella Typhi)',
+        icd_code: 'A01.0',
+        icd10_code: 'A01.0',
+        category: 'Infectious & Parasitic',
+        description: 'Systemic enteric fever characterized by step-ladder pyrexia, hepatosplenomegaly, and headache.',
+        default_severity: 'Severe',
+        treatment_plan: CLINICAL_PROTOCOLS['A01.0']
+      },
+      {
+        id: 9009,
+        name: 'Cholera (Vibrio Cholerae)',
+        disease_name: 'Cholera (Vibrio Cholerae)',
+        icd_code: 'A00.9',
+        icd10_code: 'A00.9',
+        category: 'Infectious & Parasitic',
+        description: 'Severe acute watery diarrhea ("rice-water stools") causing rapid dehydration and hypovolemic shock.',
+        default_severity: 'Critical',
+        treatment_plan: CLINICAL_PROTOCOLS['A00.9']
+      },
+      {
+        id: 9010,
+        name: 'Leptospirosis, Unspecified',
+        disease_name: 'Leptospirosis, Unspecified',
+        icd_code: 'A27.9',
+        icd10_code: 'A27.9',
+        category: 'Zoonotic Infection',
+        description: 'Spirochetal infection following exposure to contaminated flood water; calf tenderness, conjunctival suffusion.',
+        default_severity: 'Severe',
+        treatment_plan: CLINICAL_PROTOCOLS['A27.9']
+      },
+      {
+        id: 9011,
+        name: 'Tuberculosis of Lung (Pulmonary TB)',
+        disease_name: 'Tuberculosis of Lung (Pulmonary TB)',
+        icd_code: 'A15.0',
+        icd10_code: 'A15.0',
+        category: 'Mycobacterial Infection',
+        description: 'Chronic Mycobacterium tuberculosis lung infection with productive cough >2 weeks, night sweats, and weight loss.',
+        default_severity: 'Moderate',
+        treatment_plan: CLINICAL_PROTOCOLS['A15.0']
+      },
+      {
+        id: 9012,
+        name: 'Malaria (Plasmodium Falciparum / Vivax)',
+        disease_name: 'Malaria (Plasmodium Falciparum / Vivax)',
+        icd_code: 'B50.9',
+        icd10_code: 'B50.9',
+        category: 'Vector-Borne Infection',
+        description: 'Protozoan mosquito-borne illness presenting with paroxysms of shaking chills, high fever, and sweating.',
+        default_severity: 'Severe',
+        treatment_plan: CLINICAL_PROTOCOLS['B50.9']
+      },
+      {
+        id: 9013,
+        name: 'COVID-19 (SARS-CoV-2 Acute Respiratory Disease)',
+        disease_name: 'COVID-19 (SARS-CoV-2 Acute Respiratory Disease)',
+        icd_code: 'U07.1',
+        icd10_code: 'U07.1',
+        category: 'Viral Infection',
+        description: 'Acute respiratory illness caused by SARS-CoV-2 presenting with fever, cough, loss of taste/smell, and dyspnea.',
+        default_severity: 'Moderate',
+        treatment_plan: CLINICAL_PROTOCOLS['U07.1']
+      },
+      {
+        id: 9014,
+        name: 'Varicella (Chickenpox) without Complication',
+        disease_name: 'Varicella (Chickenpox) without Complication',
+        icd_code: 'B01.9',
+        icd10_code: 'B01.9',
+        category: 'Viral Exanthem',
+        description: 'Varicella-zoster virus presenting with polymorphic pruritic maculopapular and vesicular skin eruptions.',
+        default_severity: 'Mild',
+        treatment_plan: {
+          goal: 'Symptom relief, prevention of secondary bacterial superinfection from excoriation, and isolation until all lesions crust.',
+          lifestyle: 'Keep fingernails short and clean; cool sponge baths; avoid scratching lesions; isolate from non-immune individuals.',
+          medication_plan: 'Calamine lotion topically TID; Cetirizine 10mg PO OD for itching; Paracetamol 500mg PO Q6H PRN.',
+          follow_up_schedule: '7 Days',
+          follow_up_days: 7
+        }
+      },
+      {
+        id: 9015,
+        name: 'Acute Upper Respiratory Tract Infection (URTI)',
+        disease_name: 'Acute Upper Respiratory Tract Infection (URTI)',
+        icd_code: 'J06.9',
+        icd10_code: 'J06.9',
+        category: 'Respiratory Infection',
+        description: 'Acute viral inflammation of upper respiratory tract presenting with rhinorrhea, nasal congestion, cough, and low-grade fever.',
+        default_severity: 'Mild',
+        treatment_plan: CLINICAL_PROTOCOLS['J06.9']
+      },
+      {
+        id: 9016,
+        name: 'Acute Bronchitis, Unspecified',
+        disease_name: 'Acute Bronchitis, Unspecified',
+        icd_code: 'J20.9',
+        icd10_code: 'J20.9',
+        category: 'Lower Respiratory',
+        description: 'Acute inflammation of tracheobronchial tree with productive cough, mild chest discomfort, and absence of consolidation on auscultation.',
+        default_severity: 'Mild',
+        treatment_plan: CLINICAL_PROTOCOLS['J20.9']
+      },
+      {
+        id: 9017,
+        name: 'Community-Acquired Pneumonia (CAP), Unspecified',
+        disease_name: 'Community-Acquired Pneumonia (CAP), Unspecified',
+        icd_code: 'J18.9',
+        icd10_code: 'J18.9',
+        category: 'Lower Respiratory',
+        description: 'Acute parenchymal lung infection acquired outside hospital setting; productive cough, fever, crackles/rales on auscultation.',
+        default_severity: 'Moderate',
+        treatment_plan: CLINICAL_PROTOCOLS['J18.9']
+      },
+      {
+        id: 9018,
+        name: 'Bronchial Asthma with (Acute) Exacerbation',
+        disease_name: 'Bronchial Asthma with (Acute) Exacerbation',
+        icd_code: 'J45.901',
+        icd10_code: 'J45.901',
+        category: 'Chronic Respiratory',
+        description: 'Acute flare of reversible airway obstruction characterized by wheezing, chest tightness, dyspnea, and prolonged expiratory phase.',
+        default_severity: 'Severe',
+        treatment_plan: CLINICAL_PROTOCOLS['J45.901']
+      },
+      {
+        id: 9019,
+        name: 'Chronic Obstructive Pulmonary Disease (COPD)',
+        disease_name: 'Chronic Obstructive Pulmonary Disease (COPD)',
+        icd_code: 'J44.9',
+        icd10_code: 'J44.9',
+        category: 'Chronic Respiratory',
+        description: 'Persistent respiratory symptoms and airflow limitation caused by significant exposure to noxious particles or gases.',
+        default_severity: 'Moderate',
+        treatment_plan: {
+          goal: 'Improve exercise tolerance, reduce exacerbation frequency, and preserve lung function.',
+          lifestyle: 'Smoking cessation program, pulmonary rehabilitation, annual influenza and pneumococcal vaccination.',
+          medication_plan: 'Tiotropium Respimat 2.5mcg 2 puffs OD; Salbutamol MDI 2 puffs Q4-6H PRN for acute shortness of breath.',
+          follow_up_schedule: '1 Month',
+          follow_up_days: 30
+        }
+      },
+      {
+        id: 9020,
+        name: 'Essential (Primary) Hypertension',
+        disease_name: 'Essential (Primary) Hypertension',
+        icd_code: 'I10',
+        icd10_code: 'I10',
+        category: 'Cardiovascular',
+        description: 'Persistently elevated systemic arterial blood pressure (>=140/90 mmHg) without identified secondary cause.',
+        default_severity: 'Moderate',
+        treatment_plan: CLINICAL_PROTOCOLS['I10']
+      },
+      {
+        id: 9021,
+        name: 'Hypertensive Heart Disease without Heart Failure',
+        disease_name: 'Hypertensive Heart Disease without Heart Failure',
+        icd_code: 'I11.9',
+        icd10_code: 'I11.9',
+        category: 'Cardiovascular',
+        description: 'Left ventricular hypertrophy and cardiac structural remodeling resulting from longstanding systemic arterial hypertension.',
+        default_severity: 'Moderate',
+        treatment_plan: {
+          goal: 'Regression of left ventricular hypertrophy, strict BP control <130/80 mmHg, and prevention of diastolic dysfunction.',
+          lifestyle: 'Strict low-sodium diet (<1.5g sodium/day), daily home blood pressure diary, moderate exercise, weight management.',
+          medication_plan: 'Losartan 50mg PO OD + Amlodipine 5mg PO OD; Carvedilol 6.25mg to 12.5mg PO BID if indicated.',
+          follow_up_schedule: '2 Weeks',
+          follow_up_days: 14
+        }
+      },
+      {
+        id: 9022,
+        name: 'Heart Failure, Unspecified (Congestive Heart Failure)',
+        disease_name: 'Heart Failure, Unspecified (Congestive Heart Failure)',
+        icd_code: 'I50.9',
+        icd10_code: 'I50.9',
+        category: 'Cardiovascular',
+        description: 'Clinical syndrome characterized by bipedal edema, paroxysmal nocturnal dyspnea, orthopnea, and elevated JVP.',
+        default_severity: 'Severe',
+        treatment_plan: {
+          goal: 'Decongestion, symptom improvement, neurohormonal blockade, and reduction of hospitalization.',
+          lifestyle: 'Fluid restriction to 1.5-2.0 liters/day, strict low salt intake (<2g/day), daily morning weight check.',
+          medication_plan: 'Furosemide 20mg to 40mg PO OD (morning); Sacubitril/Valsartan or Enalapril; Bisoprolol 2.5mg PO OD.',
+          follow_up_schedule: '1 Week',
+          follow_up_days: 7
+        }
+      },
+      {
+        id: 9023,
+        name: 'Atherosclerotic Heart Disease (Coronary Artery Disease)',
+        disease_name: 'Atherosclerotic Heart Disease (Coronary Artery Disease)',
+        icd_code: 'I25.10',
+        icd10_code: 'I25.10',
+        category: 'Cardiovascular',
+        description: 'Lipid plaque buildup in coronary arteries reducing myocardial perfusion; presents with exertional angina or dyspnea.',
+        default_severity: 'Severe',
+        treatment_plan: {
+          goal: 'Secondary prevention of acute coronary events, relief of angina, and stabilization of coronary plaques.',
+          lifestyle: 'Heart-healthy Mediterranean diet, smoking cessation, stress reduction, cardiac rehabilitation exercise.',
+          medication_plan: 'Aspirin 80mg PO OD + Atorvastatin 40mg PO OD at bedtime; Metoprolol tartrate 50mg PO BID.',
+          follow_up_schedule: '2 Weeks',
+          follow_up_days: 14
+        }
+      },
+      {
+        id: 9024,
+        name: 'Type 2 Diabetes Mellitus without Complications',
+        disease_name: 'Type 2 Diabetes Mellitus without Complications',
+        icd_code: 'E11.9',
+        icd10_code: 'E11.9',
+        category: 'Endocrine & Metabolic',
+        description: 'Insulin resistance and relative insulin deficiency resulting in chronic hyperglycemia (FBS >=126 mg/dL or HbA1c >=6.5%).',
+        default_severity: 'Moderate',
+        treatment_plan: CLINICAL_PROTOCOLS['E11.9']
+      },
+      {
+        id: 9025,
+        name: 'Pure Hypercholesterolemia / Dyslipidemia',
+        disease_name: 'Pure Hypercholesterolemia / Dyslipidemia',
+        icd_code: 'E78.0',
+        icd10_code: 'E78.0',
+        category: 'Endocrine & Metabolic',
+        description: 'Elevated low-density lipoprotein cholesterol (LDL-C) or total cholesterol increasing cardiovascular atherosclerotic risk.',
+        default_severity: 'Mild',
+        treatment_plan: {
+          goal: 'Lower LDL-C by >=50% or target <100 mg/dL (<70 mg/dL if high risk) and stabilize vascular plaques.',
+          lifestyle: 'Low saturated fat diet, replace trans fats with unsaturated oils, increase soluble fiber, regular aerobic exercise.',
+          medication_plan: 'Atorvastatin 20mg to 40mg PO OD at bedtime or Rosuvastatin 10mg PO OD.',
+          follow_up_schedule: '2 Months',
+          follow_up_days: 60
+        }
+      },
+      {
+        id: 9026,
+        name: 'Gouty Arthritis / Hyperuricemia, Unspecified',
+        disease_name: 'Gouty Arthritis / Hyperuricemia, Unspecified',
+        icd_code: 'M10.9',
+        icd10_code: 'M10.9',
+        category: 'Musculoskeletal / Metabolic',
+        description: 'Monosodium urate crystal deposition in peripheral joints causing acute severe inflammatory monoarthritis.',
+        default_severity: 'Moderate',
+        treatment_plan: {
+          goal: 'Rapid termination of acute joint inflammation/pain, followed by long-term serum uric acid lowering to <6.0 mg/dL.',
+          lifestyle: 'Avoid purine-rich foods (organ meats, anchovies, beer); high fluid intake (>2.5L/day); cold pack to joint.',
+          medication_plan: 'Colchicine 0.5mg PO BID during acute flare + Naproxen 500mg PO BID; Allopurinol 100mg PO OD started 2 weeks later.',
+          follow_up_schedule: '2 Weeks',
+          follow_up_days: 14
+        }
+      },
+      {
+        id: 9027,
+        name: 'Gastritis, Unspecified',
+        disease_name: 'Gastritis, Unspecified',
+        icd_code: 'K29.7',
+        icd10_code: 'K29.7',
+        category: 'Gastrointestinal',
+        description: 'Acute or chronic mucosal inflammation of gastric lining presenting with epigastric burning, nausea, and early satiety.',
+        default_severity: 'Mild',
+        treatment_plan: CLINICAL_PROTOCOLS['K29.7']
+      },
+      {
+        id: 9028,
+        name: 'Gastro-Esophageal Reflux Disease (GERD)',
+        disease_name: 'Gastro-Esophageal Reflux Disease (GERD)',
+        icd_code: 'K21.9',
+        icd10_code: 'K21.9',
+        category: 'Gastrointestinal',
+        description: 'Retrograde flow of gastric contents into esophagus producing retrosternal heartburn, acid regurgitation, or chronic cough.',
+        default_severity: 'Mild',
+        treatment_plan: CLINICAL_PROTOCOLS['K21.9']
+      },
+      {
+        id: 9029,
+        name: 'Acute Appendicitis, Other / Unspecified',
+        disease_name: 'Acute Appendicitis, Other / Unspecified',
+        icd_code: 'K35.80',
+        icd10_code: 'K35.80',
+        category: 'Surgical / Abdominal',
+        description: 'Acute inflammation of vermiform appendix; periumbilical pain migrating to right lower quadrant (McBurney\'s sign), fever, anorexia.',
+        default_severity: 'Severe',
+        treatment_plan: {
+          goal: 'Immediate surgical referral, prevention of appendiceal perforation, peritonitis, and intra-abdominal sepsis.',
+          lifestyle: 'Strict NPO (nothing by mouth); avoid hot compress or laxatives which increase perforation risk; urgent surgical admission.',
+          medication_plan: 'IV fluids (Plain Ringer\'s Lactate); Ceftriaxone 1g IV + Metronidazole 500mg IV.',
+          follow_up_schedule: 'Immediate Surgical Evaluation',
+          follow_up_days: 1
+        }
+      },
+      {
+        id: 9030,
+        name: 'Urinary Tract Infection (UTI), Site Not Specified',
+        disease_name: 'Urinary Tract Infection (UTI), Site Not Specified',
+        icd_code: 'N39.0',
+        icd10_code: 'N39.0',
+        category: 'Genitourinary',
+        description: 'Bacterial infection of urinary tract producing dysuria, urinary frequency, urgency, and suprapubic discomfort.',
+        default_severity: 'Moderate',
+        treatment_plan: CLINICAL_PROTOCOLS['N39.0']
+      },
+      {
+        id: 9031,
+        name: 'Low Back Pain / Lumbago (Mechanical Lumbar Strain)',
+        disease_name: 'Low Back Pain / Lumbago (Mechanical Lumbar Strain)',
+        icd_code: 'M54.5',
+        icd10_code: 'M54.5',
+        category: 'Musculoskeletal',
+        description: 'Acute or subacute paraspinal muscle spasm or ligamentous sprain of lumbar spine without radiculopathy.',
+        default_severity: 'Mild',
+        treatment_plan: CLINICAL_PROTOCOLS['M54.5']
+      },
+      {
+        id: 9032,
+        name: 'Osteoarthritis, Unspecified Site (Joint Wear)',
+        disease_name: 'Osteoarthritis, Unspecified Site (Joint Wear)',
+        icd_code: 'M19.90',
+        icd10_code: 'M19.90',
+        category: 'Musculoskeletal',
+        description: 'Degenerative articular cartilage breakdown presenting with joint pain worsened by weight-bearing, crepitus, and stiffness.',
+        default_severity: 'Mild',
+        treatment_plan: {
+          goal: 'Alleviate joint pain, maintain range of motion, strengthen periarticular muscles, and minimize functional limitation.',
+          lifestyle: 'Low-impact aerobic exercise (swimming, cycling, walking), weight loss if overweight, knee support.',
+          medication_plan: 'Paracetamol 500mg PO Q6-8H first-line; Topical Diclofenac gel 1% TID-QID; Celecoxib 200mg PO OD for persistent flares.',
+          follow_up_schedule: '1 Month',
+          follow_up_days: 30
+        }
+      },
+      {
+        id: 9033,
+        name: 'Open Wound / Laceration, Unspecified',
+        disease_name: 'Open Wound / Laceration, Unspecified',
+        icd_code: 'T14.1',
+        icd10_code: 'T14.1',
+        category: 'Trauma & Injury',
+        description: 'Mechanical breach of cutaneous integrity resulting from sharp or blunt trauma, requiring wound debridement or closure.',
+        default_severity: 'Moderate',
+        treatment_plan: {
+          goal: 'Hemostasis, surgical wound toilet/closure, prevention of tetanus and bacterial infection, primary intention healing.',
+          lifestyle: 'Keep wound clean and dry for 48 hours; do not soak in water; watch for erythema, warmth, purulent drainage.',
+          medication_plan: 'Tetanus Toxoid 0.5 mL IM; Cephalexin 500mg PO QID x 5 days; Mefenamic Acid 500mg PO TID PRN for pain.',
+          follow_up_schedule: 'Suture Removal (7-10 Days)',
+          follow_up_days: 7
+        }
+      },
+      {
+        id: 9034,
+        name: 'Tension-Type Headache, Unspecified',
+        disease_name: 'Tension-Type Headache, Unspecified',
+        icd_code: 'G44.2',
+        icd10_code: 'G44.2',
+        category: 'Neurological',
+        description: 'Bilateral dull band-like pressing head pain without nausea or photophobia, exacerbated by stress, fatigue, or muscle tension.',
+        default_severity: 'Mild',
+        treatment_plan: CLINICAL_PROTOCOLS['G44.2']
+      },
+      {
+        id: 9035,
+        name: 'Allergic Urticaria (Hives)',
+        disease_name: 'Allergic Urticaria (Hives)',
+        icd_code: 'L50.0',
+        icd10_code: 'L50.0',
+        category: 'Dermatology & Allergy',
+        description: 'Mast cell histamine release causing transient intensely pruritic erythematous edematous wheals.',
+        default_severity: 'Mild',
+        treatment_plan: {
+          goal: 'Suppression of cutaneous histamine release, immediate relief of pruritus, and identification of allergen.',
+          lifestyle: 'Avoid identified food/drug triggers, cool compresses on itchy skin, wear loose cotton clothing.',
+          medication_plan: 'Cetirizine 10mg or Bilastine 20mg PO OD; Hydrocortisone 1% cream topically.',
+          follow_up_schedule: '1 Week',
+          follow_up_days: 7
+        }
+      },
+      {
+        id: 9036,
+        name: 'Cellulitis, Unspecified',
+        disease_name: 'Cellulitis, Unspecified',
+        icd_code: 'L03.90',
+        icd10_code: 'L03.90',
+        category: 'Dermatology / Infectious',
+        description: 'Acute non-necrotizing bacterial dermis and subcutaneous infection; spreading erythema, warmth, edema, and tenderness.',
+        default_severity: 'Moderate',
+        treatment_plan: {
+          goal: 'Arrest bacterial dissemination, resolve soft tissue erythema and swelling, and prevent abscess or necrotizing fasciitis.',
+          lifestyle: 'Elevate affected limb above heart level; mark erythematous borders with surgical pen to track progression.',
+          medication_plan: 'Cloxacillin 500mg PO Q6H on empty stomach x 10 days OR Cephalexin 500mg PO QID x 10 days; Paracetamol 500mg PO Q6H PRN.',
+          follow_up_schedule: '3 Days for Border Regression',
+          follow_up_days: 3
+        }
+      },
+      {
+        id: 9037,
+        name: 'Iron Deficiency Anemia, Unspecified',
+        disease_name: 'Iron Deficiency Anemia, Unspecified',
+        icd_code: 'D50.9',
+        icd10_code: 'D50.9',
+        category: 'Hematology',
+        description: 'Microcytic hypochromic anemia from depleted iron stores; pallor, fatigue, exercise intolerance, brittle nails, or pica.',
+        default_severity: 'Mild',
+        treatment_plan: {
+          goal: 'Replenish iron stores (ferritin), normalize hemoglobin/hematocrit, and identify cause of occult blood loss.',
+          lifestyle: 'High iron diet (dark leafy greens, lean red meat, legumes); take iron with vitamin C; avoid tea/coffee near dose.',
+          medication_plan: 'Ferrous Sulfate 325mg PO OD to BID on empty stomach x 3-6 months; Ascorbic Acid 500mg PO with iron.',
+          follow_up_schedule: '1 Month (CBC Check)',
+          follow_up_days: 30
+        }
+      }
+    ];
+
+    // Assigned queue patients cached for instant focus lookup
+    const ASSIGNED_QUEUE_PATIENTS = <?= json_encode(array_values(array_map(function($p) {
+        return [
+            'id' => (int)$p['PatientID'],
+            'name' => trim(($p['FirstName'] ?? '') . ' ' . ($p['LastName'] ?? '')),
+            'code' => $p['PatientCode'] ?? '',
+            'student_id' => $p['StudentID'] ?? '',
+            'gender' => $p['Gender'] ?? '',
+            'age' => $p['Age'] ?? '',
+            'queue_num' => $p['QueueNumber'] ?? ''
+        ];
+    }, $patientList))) ?>;
+
     // Dynamic Search for Patients & Diseases
     document.addEventListener('DOMContentLoaded', function () {
-      // 1. Patient Search
+      // 1. Patient Search Handler
       const docSearchInput = document.getElementById('doctor-patient-search');
       const docResultsBox = document.getElementById('doctor-search-results');
       let docSearchTimer = null;
 
+      function renderPatientList(list, isQueueFallback = false) {
+        if (!docResultsBox) return;
+        docResultsBox.innerHTML = '';
+
+        if (!list || list.length === 0) {
+          docResultsBox.innerHTML = '<div class="p-3 text-xs text-slate-400 text-center font-medium">No matching patients found.</div>';
+          docResultsBox.classList.remove('hidden');
+          return;
+        }
+
+        if (isQueueFallback) {
+          const header = document.createElement('div');
+          header.className = 'px-3 py-1.5 bg-slate-50 text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center justify-between border-b border-slate-100';
+          header.innerHTML = `<span>Your Active Assigned Patients (${list.length})</span><span class="text-[9px] text-blue-600 font-semibold">Click to open chart</span>`;
+          docResultsBox.appendChild(header);
+        }
+
+        list.forEach(p => {
+          const item = document.createElement('div');
+          item.className = 'p-2.5 hover:bg-blue-50 cursor-pointer transition flex items-center justify-between text-xs border-b border-slate-50 last:border-b-0';
+          const pName = p.name || `${p.first_name || ''} ${p.last_name || ''}`.trim();
+          const pCode = p.code || p.patient_code || '';
+          const pAge = p.age ? `${p.age}y` : '';
+          const pGender = p.gender || '';
+
+          item.innerHTML = `
+            <div class="min-w-0 pr-2">
+              <p class="font-bold text-slate-900 truncate leading-tight">${pName}</p>
+              <p class="text-[10px] text-slate-500 font-mono mt-0.5">${pCode} ${p.student_id ? '• ID: ' + p.student_id : ''} ${p.queue_num ? '• Queue #' + p.queue_num : ''}</p>
+            </div>
+            <span class="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 font-semibold text-slate-600 shrink-0">${pGender} ${pAge}</span>
+          `;
+
+          item.addEventListener('click', () => {
+            window.location.href = '?patient_id=' + (p.id || p.patient_id);
+          });
+          docResultsBox.appendChild(item);
+        });
+
+        docResultsBox.classList.remove('hidden');
+      }
+
       if (docSearchInput && docResultsBox) {
+        docSearchInput.addEventListener('focus', function () {
+          const q = this.value.trim();
+          if (q.length < 1 && ASSIGNED_QUEUE_PATIENTS.length > 0) {
+            renderPatientList(ASSIGNED_QUEUE_PATIENTS, true);
+          }
+        });
+
         docSearchInput.addEventListener('input', function () {
           clearTimeout(docSearchTimer);
           const q = this.value.trim();
           if (q.length < 1) {
-            docResultsBox.classList.add('hidden');
-            docResultsBox.innerHTML = '';
+            if (ASSIGNED_QUEUE_PATIENTS.length > 0) {
+              renderPatientList(ASSIGNED_QUEUE_PATIENTS, true);
+            } else {
+              docResultsBox.classList.add('hidden');
+              docResultsBox.innerHTML = '';
+            }
             return;
           }
+
+          // Instant local search in assigned queue first
+          const qLower = q.toLowerCase();
+          const localPatients = ASSIGNED_QUEUE_PATIENTS.filter(p => 
+            p.name.toLowerCase().includes(qLower) || 
+            (p.code && p.code.toLowerCase().includes(qLower)) ||
+            (p.student_id && p.student_id.toLowerCase().includes(qLower))
+          );
+          if (localPatients.length > 0) {
+            renderPatientList(localPatients);
+          }
+
           docSearchTimer = setTimeout(() => {
-            fetch('/api/search/patients?q=' + encodeURIComponent(q))
-              .then(res => res.json())
-              .then(data => {
-                docResultsBox.innerHTML = '';
-                if (!data || !data.data || data.data.length === 0) {
-                  docResultsBox.innerHTML = '<div class="p-3 text-xs text-slate-400 text-center font-medium">No patients found.</div>';
-                  docResultsBox.classList.remove('hidden');
-                  return;
-                }
-                data.data.forEach(p => {
-                  const item = document.createElement('div');
-                  item.className = 'p-3 hover:bg-blue-50 cursor-pointer transition flex items-center justify-between text-xs';
-                  item.innerHTML = `
-                                <div>
-                                    <p class="font-bold text-slate-900">${p.name}</p>
-                                    <p class="text-[10px] text-slate-500 font-mono">ID: ${p.code} ${p.student_id ? '• Student: ' + p.student_id : ''}</p>
-                                </div>
-                                <span class="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 font-semibold text-slate-600">${p.gender || ''}, ${p.age ? p.age + 'y' : ''}</span>
-                            `;
-                  item.addEventListener('click', () => {
-                    window.location.href = '?patient_id=' + p.id;
-                  });
-                  docResultsBox.appendChild(item);
+            const searchUrls = ['/api/search/patients?q=' + encodeURIComponent(q), '/search/patients?q=' + encodeURIComponent(q)];
+            
+            const tryFetch = (index) => {
+              if (index >= searchUrls.length) return;
+              fetch(searchUrls[index])
+                .then(res => {
+                  if (!res.ok) throw new Error('HTTP ' + res.status);
+                  return res.json();
+                })
+                .then(data => {
+                  if (data && data.data && data.data.length > 0) {
+                    renderPatientList(data.data);
+                  } else if (localPatients.length === 0) {
+                    renderPatientList([]);
+                  }
+                })
+                .catch(() => {
+                  tryFetch(index + 1);
                 });
-                docResultsBox.classList.remove('hidden');
-              })
-              .catch(() => {
-                docResultsBox.classList.add('hidden');
-              });
-          }, 250);
+            };
+
+            tryFetch(0);
+          }, 200);
         });
 
         document.addEventListener('click', function (e) {
@@ -2244,7 +3256,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
         });
       }
 
-      // 2. Disease & ICD-10 AJAX Search Autocomplete
+      // 2. Comprehensive Disease & ICD-10 AJAX Search Autocomplete
       const diagInput = document.getElementById('diagnosis-name-input');
       const icdInput = document.getElementById('diagnosis-icd-input');
       const diagResultsBox = document.getElementById('diagnosis-search-results');
@@ -2258,15 +3270,29 @@ require_once __DIR__ . '/../includes/sidebar.php';
       function renderDiseaseResults(items) {
         if (!diagResultsBox) return;
         diagResultsBox.innerHTML = '';
+
         if (!items || items.length === 0) {
-          diagResultsBox.innerHTML = '<div class="p-3 text-xs text-slate-400 text-center font-medium">No matching diseases or ICD-10 codes found in hospital catalog.</div>';
+          diagResultsBox.innerHTML = `
+            <div class="p-3 text-xs text-slate-500 text-center font-medium">
+              No matching clinical conditions found. You may still type any custom diagnosis name or code.
+            </div>
+          `;
           diagResultsBox.classList.remove('hidden');
           return;
         }
 
+        // Header for results
+        const countHeader = document.createElement('div');
+        countHeader.className = 'px-2.5 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between border-b border-slate-100';
+        countHeader.innerHTML = `
+          <span>Hospital Diagnoses (${items.length})</span>
+          <span class="text-[9px] text-blue-600 font-semibold">Select to Auto-Fill Protocol</span>
+        `;
+        diagResultsBox.appendChild(countHeader);
+
         items.forEach(item => {
           const row = document.createElement('div');
-          row.className = 'p-2.5 hover:bg-blue-50/90 rounded-xl cursor-pointer transition flex items-start justify-between gap-3 text-xs border-b border-slate-50 last:border-b-0';
+          row.className = 'p-2.5 hover:bg-blue-50/90 rounded-xl cursor-pointer transition flex items-start justify-between gap-3 text-xs border-b border-slate-50 last:border-b-0 group';
 
           const leftCol = document.createElement('div');
           leftCol.className = 'space-y-0.5 min-w-0';
@@ -2275,13 +3301,13 @@ require_once __DIR__ . '/../includes/sidebar.php';
           titleRow.className = 'flex items-center gap-1.5 flex-wrap';
 
           const nameEl = document.createElement('span');
-          nameEl.className = 'font-bold text-slate-900 leading-tight';
-          nameEl.textContent = item.name;
+          nameEl.className = 'font-bold text-slate-900 group-hover:text-blue-700 leading-tight';
+          nameEl.textContent = item.name || item.disease_name;
           titleRow.appendChild(nameEl);
 
           if (item.category) {
             const catEl = document.createElement('span');
-            catEl.className = 'text-[9px] px-1.5 py-0.2 rounded bg-slate-100 text-slate-500 font-semibold';
+            catEl.className = 'text-[9px] px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 font-semibold';
             catEl.textContent = item.category;
             titleRow.appendChild(catEl);
           }
@@ -2290,39 +3316,44 @@ require_once __DIR__ . '/../includes/sidebar.php';
 
           if (item.description) {
             const descEl = document.createElement('p');
-            descEl.className = 'text-[10px] text-slate-500 line-clamp-1';
+            descEl.className = 'text-[10px] text-slate-500 line-clamp-1 leading-normal';
             descEl.textContent = item.description;
             leftCol.appendChild(descEl);
           }
 
           const rightCol = document.createElement('div');
           rightCol.className = 'shrink-0 text-right';
+          const code = item.icd_code || item.icd10_code || 'ICD-10';
           rightCol.innerHTML = `
-                <span class="px-2 py-0.5 text-[10px] font-mono font-bold rounded-full bg-blue-100 text-blue-800">${item.icd_code || 'ICD-10'}</span>
-            `;
+            <span class="px-2 py-0.5 text-[10px] font-mono font-bold rounded-full bg-blue-100 text-blue-800 group-hover:bg-blue-600 group-hover:text-white transition">${code}</span>
+          `;
 
           row.appendChild(leftCol);
           row.appendChild(rightCol);
 
           row.addEventListener('click', () => {
-            if (diagInput) diagInput.value = item.name;
-            if (icdInput) icdInput.value = item.icd_code || '';
-            if (diagSevSelect && item.default_severity) diagSevSelect.value = item.default_severity;
+            const diseaseName = item.name || item.disease_name;
+            const icdCode = item.icd_code || item.icd10_code || '';
+            const sev = item.default_severity || 'Moderate';
+
+            if (diagInput) diagInput.value = diseaseName;
+            if (icdInput) icdInput.value = icdCode;
+            if (diagSevSelect) diagSevSelect.value = sev;
             if (diagBadge && diagBadgeText) {
-              diagBadgeText.textContent = `${item.name} [${item.icd_code}]`;
+              diagBadgeText.textContent = `${diseaseName} [${icdCode}]`;
               diagBadge.classList.remove('hidden');
             }
             diagResultsBox.classList.add('hidden');
 
             // Auto-populate related treatment plan
-            const proto = item.treatment_plan || CLINICAL_PROTOCOLS[item.icd_code] || {
-              goal: `Symptom stabilization, control of ${item.name}, and clinical recovery.`,
+            const proto = item.treatment_plan || CLINICAL_PROTOCOLS[icdCode] || {
+              goal: `Symptom stabilization, control of ${diseaseName}, and clinical recovery.`,
               lifestyle: 'Adequate rest, balanced nutrition, stay hydrated, avoid smoking and alcohol.',
               medication_plan: 'Prescribed pharmacological therapy and supportive clinical care as indicated.',
               follow_up_schedule: '2 Weeks',
               follow_up_days: 14
             };
-            applyDiagnosisTreatmentPlan(proto, item.name, item.icd_code);
+            applyDiagnosisTreatmentPlan(proto, diseaseName, icdCode);
 
             if (window.lucide) lucide.createIcons();
           });
@@ -2336,32 +3367,82 @@ require_once __DIR__ . '/../includes/sidebar.php';
 
       function searchDiseases(query) {
         clearTimeout(diagTimer);
-        const q = (query || '').trim();
+        const q = (query || '').trim().toLowerCase();
+
         if (q.length < 1) {
-          if (diagResultsBox) {
-            diagResultsBox.classList.add('hidden');
-            diagResultsBox.innerHTML = '';
-          }
+          // If empty, show top 10 common conditions
+          renderDiseaseResults(MASTER_DISEASES_CATALOG.slice(0, 10));
           return;
         }
 
+        // 1. Instant 0ms Local Master Catalog Filtering
+        const localMatches = MASTER_DISEASES_CATALOG.filter(d => {
+          const n = (d.name || d.disease_name || '').toLowerCase();
+          const c = (d.icd_code || d.icd10_code || '').toLowerCase();
+          const cat = (d.category || '').toLowerCase();
+          const desc = (d.description || '').toLowerCase();
+          return n.includes(q) || c.includes(q) || cat.includes(q) || desc.includes(q);
+        });
+
+        // Immediately render local matches without delay!
+        renderDiseaseResults(localMatches);
+
+        // 2. Concurrently fetch and merge with server DB catalog
         if (diagSpinner) diagSpinner.classList.remove('hidden');
         diagTimer = setTimeout(async () => {
           if (diagAbortCtrl) diagAbortCtrl.abort();
           diagAbortCtrl = new AbortController();
 
-          try {
-            const res = await fetch('/api/search/diseases?q=' + encodeURIComponent(q), {
-              signal: diagAbortCtrl.signal,
-              headers: { 'Accept': 'application/json' }
-            });
-            const payload = await res.json();
-            if (diagSpinner) diagSpinner.classList.add('hidden');
-            renderDiseaseResults(payload.data || []);
-          } catch (err) {
-            if (err.name !== 'AbortError') {
-              if (diagSpinner) diagSpinner.classList.add('hidden');
+          const apiUrls = [
+            '/api/search/diseases?q=' + encodeURIComponent(q),
+            '/search/diseases?q=' + encodeURIComponent(q)
+          ];
+
+          let serverResults = [];
+          for (const url of apiUrls) {
+            try {
+              const res = await fetch(url, {
+                signal: diagAbortCtrl.signal,
+                headers: { 'Accept': 'application/json' }
+              });
+              if (res.ok) {
+                const payload = await res.json();
+                if (payload && payload.data && Array.isArray(payload.data)) {
+                  serverResults = payload.data;
+                  break;
+                }
+              }
+            } catch (err) {
+              if (err.name === 'AbortError') return;
             }
+          }
+
+          if (diagSpinner) diagSpinner.classList.add('hidden');
+
+          if (serverResults.length > 0) {
+            // Merge server results with local results avoiding duplicates
+            const seenCodes = new Set();
+            const merged = [];
+
+            // Add server items first
+            serverResults.forEach(item => {
+              const code = (item.icd_code || item.icd10_code || '').toUpperCase();
+              if (code && !seenCodes.has(code)) {
+                seenCodes.add(code);
+                merged.push(item);
+              }
+            });
+
+            // Add any remaining local items
+            localMatches.forEach(item => {
+              const code = (item.icd_code || item.icd10_code || '').toUpperCase();
+              if (!seenCodes.has(code)) {
+                seenCodes.add(code);
+                merged.push(item);
+              }
+            });
+
+            renderDiseaseResults(merged);
           }
         }, 150);
       }
@@ -2371,9 +3452,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
           searchDiseases(this.value);
         });
         diagInput.addEventListener('focus', function () {
-          if (this.value.trim().length >= 1) {
-            searchDiseases(this.value);
-          }
+          searchDiseases(this.value);
         });
       }
 
@@ -2386,6 +3465,11 @@ require_once __DIR__ . '/../includes/sidebar.php';
             applyDiagnosisTreatmentPlan(CLINICAL_PROTOCOLS[val], name, val);
           }
         });
+        icdInput.addEventListener('focus', function () {
+          if (this.value.trim().length >= 1) {
+            searchDiseases(this.value);
+          }
+        });
       }
 
       document.addEventListener('click', function (e) {
@@ -2395,6 +3479,71 @@ require_once __DIR__ . '/../includes/sidebar.php';
           }
         }
       });
+
+      // Medication Plan Search Helper
+      const planMedInput = document.getElementById('plan-medication-input');
+      const planMedResults = document.getElementById('plan-medication-results');
+      let planMedTimer = null;
+
+      window.appendMedicationPlan = function(text) {
+        if (!planMedInput) return;
+        const current = planMedInput.value.trim();
+        if (!current) {
+          planMedInput.value = text;
+        } else if (!current.includes(text)) {
+          planMedInput.value = current + '; ' + text;
+        }
+        planMedInput.focus();
+        if (planMedResults) planMedResults.classList.add('hidden');
+      };
+
+      if (planMedInput && planMedResults) {
+        planMedInput.addEventListener('input', function() {
+          clearTimeout(planMedTimer);
+          const q = this.value.trim();
+          if (q.length < 2) {
+            planMedResults.classList.add('hidden');
+            return;
+          }
+          planMedTimer = setTimeout(async () => {
+            try {
+              const res = await fetch('/api/search/medications?q=' + encodeURIComponent(q));
+              const data = await res.json();
+              if (data.success && Array.isArray(data.data) && data.data.length > 0) {
+                let html = '';
+                data.data.slice(0, 8).forEach(item => {
+                  const title = item.full_name || (item.generic_name + ' ' + (item.strength || ''));
+                  const dosageSuggestion = title + ' PO TID';
+                  const safeTitle = title.replace(/'/g, "\\'");
+                  const safeSuggest = dosageSuggestion.replace(/'/g, "\\'");
+                  html += `
+                    <div class="p-2 hover:bg-emerald-50 cursor-pointer rounded-lg transition flex items-center justify-between text-xs"
+                         onclick="appendMedicationPlan('${safeSuggest}')">
+                      <div>
+                        <div class="font-bold text-slate-800">${escapeHtml(title)}</div>
+                        <div class="text-[10px] text-slate-400">${escapeHtml(item.dosage_form || '')} • Stock: ${item.current_stock ?? 0}</div>
+                      </div>
+                      <span class="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">+ Add</span>
+                    </div>
+                  `;
+                });
+                planMedResults.innerHTML = html;
+                planMedResults.classList.remove('hidden');
+              } else {
+                planMedResults.classList.add('hidden');
+              }
+            } catch (e) {
+              planMedResults.classList.add('hidden');
+            }
+          }, 180);
+        });
+
+        document.addEventListener('click', function(e) {
+          if (!planMedInput.contains(e.target) && !planMedResults.contains(e.target)) {
+            planMedResults.classList.add('hidden');
+          }
+        });
+      }
     });
 </script>
 

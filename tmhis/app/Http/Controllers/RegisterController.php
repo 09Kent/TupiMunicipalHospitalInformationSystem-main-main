@@ -43,13 +43,24 @@ class RegisterController extends Controller
             'name' => session('full_name', auth()->user()->FirstName ?? 'Registrator'),
         ];
 
+        $ambulances = [];
+        try {
+            if (\Illuminate\Support\Facades\Schema::hasTable('ambulances')) {
+                $ambulances = \App\Models\Ambulance::all();
+            }
+        } catch (\Throwable $e) {}
+        if (empty($ambulances) || (is_object($ambulances) && method_exists($ambulances, 'isEmpty') && $ambulances->isEmpty())) {
+            $ambulances = collect(\App\Http\Controllers\Api\AmbulanceApiController::getFallbackAmbulances());
+        }
+
         return view('register.dashboard', compact(
             'kpis',
             'recentPatients',
             'todayAppointments',
             'nowServing',
             'todayQueue',
-            'user'
+            'user',
+            'ambulances'
         ));
     }
 

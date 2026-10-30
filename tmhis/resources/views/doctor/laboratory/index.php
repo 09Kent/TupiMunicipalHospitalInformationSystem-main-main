@@ -611,9 +611,17 @@ require_once __DIR__ . '/../includes/sidebar.php';
 
         pTimer = setTimeout(async () => {
           try {
-            const res = await fetch('<?= url('/doctor/api/prescription-patients') ?>?q=' + encodeURIComponent(q), { headers: { Accept: 'application/json' } });
-            const payload = await res.json();
-            if (res.ok && payload.success && payload.data && payload.data.length > 0) {
+            let res = await fetch('<?= url('/doctor/api/prescription-patients') ?>?q=' + encodeURIComponent(q), { headers: { Accept: 'application/json' } });
+            let payload = null;
+            if (res.ok) {
+              const j = await res.json();
+              if (j && j.success && Array.isArray(j.data)) payload = j;
+            }
+            if (!payload) {
+              const fb = await fetch('/api/search/patients?q=' + encodeURIComponent(q), { headers: { Accept: 'application/json' } });
+              payload = await fb.json();
+            }
+            if (payload && payload.success && payload.data && payload.data.length > 0) {
               renderPatients(payload.data);
             } else if (localMatches.length === 0) {
               renderPatients([]);
@@ -653,10 +661,23 @@ require_once __DIR__ . '/../includes/sidebar.php';
         controller?.abort();
         controller = new AbortController();
         try {
-          const response = await fetch('<?= url('/doctor/api/laboratory-tests') ?>?q=' + encodeURIComponent(term), { signal: controller.signal, headers: { Accept: 'application/json' } });
-          const payload = await response.json();
-          if (!response.ok || !payload.success) throw new Error('Search failed');
-          if (!payload.data.length) {
+          let payload = null;
+          try {
+            const response = await fetch('<?= url('/doctor/api/laboratory-tests') ?>?q=' + encodeURIComponent(term), { signal: controller.signal, headers: { Accept: 'application/json' } });
+            if (response.ok) {
+              const j = await response.json();
+              if (j && j.success && Array.isArray(j.data)) payload = j;
+            }
+          } catch (e) {
+            if (e.name === 'AbortError') return;
+          }
+
+          if (!payload) {
+            const fb = await fetch('/api/search/laboratory-tests?q=' + encodeURIComponent(term), { signal: controller.signal, headers: { Accept: 'application/json' } });
+            payload = await fb.json();
+          }
+
+          if (!payload || !payload.data || !payload.data.length) {
             status.textContent = 'No matching active laboratory tests found.';
             return;
           }
@@ -665,11 +686,16 @@ require_once __DIR__ . '/../includes/sidebar.php';
             option.type = 'button';
             option.className = 'w-full text-left px-3.5 py-2.5 hover:bg-blue-50 border-b border-slate-100 last:border-b-0';
             option.innerHTML = '<span class="block font-bold text-slate-800"></span><span class="block text-[10px] text-slate-400"></span>';
-            option.children[0].textContent = test.TestName;
-            option.children[1].textContent = [test.TestCode, test.Category, test.SpecimenType].filter(Boolean).join(' • ');
+            const tName = test.TestName || test.test_name || '';
+            const tCode = test.TestCode || test.test_code || '';
+            const tCat = test.Category || test.category || '';
+            const tSpec = test.SpecimenType || test.specimen_type || '';
+
+            option.children[0].textContent = tName;
+            option.children[1].textContent = [tCode, tCat, tSpec].filter(Boolean).join(' • ');
             option.addEventListener('click', () => {
-              search.value = test.TestName;
-              hidden.value = test.TestName;
+              search.value = tName;
+              hidden.value = tName;
               results.classList.add('hidden');
               status.textContent = 'Selected from the active laboratory catalog.';
             });

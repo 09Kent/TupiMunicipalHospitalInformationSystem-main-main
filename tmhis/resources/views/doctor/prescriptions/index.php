@@ -310,10 +310,31 @@ require_once __DIR__ . '/../includes/sidebar.php';
               controller?.abort();
               controller = new AbortController();
               try {
-                const response = await fetch('<?= url('/doctor/api/prescription-medicines') ?>?q=' + encodeURIComponent(term), { signal: controller.signal, headers: { Accept: 'application/json' } });
-                const payload = await response.json();
-                if (!response.ok || !payload.success) throw new Error('Search failed');
-                if (!payload.data.length) {
+                let payload = null;
+                try {
+                  const response = await fetch('<?= url('/doctor/api/prescription-medicines') ?>?q=' + encodeURIComponent(term), { 
+                    signal: controller.signal, 
+                    headers: { Accept: 'application/json' } 
+                  });
+                  if (response.ok) {
+                    const resJson = await response.json();
+                    if (resJson && resJson.success && Array.isArray(resJson.data)) {
+                      payload = resJson;
+                    }
+                  }
+                } catch (e) {
+                  if (e.name === 'AbortError') return;
+                }
+
+                if (!payload) {
+                  const fallbackResponse = await fetch('/api/search/medications?q=' + encodeURIComponent(term), {
+                    signal: controller.signal,
+                    headers: { Accept: 'application/json' }
+                  });
+                  payload = await fallbackResponse.json();
+                }
+
+                if (!payload || !payload.data || !payload.data.length) {
                   status.textContent = 'No matching medicine found in pharmacy inventory.';
                   return;
                 }
@@ -322,10 +343,17 @@ require_once __DIR__ . '/../includes/sidebar.php';
                   option.type = 'button';
                   option.className = 'w-full text-left px-3.5 py-2.5 hover:bg-blue-50 border-b border-slate-100 last:border-b-0';
                   option.innerHTML = '<span class="block text-xs font-bold text-slate-800"></span><span class="block text-[10px] text-slate-500"></span>';
-                  option.children[0].textContent = [medicine.GenericName, medicine.Strength].filter(Boolean).join(' ');
-                  option.children[1].textContent = [medicine.BrandName, medicine.DosageForm, medicine.ItemCode, `Stock: ${medicine.CurrentStock}`].filter(Boolean).join(' • ');
+                  const generic = medicine.GenericName || medicine.generic_name || '';
+                  const strength = medicine.Strength || medicine.strength || '';
+                  const brand = medicine.BrandName || medicine.brand_name || '';
+                  const form = medicine.DosageForm || medicine.dosage_form || '';
+                  const code = medicine.ItemCode || medicine.item_code || '';
+                  const stock = medicine.CurrentStock ?? medicine.current_stock ?? 0;
+
+                  option.children[0].textContent = [generic, strength].filter(Boolean).join(' ');
+                  option.children[1].textContent = [brand, form, code, `Stock: ${stock}`].filter(Boolean).join(' • ');
                   option.addEventListener('click', () => {
-                    search.value = [medicine.GenericName, medicine.Strength].filter(Boolean).join(' ');
+                    search.value = [generic, strength].filter(Boolean).join(' ');
                     results.classList.add('hidden');
                     status.textContent = 'Medicine selected from pharmacy inventory.';
                   });
@@ -426,23 +454,56 @@ require_once __DIR__ . '/../includes/sidebar.php';
       controller?.abort();
       controller = new AbortController();
       try {
-        const response = await fetch('<?= url('/doctor/api/prescription-patients') ?>?q=' + encodeURIComponent(term), { signal: controller.signal, headers: { Accept: 'application/json' } });
-        const payload = await response.json();
-        if (!response.ok || !payload.success) throw new Error('Search failed');
-        if (!payload.data.length) {
+        let payload = null;
+        try {
+          const response = await fetch('<?= url('/doctor/api/prescription-patients') ?>?q=' + encodeURIComponent(term), { 
+            signal: controller.signal, 
+            headers: { Accept: 'application/json' } 
+          });
+          if (response.ok) {
+            const resJson = await response.json();
+            if (resJson && resJson.success && Array.isArray(resJson.data)) {
+              payload = resJson;
+            }
+          }
+        } catch (e) {
+          if (e.name === 'AbortError') return;
+        }
+
+        if (!payload) {
+          const fallbackResponse = await fetch('/api/search/patients?q=' + encodeURIComponent(term), {
+            signal: controller.signal,
+            headers: { Accept: 'application/json' }
+          });
+          payload = await fallbackResponse.json();
+        }
+
+        if (!payload || !payload.data || !payload.data.length) {
           status.textContent = 'No assigned patient matches this search.';
           return;
         }
         payload.data.forEach(patient => {
+          const pId = patient.PatientID || patient.id || patient.patient_id;
+          const pFirst = patient.FirstName || patient.first_name || '';
+          const pLast = patient.LastName || patient.last_name || '';
+          const pCode = patient.PatientCode || patient.patient_code || patient.code || ('PAT-' + pId);
+          const pAge = patient.Age ?? patient.age ?? '';
+          const pGender = patient.Gender || patient.gender || '';
+          const pPhone = patient.ContactNumber || patient.contact || 'No phone';
+
           const option = document.createElement('button');
           option.type = 'button';
-          option.className = 'w-full text-left px-3.5 py-2.5 hover:bg-blue-50 border-b border-slate-100 last:border-b-0';
-          option.innerHTML = '<span class="block text-xs font-bold text-slate-800"></span><span class="block text-[10px] text-slate-500"></span>';
-          option.children[0].textContent = `${patient.FirstName} ${patient.LastName}`;
-          option.children[1].textContent = `${patient.PatientCode} • ${patient.Age}y, ${patient.Gender} • ${patient.ContactNumber || 'No phone'}`;
+          option.className = 'w-full text-left px-3.5 py-2.5 hover:bg-blue-50 border-b border-slate-100 last:border-b-0 transition flex items-center justify-between';
+          option.innerHTML = `
+            <div>
+              <span class="block text-xs font-bold text-slate-800">${pFirst} ${pLast}</span>
+              <span class="block text-[10px] text-slate-500 font-mono">${pCode} • ${pAge ? pAge + 'y, ' : ''}${pGender} • ${pPhone}</span>
+            </div>
+            <span class="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">Select &rarr;</span>
+          `;
           option.addEventListener('click', () => {
-            hidden.value = patient.PatientID;
-            search.value = `${patient.FirstName} ${patient.LastName} (${patient.PatientCode})`;
+            hidden.value = pId;
+            search.value = `${pFirst} ${pLast} (${pCode})`;
             results.classList.add('hidden');
             status.textContent = 'Patient selected.';
           });

@@ -291,6 +291,7 @@ function switchView(viewName) {
     'charges': 'PATIENT SERVICE CHARGES',
     'billing': 'PATIENT BILL PROCESSING',
     'payments': 'PAYMENT PROCESSING',
+    'pos': 'POS / PHARMACY RETAIL SALES',
     'accounts': 'PATIENT ACCOUNTS & BALANCES',
     'invoices': 'PATIENT INVOICES',
     'receipts': 'OFFICIAL RECEIPTS',
@@ -303,6 +304,7 @@ function switchView(viewName) {
     'charges': 'Patient Service Charges & Charge Computation',
     'billing': 'Compute Total Patient Bills, Apply Discounts & Issue Invoices',
     'payments': 'Record Cash, Card, GCash, Bank Payments & Generate Official Receipts',
+    'pos': 'Retail Pharmacy Sales, Real-time Stock Deduction & Fast Receipt Printing',
     'accounts': 'Track Account Ledgers, Aging Balances & Settle Outstanding Bills',
     'invoices': 'Hospital Invoices, Medical Billing Statements & Print Layouts',
     'receipts': 'BIR-Compliant Official Receipts with Amount in Words',
@@ -320,6 +322,7 @@ function switchView(viewName) {
   else if (viewName === 'charges') renderChargesTable();
   else if (viewName === 'billing') renderBillProcessing();
   else if (viewName === 'payments') renderPaymentsTable();
+  else if (viewName === 'pos') PosModule.init();
   else if (viewName === 'accounts') renderAccountsTables();
   else if (viewName === 'invoices') renderInvoicesTable();
   else if (viewName === 'receipts') renderReceiptsTable();
@@ -557,44 +560,123 @@ function renderChargesTable() {
 }
 
 // Patient search helpers for Bill Processing
+let billSearchTimer = null;
+
 function onBillPatientSearchInput(query) {
   const container = document.getElementById('bill-patient-search-results');
   if (!container) return;
   const q = (query || '').toLowerCase().trim();
-  const matched = AppState.patients.filter(p => 
+
+  const renderList = (matched, isAsync = false) => {
+    if (matched.length === 0) {
+      if (!isAsync && q.length >= 2) {
+        container.innerHTML = `<div class="p-3 text-xs text-slate-400 text-center">Searching hospital records...</div>`;
+      } else {
+        container.innerHTML = `<div class="p-3 text-xs text-slate-400 text-center">No matching patients found</div>`;
+      }
+      container.classList.remove('hidden');
+      return;
+    }
+
+    let html = '';
+    matched.slice(0, 10).forEach(p => {
+      const pid = p.id || p.PatientID || p.PatientCode;
+      const pname = p.name || p.FullName || ((p.FirstName || '') + ' ' + (p.LastName || '')).trim();
+      const pcode = p.code || p.PatientCode || pid;
+      const room = p.room || p.PatientCategory || 'Outpatient';
+      const encoded = encodeURIComponent(JSON.stringify({ id: pid, name: pname, code: pcode, category: p.PatientCategory || 'OPD' }));
+      html += `
+        <div onclick="selectBillPatientFromObj('${encoded}')" class="p-2.5 hover:bg-brand-50 cursor-pointer transition-colors flex items-center justify-between">
+          <div>
+            <div class="font-bold text-xs text-slate-800">${pname}</div>
+            <div class="text-[11px] text-slate-500 font-mono">${pcode} ${p.studentId ? '• Student ID: ' + p.studentId : ''}</div>
+          </div>
+          <div class="text-right text-[11px] text-slate-400">
+            <div>${room}</div>
+            <span class="text-brand-600 font-semibold text-[10px]">Select &rarr;</span>
+          </div>
+        </div>
+      `;
+    });
+    container.innerHTML = html;
+    container.classList.remove('hidden');
+  };
+
+  const localMatched = AppState.patients.filter(p => 
     p.name.toLowerCase().includes(q) ||
     p.id.toLowerCase().includes(q) ||
     (p.studentId && p.studentId.toLowerCase().includes(q))
   );
 
-  if (matched.length === 0) {
-    container.innerHTML = `<div class="p-3 text-xs text-slate-400 text-center">No matching patients found</div>`;
-    container.classList.remove('hidden');
-    return;
+  if (localMatched.length > 0 || !q) {
+    renderList(localMatched);
   }
 
-  let html = '';
-  matched.slice(0, 10).forEach(p => {
-    html += `
-      <div onclick="selectBillPatient('${p.id}')" class="p-2.5 hover:bg-brand-50 cursor-pointer transition-colors flex items-center justify-between">
-        <div>
-          <div class="font-bold text-xs text-slate-800">${p.name}</div>
-          <div class="text-[11px] text-slate-500 font-mono">${p.id} ${p.studentId ? '• Student ID: ' + p.studentId : ''}</div>
-        </div>
-        <div class="text-right text-[11px] text-slate-400">
-          <div>${p.room || 'Outpatient'}</div>
-          <span class="text-brand-600 font-semibold text-[10px]">Select &rarr;</span>
-        </div>
-      </div>
-    `;
-  });
-  container.innerHTML = html;
-  container.classList.remove('hidden');
+  if (q.length >= 2) {
+    clearTimeout(billSearchTimer);
+    billSearchTimer = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/search/patients?q=${encodeURIComponent(q)}&limit=10`);
+        const json = await res.json();
+        if (json.success && Array.isArray(json.data) && json.data.length > 0) {
+          const merged = [...localMatched];
+          const seen = new Set(merged.map(x => String(x.id)));
+          json.data.forEach(srv => {
+            const sid = String(srv.PatientID || srv.PatientCode);
+            if (!seen.has(sid)) {
+              seen.add(sid);
+              merged.push({
+                id: sid,
+                name: srv.FullName || `${srv.FirstName} ${srv.LastName}`.trim(),
+                code: srv.PatientCode || sid,
+                category: srv.PatientCategory || 'OPD',
+                room: srv.PatientCategory === 'Inpatient' ? 'Inpatient Ward' : 'OPD'
+              });
+            }
+          });
+          renderList(merged, true);
+        } else if (localMatched.length === 0) {
+          renderList([], true);
+        }
+      } catch (err) {
+        if (localMatched.length === 0) renderList([], true);
+      }
+    }, 200);
+  }
 }
 
 function onBillPatientSearchFocus() {
   const val = document.getElementById('bill-patient-search-input')?.value || '';
   onBillPatientSearchInput(val);
+}
+
+function selectBillPatientFromObj(encodedJson) {
+  try {
+    const data = JSON.parse(decodeURIComponent(encodedJson));
+    const sel = document.getElementById('bill-patient-select');
+    if (sel) {
+      let opt = Array.from(sel.options).find(o => o.value === String(data.id));
+      if (!opt) {
+        opt = new Option(`${data.name} (${data.code || data.id})`, data.id);
+        sel.add(opt);
+      }
+      sel.value = data.id;
+    }
+    let p = AppState.patients.find(x => String(x.id) === String(data.id));
+    if (!p) {
+      p = { id: String(data.id), name: data.name, category: data.category || 'OPD' };
+      AppState.patients.push(p);
+    }
+    AppState.selectedPatientForBill = data.id;
+    const input = document.getElementById('bill-patient-search-input');
+    if (input) {
+      input.value = `${data.name} (${data.code || data.id})`;
+    }
+    document.getElementById('bill-patient-search-results')?.classList.add('hidden');
+    renderBillProcessing();
+  } catch(e) {
+    console.error(e);
+  }
 }
 
 function selectBillPatient(patientId) {
@@ -1178,6 +1260,7 @@ function renderNotificationsView() {
 // =======================================================
 
 let chargeSearchTimeout = null;
+window.onChargePatientSearch = function(q) { onChargePatientSearchInput(q); };
 
 function onChargePatientSearchInput(query) {
   clearTimeout(chargeSearchTimeout);
@@ -2767,3 +2850,762 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 });
+
+// ============================================================================
+// POINT-OF-SALE (POS) / PHARMACY RETAIL SALES MODULE
+// ============================================================================
+const PosModule = {
+  state: {
+    medicines: [],
+    cart: [],
+    customerType: 'walkin', // 'walkin' | 'patient'
+    patientId: null,
+    patientName: '',
+    patientCode: '',
+    discountType: 'None',
+    discountAmount: 0.00,
+    paymentMethod: 'Cash',
+    currentReceiptUrl: '',
+    isCheckingOut: false,
+    currentDosageFilter: 'All',
+    searchQuery: '',
+    patientSearchTimer: null
+  },
+
+  init: function () {
+    this.loadMedicines();
+    this.loadSalesHistory();
+    this.renderCart();
+    this.updateDiscount();
+  },
+
+  loadMedicines: async function () {
+    try {
+      const res = await fetch('/billing/api/pos/medicines');
+      const data = await res.json();
+      if (data.success) {
+        this.state.medicines = data.data || [];
+        this.filterMedicines();
+      }
+    } catch (err) {
+      console.error('Failed to load medicines for POS:', err);
+    }
+  },
+
+  setCustomerType: function (type) {
+    this.state.customerType = type;
+    const btnWalkin = document.getElementById('pos-btn-walkin');
+    const btnPatient = document.getElementById('pos-btn-patient');
+    const walkinInputs = document.getElementById('pos-walkin-inputs');
+    const patientInputs = document.getElementById('pos-patient-inputs');
+
+    if (type === 'walkin') {
+      btnWalkin.className = 'px-3.5 py-1.5 rounded-lg transition-all bg-white text-slate-800 shadow-sm';
+      btnPatient.className = 'px-3.5 py-1.5 rounded-lg transition-all text-slate-500 hover:text-slate-800';
+      walkinInputs.classList.remove('hidden');
+      patientInputs.classList.add('hidden');
+    } else {
+      btnPatient.className = 'px-3.5 py-1.5 rounded-lg transition-all bg-white text-slate-800 shadow-sm';
+      btnWalkin.className = 'px-3.5 py-1.5 rounded-lg transition-all text-slate-500 hover:text-slate-800';
+      patientInputs.classList.remove('hidden');
+      walkinInputs.classList.add('hidden');
+    }
+  },
+
+  searchPatients: function (val) {
+    clearTimeout(this.state.patientSearchTimer);
+    const query = (val || '').trim();
+    const dropdown = document.getElementById('pos-patient-dropdown');
+    if (!dropdown) return;
+
+    if (query.length < 1) {
+      dropdown.classList.add('hidden');
+      dropdown.innerHTML = '';
+      return;
+    }
+
+    this.state.patientSearchTimer = setTimeout(async () => {
+      try {
+        const res = await fetch('/billing/api/pos/patients?search=' + encodeURIComponent(query));
+        const data = await res.json();
+        if (data.success && data.data && data.data.length > 0) {
+          dropdown.innerHTML = data.data.map(p => `
+            <div onclick="PosModule.selectPatient(${JSON.stringify(p).replace(/"/g, '&quot;')})" class="p-2.5 hover:bg-slate-50 cursor-pointer border-b border-slate-100 last:border-0 flex items-center justify-between">
+              <div>
+                <span class="font-bold text-slate-800">${p.FullName}</span>
+                <span class="text-[10px] text-blue-600 font-mono ml-1.5">${p.PatientCode}</span>
+                <span class="block text-[10px] text-slate-400">${p.Age} • ${p.Gender}</span>
+              </div>
+              <span class="text-[10px] px-2 py-0.5 rounded bg-brand-50 text-brand-700 font-bold">Select</span>
+            </div>
+          `).join('');
+          dropdown.classList.remove('hidden');
+        } else {
+          dropdown.innerHTML = '<div class="p-3 text-center text-slate-400 text-xs italic">No matching patients found</div>';
+          dropdown.classList.remove('hidden');
+        }
+      } catch (err) {
+        console.error('Error searching patients:', err);
+      }
+    }, 200);
+  },
+
+  selectPatient: function (p) {
+    this.state.patientId = p.PatientID;
+    this.state.patientName = p.FullName;
+    this.state.patientCode = p.PatientCode;
+
+    const dropdown = document.getElementById('pos-patient-dropdown');
+    if (dropdown) dropdown.classList.add('hidden');
+
+    const searchInput = document.getElementById('pos-patient-search');
+    if (searchInput) searchInput.value = '';
+
+    const badge = document.getElementById('pos-selected-patient-badge');
+    const badgeName = document.getElementById('pos-badge-patient-name');
+    const badgeCode = document.getElementById('pos-badge-patient-code');
+
+    if (badge && badgeName && badgeCode) {
+      badgeName.innerText = p.FullName;
+      badgeCode.innerText = p.PatientCode;
+      badge.classList.remove('hidden');
+      badge.classList.add('flex');
+    }
+    lucide.createIcons();
+  },
+
+  clearPatient: function () {
+    this.state.patientId = null;
+    this.state.patientName = '';
+    this.state.patientCode = '';
+
+    const badge = document.getElementById('pos-selected-patient-badge');
+    if (badge) {
+      badge.classList.add('hidden');
+      badge.classList.remove('flex');
+    }
+  },
+
+  setDosagePill: function (dosage) {
+    this.state.currentDosageFilter = dosage;
+    const select = document.getElementById('pos-dosage-filter');
+    if (select) select.value = dosage;
+
+    const pills = document.querySelectorAll('#pos-category-pills button');
+    pills.forEach(p => {
+      if (p.innerText.includes(dosage) || (dosage === 'All' && p.innerText.includes('All'))) {
+        p.className = 'px-2.5 py-1 rounded-lg bg-brand-50 text-brand-700 font-bold border border-brand-200 whitespace-nowrap';
+      } else {
+        p.className = 'px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 font-medium hover:bg-slate-200 transition whitespace-nowrap';
+      }
+    });
+
+    this.filterMedicines();
+  },
+
+  filterMedicines: function () {
+    const searchInput = document.getElementById('pos-medicine-search');
+    const dosageSelect = document.getElementById('pos-dosage-filter');
+    const query = (searchInput ? searchInput.value : '').toLowerCase().trim();
+    const dosage = (dosageSelect ? dosageSelect.value : 'All');
+
+    const filtered = this.state.medicines.filter(m => {
+      const matchSearch = !query ||
+        (m.ItemCode && m.ItemCode.toLowerCase().includes(query)) ||
+        (m.GenericName && m.GenericName.toLowerCase().includes(query)) ||
+        (m.BrandName && m.BrandName.toLowerCase().includes(query));
+
+      const matchDosage = (dosage === 'All') ||
+        (m.DosageForm && m.DosageForm.toLowerCase().includes(dosage.toLowerCase()));
+
+      return matchSearch && matchDosage;
+    });
+
+    this.renderMedicineGrid(filtered);
+  },
+
+  renderMedicineGrid: function (medicines) {
+    const grid = document.getElementById('pos-medicine-grid');
+    const emptyBox = document.getElementById('pos-medicine-empty');
+    if (!grid) return;
+
+    if (!medicines || medicines.length === 0) {
+      grid.innerHTML = '';
+      if (emptyBox) emptyBox.classList.remove('hidden');
+      return;
+    }
+
+    if (emptyBox) emptyBox.classList.add('hidden');
+
+    grid.innerHTML = medicines.map(med => {
+      const stock = parseInt(med.CurrentStock, 10) || 0;
+      const reorder = parseInt(med.ReorderLevel, 10) || 10;
+      const price = parseFloat(med.SellingPrice) || 0.00;
+      const isOutOfStock = stock <= 0;
+      const isLowStock = stock > 0 && stock <= reorder;
+
+      let stockBadge = '';
+      if (isOutOfStock) {
+        stockBadge = '<span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-rose-100 text-rose-800">Out of Stock</span>';
+      } else if (isLowStock) {
+        stockBadge = `<span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">Low: ${stock} left</span>`;
+      } else {
+        stockBadge = `<span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800">${stock} in stock</span>`;
+      }
+
+      const brandText = med.BrandName ? `<span class="text-[10px] font-medium text-slate-400 block">${med.BrandName}</span>` : '';
+      const strengthText = med.Strength ? ` (${med.Strength})` : '';
+
+      return `
+        <div class="hospity-card p-3.5 flex flex-col justify-between border border-slate-200/80 hover:border-brand-300 hover:shadow-md transition-all select-none">
+          <div class="space-y-1">
+            <div class="flex items-start justify-between gap-1">
+              <span class="text-[10px] font-mono text-slate-400 font-semibold">${med.ItemCode}</span>
+              ${stockBadge}
+            </div>
+            <h4 class="text-xs font-black text-slate-900 leading-tight line-clamp-1">${med.GenericName}${strengthText}</h4>
+            ${brandText}
+            <span class="text-[10px] text-slate-500 font-medium inline-block">${med.DosageForm || 'Medication'}</span>
+          </div>
+
+          <div class="pt-3 border-t border-slate-100 mt-2 flex items-center justify-between">
+            <span class="text-sm font-black font-mono text-emerald-800">₱${price.toFixed(2)}</span>
+            <button 
+              type="button" 
+              onclick="PosModule.addToCart(${med.InventoryID})" 
+              ${isOutOfStock ? 'disabled' : ''}
+              class="px-2.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1 ${isOutOfStock ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-brand-50 text-brand-700 hover:bg-brand-600 hover:text-white active:scale-95 cursor-pointer'}"
+              title="${isOutOfStock ? 'Item out of stock' : 'Add to cart'}">
+              <i data-lucide="plus" class="w-3.5 h-3.5"></i> Add
+            </button>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    lucide.createIcons();
+  },
+
+  addToCart: function (invId) {
+    const med = this.state.medicines.find(m => m.InventoryID === invId);
+    if (!med) return;
+
+    const stock = parseInt(med.CurrentStock, 10) || 0;
+    if (stock <= 0) {
+      alert('This medicine is out of stock.');
+      return;
+    }
+
+    const existing = this.state.cart.find(c => c.inventory_id === invId);
+    if (existing) {
+      if (existing.quantity >= stock) {
+        alert(`Cannot add more. Available stock for ${med.GenericName} is ${stock}.`);
+        return;
+      }
+      existing.quantity += 1;
+    } else {
+      this.state.cart.push({
+        inventory_id: med.InventoryID,
+        item_code: med.ItemCode,
+        medicine_name: med.BrandName ? `${med.BrandName} (${med.GenericName})` : med.GenericName,
+        dosage_form: med.DosageForm,
+        strength: med.Strength,
+        unit_price: parseFloat(med.SellingPrice) || 0.00,
+        quantity: 1,
+        max_stock: stock
+      });
+    }
+
+    this.renderCart();
+  },
+
+  updateQty: function (invId, delta) {
+    const item = this.state.cart.find(c => c.inventory_id === invId);
+    if (!item) return;
+
+    const newQty = item.quantity + delta;
+    if (newQty <= 0) {
+      this.removeFromCart(invId);
+      return;
+    }
+    if (newQty > item.max_stock) {
+      alert(`Cannot exceed available stock of ${item.max_stock}.`);
+      return;
+    }
+
+    item.quantity = newQty;
+    this.renderCart();
+  },
+
+  setQty: function (invId, rawVal) {
+    const item = this.state.cart.find(c => c.inventory_id === invId);
+    if (!item) return;
+
+    let val = parseInt(rawVal, 10);
+    if (isNaN(val) || val <= 0) val = 1;
+    if (val > item.max_stock) {
+      alert(`Cannot exceed available stock of ${item.max_stock}.`);
+      val = item.max_stock;
+    }
+
+    item.quantity = val;
+    this.renderCart();
+  },
+
+  removeFromCart: function (invId) {
+    this.state.cart = this.state.cart.filter(c => c.inventory_id !== invId);
+    this.renderCart();
+  },
+
+  clearCart: function () {
+    this.state.cart = [];
+    this.renderCart();
+  },
+
+  renderCart: function () {
+    const cartBox = document.getElementById('pos-cart-items');
+    const countEl = document.getElementById('pos-cart-count');
+    const subtotalEl = document.getElementById('pos-subtotal');
+    const totalEl = document.getElementById('pos-total-amount');
+
+    if (!cartBox) return;
+
+    if (this.state.cart.length === 0) {
+      cartBox.innerHTML = `
+        <div id="pos-cart-empty" class="text-center py-8">
+          <i data-lucide="shopping-bag" class="w-8 h-8 text-slate-300 mx-auto mb-2"></i>
+          <p class="text-xs font-semibold text-slate-500">Cart is empty</p>
+          <p class="text-[10px] text-slate-400 mt-0.5">Click "Add" on any medicine card to begin.</p>
+        </div>
+      `;
+      if (countEl) countEl.innerText = '0 items selected';
+      if (subtotalEl) subtotalEl.innerText = '₱0.00';
+      if (totalEl) totalEl.innerText = '₱0.00';
+      this.calculateChange();
+      lucide.createIcons();
+      return;
+    }
+
+    let subtotal = 0.00;
+    let totalItems = 0;
+
+    cartBox.innerHTML = this.state.cart.map(item => {
+      const lineSubtotal = item.unit_price * item.quantity;
+      subtotal += lineSubtotal;
+      totalItems += item.quantity;
+
+      return `
+        <div class="p-2.5 bg-white rounded-xl border border-slate-200/80 shadow-xs flex items-center justify-between gap-2 text-xs">
+          <div class="flex-1 min-w-0">
+            <h5 class="font-bold text-slate-900 leading-tight truncate">${item.medicine_name}</h5>
+            <span class="text-[10px] text-slate-400 font-mono">₱${item.unit_price.toFixed(2)} each</span>
+          </div>
+
+          <!-- Quantity Controls -->
+          <div class="flex items-center gap-1">
+            <button type="button" onclick="PosModule.updateQty(${item.inventory_id}, -1)" class="w-6 h-6 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold flex items-center justify-center transition">
+              -
+            </button>
+            <input 
+              type="number" 
+              min="1" 
+              max="${item.max_stock}" 
+              value="${item.quantity}" 
+              onchange="PosModule.setQty(${item.inventory_id}, this.value)" 
+              class="w-10 text-center font-mono font-bold text-xs py-0.5 px-1 bg-slate-50 border border-slate-200 rounded">
+            <button type="button" onclick="PosModule.updateQty(${item.inventory_id}, 1)" class="w-6 h-6 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold flex items-center justify-center transition">
+              +
+            </button>
+          </div>
+
+          <!-- Line Subtotal & Remove -->
+          <div class="text-right min-w-[65px]">
+            <span class="block font-mono font-bold text-slate-800">₱${lineSubtotal.toFixed(2)}</span>
+            <button type="button" onclick="PosModule.removeFromCart(${item.inventory_id})" class="text-[10px] text-rose-500 hover:text-rose-700 transition" title="Remove item">
+              Remove
+            </button>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    if (countEl) countEl.innerText = `${totalItems} unit${totalItems > 1 ? 's' : ''} (${this.state.cart.length} item${this.state.cart.length > 1 ? 's' : ''})`;
+    if (subtotalEl) subtotalEl.innerText = `₱${subtotal.toFixed(2)}`;
+
+    this.updateDiscount(subtotal);
+    lucide.createIcons();
+  },
+
+  updateDiscount: function (computedSubtotal) {
+    const subtotal = (typeof computedSubtotal === 'number') ? computedSubtotal : this.getCartSubtotal();
+    const select = document.getElementById('pos-discount-select');
+    const discountType = select ? select.value : 'None';
+    this.state.discountType = discountType;
+
+    const customWrap = document.getElementById('pos-custom-discount-wrap');
+    const customInput = document.getElementById('pos-custom-discount-input');
+    const discountAmountEl = document.getElementById('pos-discount-amount');
+    const totalEl = document.getElementById('pos-total-amount');
+
+    let discount = 0.00;
+    if (discountType === 'Senior Citizen' || discountType === 'PWD') {
+      if (customWrap) customWrap.classList.add('hidden');
+      discount = subtotal * 0.20;
+    } else if (discountType === 'Employee') {
+      if (customWrap) customWrap.classList.add('hidden');
+      discount = subtotal * 0.10;
+    } else if (discountType === 'Custom') {
+      if (customWrap) customWrap.classList.remove('hidden');
+      discount = parseFloat(customInput ? customInput.value : 0) || 0.00;
+    } else {
+      if (customWrap) customWrap.classList.add('hidden');
+      discount = 0.00;
+    }
+
+    discount = Math.min(subtotal, Math.max(0.00, discount));
+    this.state.discountAmount = discount;
+
+    const totalDue = Math.max(0.00, subtotal - discount);
+
+    if (discountAmountEl) discountAmountEl.innerText = `-₱${discount.toFixed(2)}`;
+    if (totalEl) totalEl.innerText = `₱${totalDue.toFixed(2)}`;
+
+    this.calculateChange(totalDue);
+  },
+
+  getCartSubtotal: function () {
+    return this.state.cart.reduce((sum, item) => sum + (item.unit_price * item.quantity), 0.00);
+  },
+
+  getCartTotal: function () {
+    const subtotal = this.getCartSubtotal();
+    return Math.max(0.00, subtotal - (this.state.discountAmount || 0.00));
+  },
+
+  setPaymentMethod: function (method) {
+    this.state.paymentMethod = method;
+    const btns = document.querySelectorAll('.pos-pm-btn');
+    btns.forEach(b => {
+      b.className = 'pos-pm-btn py-2 px-2 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 text-center';
+    });
+
+    const activeBtn = document.getElementById(`pos-pm-${method.toLowerCase()}`);
+    if (activeBtn) {
+      activeBtn.className = 'pos-pm-btn py-2 px-2 rounded-xl border border-brand-500 bg-brand-50 text-brand-700 text-center font-bold';
+    }
+
+    const cashCalc = document.getElementById('pos-cash-calculator');
+    const refWrap = document.getElementById('pos-reference-wrap');
+
+    if (method === 'Cash') {
+      if (cashCalc) cashCalc.classList.remove('hidden');
+      if (refWrap) refWrap.classList.add('hidden');
+    } else {
+      if (cashCalc) cashCalc.classList.add('hidden');
+      if (refWrap) refWrap.classList.remove('hidden');
+    }
+
+    this.calculateChange();
+  },
+
+  quickCash: function (val) {
+    const input = document.getElementById('pos-amount-tendered');
+    const totalDue = this.getCartTotal();
+    if (!input) return;
+
+    if (val === 'exact') {
+      input.value = totalDue.toFixed(2);
+    } else {
+      const cur = parseFloat(input.value) || totalDue;
+      input.value = (cur + val).toFixed(2);
+    }
+
+    this.calculateChange();
+  },
+
+  calculateChange: function (currentTotal) {
+    const totalDue = (typeof currentTotal === 'number') ? currentTotal : this.getCartTotal();
+    const tenderedInput = document.getElementById('pos-amount-tendered');
+    const changeDueEl = document.getElementById('pos-change-due');
+    const alertEl = document.getElementById('pos-insufficient-alert');
+
+    if (this.state.paymentMethod !== 'Cash') {
+      if (changeDueEl) changeDueEl.innerText = '₱0.00';
+      if (alertEl) alertEl.classList.add('hidden');
+      return;
+    }
+
+    const tendered = parseFloat(tenderedInput ? tenderedInput.value : 0) || 0.00;
+    if (tendered >= totalDue) {
+      const change = tendered - totalDue;
+      if (changeDueEl) changeDueEl.innerText = `₱${change.toFixed(2)}`;
+      if (alertEl) alertEl.classList.add('hidden');
+    } else {
+      if (changeDueEl) changeDueEl.innerText = '₱0.00';
+      if (tendered > 0 && alertEl) {
+        alertEl.classList.remove('hidden');
+      } else if (alertEl) {
+        alertEl.classList.add('hidden');
+      }
+    }
+  },
+
+  checkout: async function () {
+    if (this.state.isCheckingOut) return;
+
+    if (this.state.cart.length === 0) {
+      alert('Your cart is empty. Please add items to checkout.');
+      return;
+    }
+
+    if (this.state.customerType === 'patient' && !this.state.patientId) {
+      alert('Please select a valid hospital patient, or switch to Walk-in customer.');
+      return;
+    }
+
+    const totalDue = this.getCartTotal();
+    let amountReceived = totalDue;
+
+    if (this.state.paymentMethod === 'Cash') {
+      const tenderedInput = document.getElementById('pos-amount-tendered');
+      amountReceived = parseFloat(tenderedInput ? tenderedInput.value : 0) || 0.00;
+      if (amountReceived < totalDue) {
+        alert(`Insufficient cash amount tendered. Total due is ₱${totalDue.toFixed(2)}, received ₱${amountReceived.toFixed(2)}.`);
+        return;
+      }
+    }
+
+    let customerName = 'Walk-in Customer';
+    let customerPhone = null;
+
+    if (this.state.customerType === 'patient') {
+      customerName = this.state.patientName;
+    } else {
+      const nameInput = document.getElementById('pos-customer-name');
+      const phoneInput = document.getElementById('pos-customer-phone');
+      customerName = (nameInput && nameInput.value.trim()) ? nameInput.value.trim() : 'Walk-in Customer';
+      customerPhone = phoneInput ? phoneInput.value.trim() : null;
+    }
+
+    const refInput = document.getElementById('pos-reference-number');
+    const referenceNumber = refInput ? refInput.value.trim() : null;
+    const notesInput = document.getElementById('pos-notes');
+    const notes = notesInput ? notesInput.value.trim() : null;
+
+    this.state.isCheckingOut = true;
+    const btn = document.getElementById('pos-complete-sale-btn');
+    const btnLabel = document.getElementById('pos-checkout-btn-label');
+    const spinner = document.getElementById('pos-checkout-spinner');
+
+    if (btn) btn.disabled = true;
+    if (btnLabel) btnLabel.innerText = 'Processing Sale...';
+    if (spinner) spinner.classList.remove('hidden');
+
+    const payload = {
+      customer_type: this.state.customerType,
+      patient_id: this.state.patientId,
+      customer_name: customerName,
+      customer_phone: customerPhone,
+      items: this.state.cart.map(c => ({
+        inventory_id: c.inventory_id,
+        quantity: c.quantity
+      })),
+      discount_type: this.state.discountType,
+      discount_amount: this.state.discountAmount,
+      payment_method: this.state.paymentMethod,
+      amount_received: amountReceived,
+      reference_number: referenceNumber,
+      notes: notes
+    };
+
+    try {
+      const res = await fetch('/billing/api/pos/checkout', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const result = await res.json();
+
+      if (result.success && result.sale) {
+        this.openReceiptModal(result.sale);
+        this.clearCart();
+        this.loadMedicines();
+        this.loadSalesHistory();
+      } else {
+        alert(result.message || 'Failed to process POS checkout transaction.');
+      }
+    } catch (err) {
+      console.error('Checkout error:', err);
+      alert('An error occurred while connecting to the POS server: ' + err.message);
+    } finally {
+      this.state.isCheckingOut = false;
+      if (btn) btn.disabled = false;
+      if (btnLabel) btnLabel.innerText = 'Complete Sale & Print Receipt';
+      if (spinner) spinner.classList.add('hidden');
+    }
+  },
+
+  loadSalesHistory: async function () {
+    const searchInput = document.getElementById('pos-history-search');
+    const dateInput = document.getElementById('pos-history-date');
+    const search = searchInput ? searchInput.value.trim() : '';
+    const date = dateInput ? dateInput.value : '';
+
+    let url = '/billing/api/pos/sales?';
+    if (search) url += 'search=' + encodeURIComponent(search) + '&';
+    if (date) url += 'start_date=' + encodeURIComponent(date) + '&end_date=' + encodeURIComponent(date) + '&';
+
+    try {
+      const res = await fetch(url);
+      const data = await res.json();
+      if (data.success) {
+        this.renderSalesHistory(data.data || []);
+      }
+    } catch (err) {
+      console.error('Failed to load POS sales history:', err);
+    }
+  },
+
+  renderSalesHistory: function (sales) {
+    const tbody = document.getElementById('pos-history-tbody');
+    if (!tbody) return;
+
+    if (!sales || sales.length === 0) {
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="8" class="text-center py-8 text-slate-400 italic">No POS transactions recorded yet.</td>
+        </tr>
+      `;
+      return;
+    }
+
+    tbody.innerHTML = sales.map(s => {
+      const dateFormatted = new Date(s.created_at).toLocaleString('en-US', {
+        month: 'short', day: '2-digit', year: 'numeric',
+        hour: '2-digit', minute: '2-digit', hour12: true
+      });
+      const itemCount = (s.items && s.items.length) ? s.items.length : 0;
+      const totalAmount = parseFloat(s.TotalAmount) || 0.00;
+      const customerBadge = s.CustomerType === 'Patient'
+        ? '<span class="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 font-bold">Patient</span>'
+        : '<span class="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 font-bold">Walk-in</span>';
+
+      return `
+        <tr class="hover:bg-slate-50 transition">
+          <td class="py-2.5 px-3 font-mono font-bold text-slate-900">${s.ReceiptNumber}</td>
+          <td class="py-2.5 px-3 text-slate-500">${dateFormatted}</td>
+          <td class="py-2.5 px-3">
+            <span class="font-bold text-slate-800 block">${s.CustomerName}</span>
+            ${customerBadge}
+          </td>
+          <td class="py-2.5 px-3 text-slate-700 font-medium">${s.PaymentMethod}</td>
+          <td class="py-2.5 px-3 text-right font-mono">${itemCount} item${itemCount > 1 ? 's' : ''}</td>
+          <td class="py-2.5 px-3 text-right font-mono font-bold text-emerald-800">₱${totalAmount.toFixed(2)}</td>
+          <td class="py-2.5 px-3 text-center text-slate-600">${s.CashierName || 'Cashier'}</td>
+          <td class="py-2.5 px-3 text-right">
+            <a href="/print/pos-receipt/${s.SaleID}" target="_blank" class="px-2.5 py-1 bg-white border border-slate-200 hover:border-brand-500 hover:text-brand-600 text-slate-600 font-bold rounded-lg text-xs transition inline-flex items-center gap-1 shadow-xs">
+              <i data-lucide="printer" class="w-3.5 h-3.5"></i> Print
+            </a>
+          </td>
+        </tr>
+      `;
+    }).join('');
+
+    lucide.createIcons();
+  },
+
+  openReceiptModal: function (sale) {
+    const modal = document.getElementById('pos-receipt-modal');
+    const receiptNo = document.getElementById('pos-modal-receipt-no');
+    const body = document.getElementById('pos-modal-receipt-body');
+
+    this.state.currentReceiptUrl = `/print/pos-receipt/${sale.SaleID}`;
+
+    if (receiptNo) receiptNo.innerText = sale.ReceiptNumber;
+
+    if (body) {
+      const itemsList = (sale.items || []).map(i => `
+        <div class="flex justify-between items-center py-1 border-b border-slate-100 last:border-0 text-xs">
+          <div>
+            <span class="font-bold text-slate-900 block">${i.MedicineName}</span>
+            <span class="text-[10px] text-slate-400 font-mono">${i.Quantity}x @ ₱${parseFloat(i.UnitPrice).toFixed(2)}</span>
+          </div>
+          <span class="font-mono font-bold text-slate-900">₱${parseFloat(i.SubTotal).toFixed(2)}</span>
+        </div>
+      `).join('');
+
+      body.innerHTML = `
+        <div class="space-y-4">
+          <div class="text-center border-b border-slate-200 pb-3">
+            <h4 class="font-black text-sm text-slate-900 uppercase">Tupi Municipal Hospital</h4>
+            <p class="text-[10px] text-slate-500">Retail Pharmacy Point-of-Sale (POS)</p>
+            <p class="text-[10px] text-slate-400 font-mono mt-1">${new Date().toLocaleString()}</p>
+          </div>
+
+          <div class="grid grid-cols-2 gap-2 text-[11px] bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+            <div>
+              <span class="text-slate-400 block text-[9px] uppercase font-bold">Customer:</span>
+              <span class="font-bold text-slate-800">${sale.CustomerName} (${sale.CustomerType})</span>
+            </div>
+            <div>
+              <span class="text-slate-400 block text-[9px] uppercase font-bold">Cashier:</span>
+              <span class="font-bold text-slate-800">${sale.CashierName || 'Official Cashier'}</span>
+            </div>
+          </div>
+
+          <div class="border border-slate-200 rounded-xl p-3 bg-white space-y-1">
+            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Purchased Medicines:</span>
+            ${itemsList}
+          </div>
+
+          <div class="bg-emerald-50/60 border border-emerald-200/80 rounded-xl p-3 space-y-1.5 text-xs">
+            <div class="flex justify-between text-slate-600">
+              <span>Gross Subtotal:</span>
+              <span class="font-mono font-bold text-slate-800">₱${parseFloat(sale.SubTotal).toFixed(2)}</span>
+            </div>
+            <div class="flex justify-between text-slate-600">
+              <span>Discount (${sale.DiscountType}):</span>
+              <span class="font-mono font-bold text-emerald-700">- ₱${parseFloat(sale.DiscountAmount).toFixed(2)}</span>
+            </div>
+            <div class="flex justify-between font-black text-sm text-slate-900 pt-1 border-t border-emerald-200">
+              <span>Total Paid:</span>
+              <span class="font-mono text-emerald-900">₱${parseFloat(sale.TotalAmount).toFixed(2)}</span>
+            </div>
+            <div class="flex justify-between text-slate-600 pt-1 text-[11px]">
+              <span>Amount Received (${sale.PaymentMethod}):</span>
+              <span class="font-mono">₱${parseFloat(sale.AmountReceived).toFixed(2)}</span>
+            </div>
+            <div class="flex justify-between text-slate-600 text-[11px]">
+              <span>Change Due:</span>
+              <span class="font-mono font-bold text-blue-900">₱${parseFloat(sale.ChangeAmount).toFixed(2)}</span>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    if (modal) {
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    }
+  },
+
+  closeReceiptModal: function () {
+    const modal = document.getElementById('pos-receipt-modal');
+    if (modal) {
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
+  },
+
+  printCurrentReceipt: function () {
+    if (this.state.currentReceiptUrl) {
+      window.open(this.state.currentReceiptUrl, '_blank');
+    }
+  }
+};

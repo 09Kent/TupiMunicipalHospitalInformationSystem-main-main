@@ -86,6 +86,11 @@ class ReferralApiController extends Controller
         $targetDoctorId = $request->input('target_doctor_id') ? (int)$request->input('target_doctor_id') : null;
         $targetSpecialtyId = $request->input('target_specialty_id') ? (int)$request->input('target_specialty_id') : 1;
 
+        $rawAmbId = $request->input('ambulance_id');
+        $ambulanceId = ($rawAmbId !== null && $rawAmbId !== '') ? (int)$rawAmbId : null;
+        $requiresAmbulance = ($ambulanceId && $ambulanceId > 0) ? 1 : 0;
+        $ambulanceStatus = $requiresAmbulance ? 'Dispatched' : ($ambulanceId === 0 ? 'Private Transport' : ($ambulanceId === -1 ? 'MDRRMO Rescue' : null));
+
         DB::beginTransaction();
         try {
             $referral = Referral::create([
@@ -99,6 +104,9 @@ class ReferralApiController extends Controller
                 'ReceivingHospital'   => $receivingHospital,
                 'HospitalAddress'     => $hospitalAddress,
                 'RequestedService'    => $requestedService,
+                'AmbulanceID'         => $ambulanceId > 0 ? $ambulanceId : null,
+                'RequiresAmbulance'   => $requiresAmbulance,
+                'AmbulanceStatus'     => $ambulanceStatus,
                 'Reason'              => $reason,
                 'ClinicalSummary'     => $clinicalSummary,
                 'Priority'            => $priority,
@@ -108,6 +116,21 @@ class ReferralApiController extends Controller
                 'CreatedAt'           => now(),
                 'UpdatedAt'           => now()
             ]);
+
+            // Dispatch Ambulance if requested
+            if ($ambulanceId && $ambulanceId > 0) {
+                try {
+                    if (\Illuminate\Support\Facades\Schema::hasTable('ambulances')) {
+                        \App\Models\Ambulance::where('AmbulanceID', $ambulanceId)->update([
+                            'Status'             => 'On Transfer',
+                            'CurrentDestination' => $receivingHospital ?: 'Tertiary Hospital Transfer',
+                            'CurrentPatientID'   => $patientId,
+                            'EstimatedReturnTime'=> 'Est. 2 Hours',
+                            'updated_at'         => now(),
+                        ]);
+                    }
+                } catch (\Throwable $ae) {}
+            }
 
             // Audit Trail
             $patName = trim($patient->FirstName . ' ' . $patient->LastName);

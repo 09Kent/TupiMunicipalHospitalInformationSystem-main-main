@@ -590,6 +590,136 @@
       </div>
       <?php endif; ?>
 
+      <!-- TYPE: POS PHARMACY SALES RECEIPT -->
+      <?php if (in_array($type, ['pos-receipt', 'pos'])): ?>
+      <?php
+        $sale = $data['sale'];
+        $items = $data['items'];
+      ?>
+      <div class="space-y-4 text-xs">
+        <div class="border-2 border-slate-800 rounded-2xl p-5 bg-slate-50/50 space-y-4">
+          <div class="flex justify-between items-center border-b border-slate-300 pb-3">
+            <div>
+              <span class="block text-[10px] font-bold text-slate-500 uppercase">POS Sales Receipt Number</span>
+              <span class="text-xl font-mono font-black text-emerald-900"><?= e($sale ? $sale->ReceiptNumber : 'POS-RECEIPT') ?></span>
+            </div>
+            <div class="text-right">
+              <span class="block text-[10px] font-bold text-slate-500 uppercase">Transaction Date & Time</span>
+              <span class="font-bold text-slate-800 text-xs"><?= date('F d, Y h:i A', strtotime($sale->created_at ?? 'now')) ?></span>
+            </div>
+          </div>
+
+          <!-- Customer & Cashier Metadata -->
+          <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 bg-white p-3.5 rounded-xl border border-slate-200">
+            <div>
+              <span class="block text-[10px] font-bold text-slate-400 uppercase">Customer Type</span>
+              <span class="font-bold text-slate-800 flex items-center gap-1.5 mt-0.5">
+                <span class="w-2 h-2 rounded-full <?= ($sale && $sale->CustomerType === 'Patient') ? 'bg-blue-600' : 'bg-amber-500' ?>"></span>
+                <?= e($sale ? $sale->CustomerType : 'Walk-in') ?>
+              </span>
+            </div>
+            <div>
+              <span class="block text-[10px] font-bold text-slate-400 uppercase">Customer Name</span>
+              <span class="font-black text-slate-900"><?= e($sale ? $sale->CustomerName : 'Walk-in Customer') ?></span>
+              <?php if ($sale && !empty($sale->CustomerPhone)): ?>
+                <span class="block text-[10px] text-slate-500 font-mono"><?= e($sale->CustomerPhone) ?></span>
+              <?php endif; ?>
+            </div>
+            <div>
+              <span class="block text-[10px] font-bold text-slate-400 uppercase">Attending Cashier</span>
+              <span class="font-bold text-slate-800"><?= e($sale ? $sale->CashierName : $userName) ?></span>
+            </div>
+          </div>
+
+          <!-- Purchased Items Table -->
+          <div class="overflow-x-auto rounded-xl border border-slate-200">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-slate-100 text-slate-700 font-bold uppercase text-[10px] border-b border-slate-200">
+                <tr>
+                  <th class="py-2.5 px-3">Item / Description</th>
+                  <th class="py-2.5 px-3">Dosage / Form</th>
+                  <th class="py-2.5 px-3 text-center">Qty</th>
+                  <th class="py-2.5 px-3 text-right">Unit Price</th>
+                  <th class="py-2.5 px-3 text-right">Subtotal</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100 bg-white">
+                <?php if (!empty($items) && count($items) > 0): ?>
+                  <?php foreach ($items as $item): ?>
+                    <tr>
+                      <td class="py-2 px-3 font-semibold text-slate-900">
+                        <?= e($item->MedicineName) ?>
+                        <span class="block text-[10px] text-slate-400 font-mono"><?= e($item->ItemCode) ?></span>
+                      </td>
+                      <td class="py-2 px-3 text-slate-600">
+                        <?= e($item->DosageForm ?: '-') ?> <?= e($item->Strength ? "({$item->Strength})" : '') ?>
+                      </td>
+                      <td class="py-2 px-3 text-center font-bold text-slate-800">
+                        <?= (int)$item->Quantity ?>
+                      </td>
+                      <td class="py-2 px-3 text-right font-mono text-slate-700">
+                        ₱ <?= number_format($item->UnitPrice, 2) ?>
+                      </td>
+                      <td class="py-2 px-3 text-right font-mono font-bold text-slate-900">
+                        ₱ <?= number_format($item->SubTotal, 2) ?>
+                      </td>
+                    </tr>
+                  <?php endforeach; ?>
+                <?php else: ?>
+                  <tr>
+                    <td colspan="5" class="py-3 px-3 text-center text-slate-400 italic">No line items recorded for this transaction.</td>
+                  </tr>
+                <?php endif; ?>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Totals, Discounts & Settlement -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div class="p-3 bg-white border border-slate-200 rounded-xl space-y-2">
+              <div class="flex justify-between text-slate-600">
+                <span>Gross Subtotal:</span>
+                <span class="font-mono font-bold text-slate-800">₱ <?= number_format($sale ? $sale->SubTotal : 0, 2) ?></span>
+              </div>
+              <div class="flex justify-between text-slate-600">
+                <span>Discount (<?= e($sale ? $sale->DiscountType : 'None') ?>):</span>
+                <span class="font-mono font-bold text-emerald-700">- ₱ <?= number_format($sale ? $sale->DiscountAmount : 0, 2) ?></span>
+              </div>
+              <div class="border-t border-slate-100 pt-1.5 flex justify-between font-black text-sm text-slate-900">
+                <span>Total Amount Due:</span>
+                <span class="font-mono text-emerald-900">₱ <?= number_format($sale ? $sale->TotalAmount : 0, 2) ?></span>
+              </div>
+            </div>
+
+            <div class="p-3 bg-white border border-slate-200 rounded-xl space-y-2">
+              <div class="flex justify-between text-slate-600">
+                <span>Payment Method:</span>
+                <span class="font-bold text-slate-900"><?= e($sale ? $sale->PaymentMethod : 'Cash') ?></span>
+              </div>
+              <div class="flex justify-between text-slate-600">
+                <span>Amount Received:</span>
+                <span class="font-mono font-bold text-slate-800">₱ <?= number_format($sale ? $sale->AmountReceived : 0, 2) ?></span>
+              </div>
+              <div class="border-t border-slate-100 pt-1.5 flex justify-between font-black text-sm text-slate-900">
+                <span>Change Due:</span>
+                <span class="font-mono text-blue-900">₱ <?= number_format($sale ? $sale->ChangeAmount : 0, 2) ?></span>
+              </div>
+              <?php if ($sale && !empty($sale->ReferenceNumber)): ?>
+                <div class="text-[10px] text-slate-500 font-mono pt-1">
+                  Reference: <?= e($sale->ReferenceNumber) ?>
+                </div>
+              <?php endif; ?>
+            </div>
+          </div>
+
+          <div class="flex justify-between text-xs text-slate-600 pt-2 border-t border-slate-200">
+            <span>Status: <strong class="text-emerald-700 font-bold">PAID & DISPENSED</strong></span>
+            <span>Inventory Deduction: <strong class="text-slate-800 font-bold">AUTOMATICALLY APPLIED</strong></span>
+          </div>
+        </div>
+      </div>
+      <?php endif; ?>
+
       <!-- TYPE 8: REFERRAL FORM (INTERNAL OR EXTERNAL - REQUIREMENTS 12 & 13) -->
       <?php if ($type === 'referral'): ?>
       <?php
@@ -631,6 +761,28 @@
               <span class="text-slate-500 block text-[10px] uppercase font-bold">Requested Service / Specialty Unit:</span>
               <strong class="text-blue-800"><?= e($ref->RequestedService ?: 'Specialized Tertiary Care / ICU Telemetry') ?></strong>
             </div>
+            <?php 
+              $printAmb = null;
+              if (!empty($ref->AmbulanceID)) {
+                try {
+                  $printAmb = \App\Models\Ambulance::find($ref->AmbulanceID);
+                } catch (\Throwable $e) {}
+              }
+            ?>
+            <?php if ($printAmb || !empty($ref->RequiresAmbulance) || !empty($ref->AmbulanceStatus)): ?>
+            <div class="col-span-2 pt-2.5 mt-1 border-t border-amber-200">
+              <span class="text-slate-500 block text-[10px] uppercase font-bold">Emergency Transport Mode & Ambulance Dispatch:</span>
+              <div class="flex items-center justify-between text-xs font-bold text-amber-950 mt-1">
+                <span>🚑 <?= e($printAmb ? $printAmb->UnitName : ($ref->RequestedService ?: 'Municipal Ambulance Transfer')) ?> <?= $printAmb ? ' [' . e($printAmb->PlateNumber) . ']' : '' ?></span>
+                <span class="text-[10px] font-mono font-bold px-2.5 py-0.5 bg-amber-200/90 text-amber-950 rounded">
+                  Driver: <?= e($printAmb->CurrentDriver ?? 'Assigned Duty EMT') ?> (<?= e($printAmb->ContactNumber ?? '+63 (083) 228-0001') ?>)
+                </span>
+              </div>
+              <div class="text-[10px] text-amber-800 font-semibold mt-0.5">
+                Dispatch Status: <?= e($ref->AmbulanceStatus ?: 'Dispatched for Patient Transfer') ?> • Equipment: <?= e($printAmb->EquipmentLevel ?? 'Standard Medical Transfer') ?>
+              </div>
+            </div>
+            <?php endif; ?>
           </div>
         </div>
         <?php else: ?>

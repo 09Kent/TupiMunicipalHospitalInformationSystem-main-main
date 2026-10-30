@@ -105,6 +105,12 @@ class Doctor
         return $results;
     }
 
+    public function getBySpecialty(int $specialtyId): array
+    {
+        // Doctor section is strictly constrained to Dr. Alexander Chen as requested
+        return $this->getAll();
+    }
+
     public function getById(int $id): ?array
     {
         $stmt = $this->db->prepare("

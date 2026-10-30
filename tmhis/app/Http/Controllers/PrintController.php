@@ -335,6 +335,20 @@ class PrintController extends Controller
                 $data['invoice'] = $invoice;
                 break;
 
+            case 'pos-receipt':
+            case 'pos':
+                $sale = $numId ? \App\Models\PosSale::with(['items', 'patient'])->find($numId) : null;
+                if (!$sale) {
+                    $sale = \App\Models\PosSale::with(['items', 'patient'])->orderBy('SaleID', 'desc')->first();
+                }
+                $patient = $sale?->patient;
+                $docTitle = 'PHARMACY SALES POINT-OF-SALE (POS) RECEIPT';
+                $docTracking = $sale ? $sale->ReceiptNumber : 'POS-RECEIPT';
+                $data['sale'] = $sale;
+                $data['patient'] = $patient;
+                $data['items'] = $sale ? $sale->items : collect();
+                break;
+
             case 'referral':
                 $referral = $numId ? Referral::find($numId) : null;
                 if (!$referral && $numId) {

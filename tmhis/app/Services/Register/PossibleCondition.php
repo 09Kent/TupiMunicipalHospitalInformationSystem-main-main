@@ -46,8 +46,17 @@ class PossibleCondition
 
     public function saveComplaintConditions(int $complaintId, array $conditionIdsOrNames): void
     {
-        if (empty($conditionIdsOrNames))
+        if ($complaintId <= 0 || empty($conditionIdsOrNames))
             return;
+
+        // Verify complaint exists in database to prevent FK violation
+        try {
+            $chk = $this->db->prepare("SELECT 1 FROM complaints WHERE ComplaintID = :cid LIMIT 1");
+            $chk->execute([':cid' => $complaintId]);
+            if (!$chk->fetchColumn()) {
+                return;
+            }
+        } catch (\Throwable $e) {}
 
         // Clear existing
         $stmtDel = $this->db->prepare("DELETE FROM complaint_conditions WHERE ComplaintID = :cid");

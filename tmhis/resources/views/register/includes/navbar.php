@@ -75,10 +75,61 @@ $user = Session::getCurrentUser() ?: [
           </div>
           <input type="text" 
                  id="top-nav-quick-search"
+                 autocomplete="off"
                  placeholder="Search patient, code, phone..." 
-                 class="w-52 pl-8 pr-3 py-1.5 bg-slate-100/90 border border-slate-200/80 rounded-xl text-xs font-medium text-slate-700 focus:outline-none focus:w-64 focus:bg-white focus:border-blue-400 transition-all"
-                 onkeydown="if(event.key==='Enter'){ window.location.href='<?= base_url('views/patients/index.php') ?>?search=' + encodeURIComponent(this.value); }" />
+                 class="w-56 pl-8 pr-3 py-1.5 bg-slate-100/90 border border-slate-200/80 rounded-xl text-xs font-medium text-slate-700 focus:outline-none focus:w-72 focus:bg-white focus:border-blue-400 transition-all"
+                 onkeydown="if(event.key==='Enter'){ window.location.href='/register/patients?search=' + encodeURIComponent(this.value); }" />
+          <div id="top-nav-search-results" class="hidden absolute left-0 right-0 top-full mt-1.5 bg-white border border-slate-200 rounded-xl shadow-2xl z-50 max-h-64 overflow-y-auto divide-y divide-slate-100"></div>
         </div>
+
+        <script>
+        (() => {
+          const input = document.getElementById('top-nav-quick-search');
+          const results = document.getElementById('top-nav-search-results');
+          if (!input || !results) return;
+          let timer = null;
+
+          input.addEventListener('input', () => {
+            clearTimeout(timer);
+            const q = input.value.trim();
+            if (q.length < 2) {
+              results.classList.add('hidden');
+              results.innerHTML = '';
+              return;
+            }
+            timer = setTimeout(async () => {
+              try {
+                const res = await fetch('/api/search/patients?q=' + encodeURIComponent(q) + '&limit=6');
+                const json = await res.json();
+                if (json.success && Array.isArray(json.data) && json.data.length > 0) {
+                  results.innerHTML = json.data.map(p => {
+                    const name = p.name || `${p.first_name || ''} ${p.last_name || ''}`.trim();
+                    const code = p.patient_code || p.code || ('PAT-' + p.id);
+                    return `
+                      <a href="/register/patients/${p.id || p.patient_id}" class="block p-2.5 hover:bg-blue-50 transition text-left">
+                        <div class="font-bold text-xs text-slate-900">${name}</div>
+                        <div class="text-[10px] text-slate-500 font-mono">${code} • ${p.age ? p.age + 'y, ' : ''}${p.gender || ''}</div>
+                      </a>
+                    `;
+                  }).join('');
+                  results.classList.remove('hidden');
+                } else {
+                  results.innerHTML = '<div class="p-2.5 text-center text-xs text-slate-400 italic">No patients found</div>';
+                  results.classList.remove('hidden');
+                }
+              } catch (e) {
+                results.classList.add('hidden');
+              }
+            }, 180);
+          });
+
+          document.addEventListener('click', (e) => {
+            if (!input.contains(e.target) && !results.contains(e.target)) {
+              results.classList.add('hidden');
+            }
+          });
+        })();
+        </script>
 
         <!-- Notifications Bell -->
         <button type="button" 

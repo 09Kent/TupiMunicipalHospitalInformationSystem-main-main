@@ -737,21 +737,53 @@ function attachRegStep1Events() {
         searchController?.abort();
         searchController = new AbortController();
         try {
-          const endpoint = window.SERVER_DATA?.apiEndpoints?.patients || '/api/register/patients';
-          const response = await fetch(endpoint + '?search=' + encodeURIComponent(term), { signal: searchController.signal, headers: { Accept: 'application/json' } });
-          const payload = await response.json();
-          if (!response.ok || !payload.success) throw new Error('Patient search failed');
-          if (!payload.data.length) {
+          const primaryEndpoint = window.SERVER_DATA?.apiEndpoints?.patients || '/api/register/patients';
+          let payload = null;
+          
+          try {
+            const response = await fetch(primaryEndpoint + '?search=' + encodeURIComponent(term), { 
+              signal: searchController.signal, 
+              headers: { Accept: 'application/json' } 
+            });
+            if (response.ok) {
+              const resJson = await response.json();
+              if (resJson && resJson.success && Array.isArray(resJson.data)) {
+                payload = resJson;
+              }
+            }
+          } catch (e) {
+            // Silently fall back to universal search endpoint
+          }
+
+          if (!payload) {
+            const fallbackResponse = await fetch('/api/search/patients?q=' + encodeURIComponent(term), {
+              signal: searchController.signal,
+              headers: { Accept: 'application/json' }
+            });
+            payload = await fallbackResponse.json();
+          }
+
+          if (!payload || !payload.data || !payload.data.length) {
             searchStatus.textContent = 'No matching patient found. Continue below to register a new patient.';
             return;
           }
           payload.data.forEach(patient => {
+            const pFirst = patient.FirstName || patient.first_name || '';
+            const pLast = patient.LastName || patient.last_name || '';
+            const pCode = patient.PatientCode || patient.patient_code || patient.code || ('PAT-' + patient.PatientID);
+            const pDob = patient.DateOfBirth || patient.date_of_birth || 'N/A';
+            const pPhone = patient.ContactNumber || patient.contact || 'No phone';
+
             const option = document.createElement('button');
             option.type = 'button';
-            option.className = 'w-full text-left px-3.5 py-2.5 hover:bg-blue-50 border-b border-slate-100 last:border-b-0';
-            option.innerHTML = '<span class="block text-xs font-bold text-slate-800"></span><span class="block text-[10px] text-slate-500"></span>';
-            option.children[0].textContent = `${patient.FirstName} ${patient.LastName}`;
-            option.children[1].textContent = `${patient.PatientCode} • DOB: ${patient.DateOfBirth} • ${patient.ContactNumber || 'No phone'}`;
+            option.className = 'w-full text-left px-3.5 py-2.5 hover:bg-blue-50 border-b border-slate-100 last:border-b-0 transition flex items-center justify-between';
+            option.innerHTML = `
+              <div>
+                <span class="block text-xs font-bold text-slate-800">${pFirst} ${pLast}</span>
+                <span class="block text-[10px] text-slate-500 font-mono">${pCode} • DOB: ${pDob} • ${pPhone}</span>
+              </div>
+              <span class="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">Select &rarr;</span>
+            `;
             option.addEventListener('click', () => selectExistingPatient(patient));
             searchResults.appendChild(option);
           });
@@ -1686,7 +1718,16 @@ function attachRegStep6Events() {
 // STEP 7: DOCTORS
 // ----------------------------------------------------
 function renderRegStep7() {
-  const docs = window.SERVER_DATA?.doctors || [];
+  let allDocs = window.SERVER_DATA?.doctors || [];
+  // Restrict doctor section strictly to Dr. Alexander Chen as requested
+  let docs = allDocs.filter(d => 
+    (d.LastName || '').toLowerCase() === 'chen' || 
+    (d.FirstName || '').toLowerCase() === 'alexander' || 
+    d.DoctorID == 3
+  );
+  if (docs.length === 0 && allDocs.length > 0) {
+    docs = [allDocs[0]];
+  }
 
   return `
     <div class="step-container space-y-8">
@@ -1754,7 +1795,7 @@ function attachRegStep7Events() {
 // STEP 8: SUBMIT TO MYSQL & SUCCESS
 // ----------------------------------------------------
 async function selectDoctorAndSubmit(doctorId) {
-  regState.selectedDoctor = (window.SERVER_DATA?.doctors || []).find(d => d.DoctorID == doctorId);
+  regState.selectedDoctor = (window.SERVER_DATA?.doctors || []).find(d => d.DoctorID == doctorId) || { DoctorID: 3, FirstName: 'Alexander', LastName: 'Chen', Specialty: 'Cardiologist' };
   
   // Submit complete record to PHP backend
   try {

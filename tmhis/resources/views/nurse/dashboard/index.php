@@ -488,7 +488,12 @@ require_once __DIR__ . '/../includes/sidebar.php';
               </tr>
             <?php else: ?>
               <?php foreach ($realPatients as $rp): ?>
-                <tr class="hover:bg-slate-50/80 transition group">
+                <tr class="nurse-patient-row hover:bg-slate-50/80 transition group" 
+                    data-name="<?= e(strtolower($rp['name'])) ?>" 
+                    data-code="<?= e(strtolower($rp['code'])) ?>" 
+                    data-doctor="<?= e(strtolower($rp['doctor'])) ?>" 
+                    data-room="<?= e(strtolower($rp['room'])) ?>" 
+                    data-status="<?= e(strtolower($rp['status'])) ?>">
                   <td class="p-3.5 pl-4">
                     <div class="flex items-center gap-3">
                       <div class="w-9 h-9 rounded-xl bg-teal-600 text-white font-black text-xs flex items-center justify-center font-display shrink-0">
@@ -1302,18 +1307,36 @@ function animateCounter(el, from, to, isFloat = false) {
 // ============================
 // Search & Filter
 // ============================
+let currentNurseStatusFilter = 'all';
+
 function filterPatients(query) {
-  const q = query.toLowerCase();
-  document.querySelectorAll('.queue-item').forEach(item => {
-    const name = item.querySelector('p.text-xs')?.textContent?.toLowerCase() || '';
-    const room = item.querySelector('p.text-\\[11px\\]')?.textContent?.toLowerCase() || '';
-    item.style.display = (name.includes(q) || room.includes(q) || !q) ? '' : 'none';
+  const q = (query || '').toLowerCase().trim();
+  const rows = document.querySelectorAll('.nurse-patient-row, .queue-item');
+  let matchCount = 0;
+
+  rows.forEach(item => {
+    const name = item.getAttribute('data-name') || item.querySelector('strong')?.textContent?.toLowerCase() || '';
+    const code = item.getAttribute('data-code') || item.querySelector('.font-mono')?.textContent?.toLowerCase() || '';
+    const doctor = item.getAttribute('data-doctor') || '';
+    const room = item.getAttribute('data-room') || '';
+    const status = item.getAttribute('data-status') || '';
+    const fullText = item.textContent?.toLowerCase() || '';
+
+    const textMatch = !q || name.includes(q) || code.includes(q) || doctor.includes(q) || room.includes(q) || fullText.includes(q);
+    const statusMatch = (currentNurseStatusFilter === 'all') || (status && status.includes(currentNurseStatusFilter.toLowerCase()));
+
+    const show = textMatch && statusMatch;
+    item.style.display = show ? '' : 'none';
+    if (show) matchCount++;
   });
 }
 
 function filterByStatus(status) {
+  currentNurseStatusFilter = status || 'all';
   document.getElementById('filterDropdown')?.classList.add('hidden');
-  showToast(status === 'all' ? 'Showing all patients' : 'Filtered: ' + status);
+  const searchInput = document.getElementById('patientSearchInput');
+  filterPatients(searchInput ? searchInput.value : '');
+  showToast(status === 'all' ? 'Showing all patients' : 'Filtered: ' + status, 'info');
 }
 
 // ============================
